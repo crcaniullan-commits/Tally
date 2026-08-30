@@ -28,7 +28,7 @@ pendiente
 
 ## Metodología
 
-El proyecto sera desarrollado usando la metodología ágil Scrum, en sprint de una semanada de duración
+El proyecto sera desarrollado usando la metodología ágil Scrum, en sprints de una semanada de duración
 
 ## Arquitectura
 
