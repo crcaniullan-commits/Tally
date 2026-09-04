@@ -1,0 +1,9 @@
+# Binarios / build
+/bin/
+/tmp/
+
+# direnv — .envrc con secretos reales
+.envrc
+
+# Go
+*.test
