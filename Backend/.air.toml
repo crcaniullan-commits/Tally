@@ -8,7 +8,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./bin/main"
-  cmd = "go build -o ./cmd/src ."
+  cmd = "go build -o ./bin/main ./cmd/src"
   delay = 1000
   entrypoint = ["./bin/main"]
   exclude_dir = ["bin"]

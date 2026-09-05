@@ -11,7 +11,7 @@ type Service struct {
 	ServiceAccessKey      *AccessKeyService
 }
 
-func newService(db string) Service {
+func NewService(db string) Service {
 	return Service{
 		ServiceUsers:          &UserService{db},
 		ServiceIncomes:        &IncomeService{db},
