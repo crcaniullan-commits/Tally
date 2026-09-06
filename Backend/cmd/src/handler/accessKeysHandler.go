@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -11,10 +12,11 @@ type ServiceAccessKey interface {
 
 type AccessKeysHandler struct {
 	service ServiceAccessKey
+	error   errorhandler.ErrorsResponse
 }
 
-func NewAccessKeysHandler(s ServiceAccessKey) *AccessKeysHandler {
-	return &AccessKeysHandler{s}
+func NewAccessKeysHandler(s ServiceAccessKey, e errorhandler.ErrorsResponse) *AccessKeysHandler {
+	return &AccessKeysHandler{s, e}
 }
 
 func (h *AccessKeysHandler) RegisterRoutes(r chi.Router) {

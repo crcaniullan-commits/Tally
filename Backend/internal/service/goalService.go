@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type GoalService struct {
-	db string
+	store store.StoreGoal
 }
 
-func NewGoalService(db string) *GoalService {
-	return &GoalService{db: db}
+func NewGoalService(store store.StoreGoal) *GoalService {
+	return &GoalService{store: store}
 }

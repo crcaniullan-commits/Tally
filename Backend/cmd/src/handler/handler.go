@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -14,8 +15,6 @@ type Handler struct {
 		Update(http.ResponseWriter, *http.Request)
 		Delete(http.ResponseWriter, *http.Request)
 		GetByID(http.ResponseWriter, *http.Request)
-	}
-	PaymentMethods interface {
 	}
 	Incomes interface {
 	}
@@ -31,15 +30,14 @@ type Handler struct {
 	}
 }
 
-func NewHandler(s service.Service) Handler {
+func NewHandler(s service.Service, e errorhandler.ErrorsResponse) Handler {
 	return Handler{
-		Users:          NewUserHandler(s.ServiceUsers),
-		PaymentMethods: NewPaymentMethodsHandler(s.ServicePaymentMethods),
-		Incomes:        NewIncomesHandler(s.ServiceIncomes),
-		Goals:          NewGoalsHandler(s.ServiceGoals),
-		Expenses:       NewExpensesHandler(s.ServiceExpenses),
-		Debtors:        NewDebtorsHandler(s.ServiceDebtors),
-		Categories:     NewCategoriesHandler(s.ServiceCategories),
-		AccessKeys:     NewAccessKeysHandler(s.ServiceAccessKey),
+		Users:      NewUserHandler(s.ServiceUsers, e),
+		Incomes:    NewIncomesHandler(s.ServiceIncomes, e),
+		Goals:      NewGoalsHandler(s.ServiceGoals, e),
+		Expenses:   NewExpensesHandler(s.ServiceExpenses, e),
+		Debtors:    NewDebtorsHandler(s.ServiceDebtors, e),
+		Categories: NewCategoriesHandler(s.ServiceCategories, e),
+		AccessKeys: NewAccessKeysHandler(s.ServiceAccessKey, e),
 	}
 }

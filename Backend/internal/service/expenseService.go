@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type ExpenseService struct {
-	db string
+	store store.StoreExpense
 }
 
-func NewExpenseService(db string) *ExpenseService {
-	return &ExpenseService{db: db}
+func NewExpenseService(store store.StoreExpense) *ExpenseService {
+	return &ExpenseService{store: store}
 }

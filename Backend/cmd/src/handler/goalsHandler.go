@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -11,10 +12,11 @@ type ServiceGoals interface {
 
 type GoalsHandler struct {
 	service ServiceGoals
+	error   errorhandler.ErrorsResponse
 }
 
-func NewGoalsHandler(s ServiceGoals) *GoalsHandler {
-	return &GoalsHandler{s}
+func NewGoalsHandler(s ServiceGoals, e errorhandler.ErrorsResponse) *GoalsHandler {
+	return &GoalsHandler{s, e}
 }
 
 func (h *GoalsHandler) RegisterRoutes(r chi.Router) {

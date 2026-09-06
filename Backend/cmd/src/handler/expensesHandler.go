@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -11,10 +12,11 @@ type ServiceExpenses interface {
 
 type ExpensesHandler struct {
 	service ServiceExpenses
+	error   errorhandler.ErrorsResponse
 }
 
-func NewExpensesHandler(s ServiceExpenses) *ExpensesHandler {
-	return &ExpensesHandler{s}
+func NewExpensesHandler(s ServiceExpenses, e errorhandler.ErrorsResponse) *ExpensesHandler {
+	return &ExpensesHandler{s, e}
 }
 
 func (h *ExpensesHandler) RegisterRoutes(r chi.Router) {

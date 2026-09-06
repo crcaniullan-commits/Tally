@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type DebtorService struct {
-	db string
+	store store.StoreDebtor
 }
 
-func NewDebtorService(db string) *DebtorService {
-	return &DebtorService{db: db}
+func NewDebtorService(store store.StoreDebtor) *DebtorService {
+	return &DebtorService{store: store}
 }

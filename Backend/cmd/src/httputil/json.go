@@ -13,7 +13,7 @@ func init() {
 	Validate = validator.New(validator.WithRequiredStructEnabled())
 }
 
-func writeJson(w http.ResponseWriter, status int, data any) error {
+func WriteJson(w http.ResponseWriter, status int, data any) error {
 	w.Header().Set("Content-type", "application(json)")
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(data)
@@ -33,7 +33,7 @@ func WriteJSONError(w http.ResponseWriter, status int, message string) error {
 	type envelope struct {
 		Error string `json:"error"`
 	}
-	return writeJson(w, status, &envelope{Error: message})
+	return WriteJson(w, status, &envelope{Error: message})
 }
 
 func JsonResponse(w http.ResponseWriter, status int, data any) error {
@@ -41,5 +41,5 @@ func JsonResponse(w http.ResponseWriter, status int, data any) error {
 		Data any `json:"data"`
 	}
 
-	return writeJson(w, status, &envelope{Data: data})
+	return WriteJson(w, status, &envelope{Data: data})
 }

@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type CategorieService struct {
-	db string
+	store store.StoreCategorie
 }
 
-func NewCategorieService(db string) *CategorieService {
-	return &CategorieService{db: db}
+func NewCategorieService(store store.StoreCategorie) *CategorieService {
+	return &CategorieService{store: store}
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -11,10 +12,11 @@ type ServiceCategories interface {
 
 type CategoriesHandler struct {
 	service ServiceCategories
+	error   errorhandler.ErrorsResponse
 }
 
-func NewCategoriesHandler(s ServiceCategories) *CategoriesHandler {
-	return &CategoriesHandler{s}
+func NewCategoriesHandler(s ServiceCategories, e errorhandler.ErrorsResponse) *CategoriesHandler {
+	return &CategoriesHandler{s, e}
 }
 
 func (h *CategoriesHandler) RegisterRoutes(r chi.Router) {

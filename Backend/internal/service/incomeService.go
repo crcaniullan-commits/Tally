@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type IncomeService struct {
-	db string
+	store store.StoreIncome
 }
 
-func NewIncomeService(db string) *IncomeService {
-	return &IncomeService{db: db}
+func NewIncomeService(store store.StoreIncome) *IncomeService {
+	return &IncomeService{store: store}
 }

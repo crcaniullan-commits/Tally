@@ -5,6 +5,8 @@ go 1.27.0
 require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-playground/validator/v10 v10.30.4
+	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.12.3
 	github.com/swaggo/swag v1.16.6
 	go.uber.org/zap v1.28.0
 )

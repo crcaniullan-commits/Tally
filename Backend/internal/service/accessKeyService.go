@@ -1,9 +1,13 @@
 package service
 
+import (
+	"github.com/crcaniullan-commits/Tally/internal/store"
+)
+
 type AccessKeyService struct {
-	db string
+	store store.StoreAccessKey
 }
 
-func NewAccessKeyService(db string) *AccessKeyService {
-	return &AccessKeyService{db: db}
+func NewAccessKeyService(store store.StoreAccessKey) *AccessKeyService {
+	return &AccessKeyService{store: store}
 }
