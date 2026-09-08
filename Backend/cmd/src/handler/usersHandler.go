@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"context"
 	"net/http"
-	"uuid"
 
 	"github.com/crcaniullan-commits/Tally/cmd/src/httputil"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
@@ -13,9 +11,10 @@ import (
 
 type ServiceUsers interface {
 	Create(http.ResponseWriter, *http.Request) (*store.Users, error)
-	Update(context.Context, uuid.UUID) error
-	Delete(context.Context, uuid.UUID) error
-	GetByID(context.Context, uuid.UUID) (*store.Users, error)
+	Update(http.ResponseWriter, *http.Request) error
+	Delete(http.ResponseWriter, *http.Request) error
+	GetByRut(http.ResponseWriter, *http.Request) (*store.Users, error)
+	GetByEmail(http.ResponseWriter, *http.Request) (*store.Users, error)
 }
 
 type UsersHandler struct {
