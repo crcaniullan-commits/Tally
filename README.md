@@ -20,7 +20,7 @@ pendiente
 
 ### Ruta del swagger
 ```
-http://localhost/v1/swagger/
+http://localhost:8080/v1/swagger/
 ```
 ## Integrantes
 
