@@ -36,3 +36,14 @@ tasks:
     desc: Genera la documentación Swagger
     cmds:
       - go tool swag init -g main.go -d cmd,internal && go tool swag fmt
+      
+  build:
+    desc: Compila el binario de producción
+    cmds:
+      - go build -o bin/server main.go
+
+  start:
+    desc: Compila y levanta el servidor de producción inmediatamente
+    deps: [build] # <-- Esto obliga a que primero corra la tarea 'build'
+    cmds:
+      - ./bin/server
