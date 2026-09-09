@@ -24,7 +24,7 @@ func NewUserService(store StoreUser) *UserService {
 	return &UserService{store: store}
 }
 
-func (s *UserService) Create(ctx context.Context, payload *CreateUserPaylaod) (*Users, error) {
+func (s *UserService) Create(ctx context.Context, payload *CreateUserPayload) (*Users, error) {
 	rut, err := util.ParseRUT(payload.Rut)
 
 	if err != nil {
@@ -36,11 +36,14 @@ func (s *UserService) Create(ctx context.Context, payload *CreateUserPaylaod) (*
 	}
 
 	user := &Users{
-		Email:        payload.Email,
-		PasswordHash: payload.Password,
-		Nombre:       payload.Name,
-		Role:         util.UserRoleUsuario,
-		Rut:          rut,
+		Email:  payload.Email,
+		Nombre: payload.Name,
+		Role:   util.UserRoleUsuario,
+		Rut:    rut,
+	}
+
+	if err := user.PasswordHash.Set(payload.Password); err != nil {
+		return nil, err
 	}
 
 	if err = s.store.Create(ctx, user); err != nil {
@@ -58,7 +61,10 @@ func (s *UserService) Update(ctx context.Context, userID uuid.UUID, payload *Upd
 		return err
 	}
 
-	user.PasswordHash = payload.Password
+	if err = user.PasswordHash.Set(payload.Password); err != nil {
+		return err
+	}
+
 	user.Nombre = payload.Name
 
 	if err = s.store.Update(ctx, user); err != nil {

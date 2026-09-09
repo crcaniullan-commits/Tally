@@ -153,7 +153,7 @@ func (s *StoreUser) Create(ctx context.Context, user *Users) error {
 
 	err := s.db.QueryRowContext(ctx, query,
 		user.Email,
-		user.PasswordHash,
+		user.PasswordHash.hash,
 		user.Nombre,
 		user.Role,
 		user.Rut.String(),
@@ -180,7 +180,7 @@ func (s *StoreUser) Update(ctx context.Context, user *Users) error {
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, user.PasswordHash, user.Nombre, user.ID)
+	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.hash, user.Nombre, user.ID)
 
 	if err != nil {
 		return err

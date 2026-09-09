@@ -11,7 +11,7 @@ import (
 )
 
 type ServiceUsers interface {
-	Create(context.Context, *CreateUserPaylaod) (*Users, error)
+	Create(context.Context, *CreateUserPayload) (*Users, error)
 	Update(context.Context, uuid.UUID, *UpdateUserPayload) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, util.RUT) (*Users, error)
@@ -23,7 +23,7 @@ type UsersHandler struct {
 	errors  errorhandler.ErrorsResponse
 }
 
-type CreateUserPaylaod struct {
+type CreateUserPayload struct {
 	Email    string `json:"email" validate:"required,max=100,email"`
 	Password string `json:"password" validate:"required,min=8,max=72"`
 	Name     string `json:"nombre" validate:"required,max=100"`
@@ -40,7 +40,7 @@ func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler
 +	a http.Request
 */
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload CreateUserPaylaod
+	var payload CreateUserPayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return

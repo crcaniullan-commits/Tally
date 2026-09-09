@@ -2,6 +2,7 @@ package application
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 )
 
@@ -52,6 +54,8 @@ func (app *Application) Run() error {
 	r.Use(middleware.GlobalMiddlewares()...)
 
 	r.Route("/v1", func(r chi.Router) {
+		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
+		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		users.InitModule(r, app.db, app.logger)
 	})
 

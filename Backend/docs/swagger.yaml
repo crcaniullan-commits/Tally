@@ -1,4 +1,240 @@
+basePath: /v1
+definitions:
+  users.CreateUserPayload:
+    properties:
+      email:
+        maxLength: 100
+        type: string
+      nombre:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+      rut:
+        maxLength: 10
+        type: string
+    required:
+    - email
+    - nombre
+    - password
+    - rut
+    type: object
+  users.UpdateUserPayload:
+    properties:
+      nombre:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - nombre
+    - password
+    type: object
+  users.Users:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      nombre:
+        type: string
+      role:
+        $ref: '#/definitions/util.UserRole'
+      rut:
+        $ref: '#/definitions/util.RUT'
+      updated_at:
+        type: string
+    type: object
+  util.RUT:
+    properties:
+      cuerpo:
+        description: 'Ej: 19234567'
+        type: integer
+      dv:
+        description: 'Ej: "K" o "4"'
+        type: string
+    type: object
+  util.UserRole:
+    enum:
+    - usuario
+    - municipal
+    type: string
+    x-enum-varnames:
+    - UserRoleUsuario
+    - UserRoleMunicipal
 info:
-  contact: {}
-paths: {}
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API para Tally, app financiera para emprendedores
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Tally
+paths:
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Crea un usuario en la base de datos
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/users.CreateUserPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: usuario creado
+          schema:
+            type: string
+        "400":
+          description: payload del usuario erroneo
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Crear usuario
+      tags:
+      - Users
+  /users/{email}:
+    get:
+      description: Busca un usuario por su email
+      parameters:
+      - description: email del usuario
+        in: path
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: usuario
+          schema:
+            $ref: '#/definitions/users.Users'
+        "404":
+          description: usuario no encontrado
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Buscar usuario por email
+      tags:
+      - Users
+  /users/{userID}:
+    delete:
+      description: Elimina un usuario de la base de datos
+      parameters:
+      - description: ID del usuario
+        in: path
+        name: userID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: usuario eliminado
+          schema:
+            type: string
+        "400":
+          description: userID invalido
+          schema: {}
+        "404":
+          description: usuario no encontrado
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar usuario
+      tags:
+      - Users
+    patch:
+      consumes:
+      - application/json
+      description: Actualiza un usuario en la base de datos
+      parameters:
+      - description: ID del usuario
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/users.UpdateUserPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: usuario actualizado
+          schema:
+            type: string
+        "400":
+          description: payload del usuario erroneo
+          schema: {}
+        "404":
+          description: usuario no encontrado
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Actualizar usuario
+      tags:
+      - Users
+  /users/municipal/{rut}:
+    get:
+      description: Busca un usuario por su rut
+      parameters:
+      - description: rut del usuario
+        in: path
+        name: rut
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: usuario
+          schema:
+            $ref: '#/definitions/users.Users'
+        "400":
+          description: rut invalido
+          schema: {}
+        "404":
+          description: usuario no encontrado
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Buscar usuario por rut
+      tags:
+      - Users
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Autorization
+    type: apiKey
 swagger: "2.0"

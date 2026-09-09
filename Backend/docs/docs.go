@@ -9,22 +9,371 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
-    "paths": {}
+    "paths": {
+        "/users": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea un usuario en la base de datos",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Crear usuario",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/users.CreateUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "usuario creado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del usuario erroneo",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/users/municipal/{rut}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Busca un usuario por su rut",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Buscar usuario por rut",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "rut del usuario",
+                        "name": "rut",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario",
+                        "schema": {
+                            "$ref": "#/definitions/users.Users"
+                        }
+                    },
+                    "400": {
+                        "description": "rut invalido",
+                        "schema": {}
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/users/{email}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Busca un usuario por su email",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Buscar usuario por email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "email del usuario",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario",
+                        "schema": {
+                            "$ref": "#/definitions/users.Users"
+                        }
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/users/{userID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un usuario de la base de datos",
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Eliminar usuario",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID del usuario",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario eliminado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "userID invalido",
+                        "schema": {}
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Actualiza un usuario en la base de datos",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Actualizar usuario",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID del usuario",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/users.UpdateUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario actualizado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del usuario erroneo",
+                        "schema": {}
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "users.CreateUserPayload": {
+            "type": "object",
+            "required": [
+                "email",
+                "nombre",
+                "password",
+                "rut"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
+                },
+                "rut": {
+                    "type": "string",
+                    "maxLength": 10
+                }
+            }
+        },
+        "users.UpdateUserPayload": {
+            "type": "object",
+            "required": [
+                "nombre",
+                "password"
+            ],
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
+                }
+            }
+        },
+        "users.Users": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "nombre": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/util.UserRole"
+                },
+                "rut": {
+                    "$ref": "#/definitions/util.RUT"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "util.RUT": {
+            "type": "object",
+            "properties": {
+                "cuerpo": {
+                    "description": "Ej: 19234567",
+                    "type": "integer"
+                },
+                "dv": {
+                    "description": "Ej: \"K\" o \"4\"",
+                    "type": "string"
+                }
+            }
+        },
+        "util.UserRole": {
+            "type": "string",
+            "enum": [
+                "usuario",
+                "municipal"
+            ],
+            "x-enum-varnames": [
+                "UserRoleUsuario",
+                "UserRoleMunicipal"
+            ]
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "Autorization",
+            "in": "header"
+        }
+    }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "",
 	Host:             "",
-	BasePath:         "",
+	BasePath:         "/v1",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "Tally",
+	Description:      "API para Tally, app financiera para emprendedores",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
