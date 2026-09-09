@@ -1,0 +1,38 @@
+version: '3'
+
+# Carga variables de entorno (DB_ADDR, etc). Crea tu .envrc o .env
+# a partir de .env.example si no tienes uno.
+dotenv:
+  - .envrc
+  - .env
+
+vars:
+  MIGRATIONS_PATH: ./migrations
+
+tasks:
+  default:
+    desc: Lista las tareas disponibles
+    cmds:
+      - go tool task --list
+
+  migration:
+    desc: "Crea una nueva migración (ej: go tool task migration NAME=create_users)"
+    requires:
+      vars: [NAME]
+    cmds:
+      - go tool migrate create -seq -ext sql -dir {{.MIGRATIONS_PATH}} {{.NAME}}
+
+  migration-up:
+    desc: Aplica las migraciones pendientes
+    cmds:
+      - go tool migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} up
+
+  migration-down:
+    desc: "Reverte migraciones (ej: go tool task migration-down STEPS=2)"
+    cmds:
+      - go tool migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} down {{.STEPS}}
+
+  gen-docs:
+    desc: Genera la documentación Swagger
+    cmds:
+      - go tool swag init -g main.go -d cmd,internal && go tool swag fmt

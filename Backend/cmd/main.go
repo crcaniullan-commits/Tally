@@ -10,9 +10,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-//	@title	Tally
+//	@title			Tally
 //	@description	API para Tally, app financiera para emprendedores
-//	@termsOfService http://swagger.io/terms/
+//	@termsOfService	http://swagger.io/terms/
 
 //	@contact.name	API Support
 //	@contact.url	http://www.swagger.io/support
@@ -21,7 +21,7 @@ import (
 //	@license.name	Apache 2.0
 //	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @BasePath		/v1
+// @BasePath					/v1
 //
 // @securityDefinitions.apiKey	ApiKeyAuth
 // @in							header

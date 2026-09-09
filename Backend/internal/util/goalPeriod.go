@@ -3,7 +3,7 @@ package util
 type GoalPeriod string
 
 const (
-	GoalPeriodDia   GoalPeriod = "dia"
+	GoalPeriodDia    GoalPeriod = "dia"
 	GoalPeriodSemana GoalPeriod = "semana"
-	GoalPeriodMes   GoalPeriod = "mes"
+	GoalPeriodMes    GoalPeriod = "mes"
 )
