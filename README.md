@@ -18,6 +18,10 @@ pendiente
 
 pendiente
 
+### Ruta del swagger
+```
+http://localhost/v1/swagger/
+```
 ## Integrantes
 
 |  Integrante  |  Rol  |
