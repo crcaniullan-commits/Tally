@@ -22,6 +22,6 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger) {
 			r.Delete("/", hdl.Delete)
 		})
 		r.Get("/{email}", hdl.GetByEmail)
-		r.Get("/{rut}", hdl.GetByRut)
+		r.Get("/municipal/{rut}", hdl.GetByRut)
 	})
 }

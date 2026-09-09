@@ -35,7 +35,7 @@ func (s *StoreUser) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 		&user.ID,
 		&user.Email,
 		&user.Nombre,
-		&user.Rut,
+		&rawRut,
 	)
 
 	if err != nil {
@@ -115,7 +115,7 @@ func (s *StoreUser) GetByEmail(ctx context.Context, email string) (*Users, error
 		&user.ID,
 		&user.Email,
 		&user.Nombre,
-		&user.Rut,
+		&rawRut,
 	)
 
 	if err != nil {
@@ -173,14 +173,14 @@ func (s *StoreUser) Create(ctx context.Context, user *Users) error {
 func (s *StoreUser) Update(ctx context.Context, user *Users) error {
 	query := `
 		UPDATE users
-		SET password_hash = $1, nombre = $2, update_at = NOW()
+		SET password_hash = $1, nombre = $2, updated_at = NOW()
 		WHERE id = $3
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, user.ID, user.Nombre)
+	res, err := s.db.ExecContext(ctx, query, user.PasswordHash, user.Nombre, user.ID)
 
 	if err != nil {
 		return err
