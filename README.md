@@ -6,7 +6,7 @@ Tally es una aplicación de finanzas simples orientada a emprendedores informale
 
 - FrontEnd:       Aplicación móvil (pendiente de definición)
 - BackEnd:        Servidor local o en la nube (pendiente de definición)
-- Base de datos:  En local o nube, se usara el motor PostgresSQL
+- Base de datos:  En local o nube, se usará el motor PostgresSQL
 
 ## Instrucciones para ejecutar el proyecto
 
@@ -17,15 +17,15 @@ git clone https://github.com/crcaniullan-commits/Tally.git
 ```
 
 ### Ejecutar el Backend
-Entrar a la carpeta del Backend, sera necesario crear un archivo .env que contenga definido las variables del archivo .env.example 
-una ves creado el archivo .env se puede levantar el contenedor de la base de datos
+Entrar a la carpeta del Backend, será necesario crear un archivo .env que contenga definido las variables del archivo .env.example 
+una vez creado el archivo .env se puede levantar el contenedor de la base de datos
 ```
 docker-compose up
 ```
-Una ves este lista la base de datos prueba que exista usando un motor de base de datos de su preferencia para probar que puede
+Una vez esté lista la base de datos prueba que exista usando un motor de base de datos de su preferencia para probar que puede
 conectarse con el usuario definido en el .env
 
-una ves comprobado ejecute en su terminal:
+una vez comprobado ejecute en su terminal:
 ```
 go install tool
 ```
@@ -33,7 +33,7 @@ y
 ```
 go mod tidy
 ```
-esto instalara las herramientas necesarias para continuar, una ves listo ejecuta los siguientes comandos
+esto instalara las herramientas necesarias para continuar, una vez listo ejecuta los siguientes comandos
 ```
 go tool task migration-up
 ```
@@ -49,11 +49,28 @@ ve a
 http://localhost:8080/v1/swagger/
 ```
 si todo salio bien, cargara la pagina del swagger con las rutas actualmente vigentes,
-un detalle es que el puerto dependerá de lo que coloques en el .env, fijense que sea el mismo
+un detalle es que el puerto dependerá de lo que coloques en el .env, fíjense que sea el mismo
 
 ### Ejecutando el archivo Docker-Compose
 
-pendiente
+En el Backend del proyecto habrá una carpeta docker, dentro encontrara un archivo dockerfile
+y un archivo docker compose y un .env.example y un script entrypoint.sh, antes que nada debe 
+crear un archivo .env en la misma carpeta use el .env.example para saber que variables debe 
+definir en el .env. si ya tiene listo puede ejecutar
+```
+docker-compose up
+```
+
+esto creara los contenedores de la app, la base de datos y ejecutara las migraciones para 
+dejar la base de datos como la app espera que este.
+
+A partir de ahi puede ir a
+```
+http://localhost:8080/v1/swagger/
+```
+
+para probar que todo funcione.
+
 
 ## Integrantes
 
@@ -65,7 +82,7 @@ pendiente
 
 ## Metodología
 
-El proyecto sera desarrollado usando la metodología ágil Scrum, en sprints de una semanada de duración
+El proyecto será desarrollado usando la metodología ágil Scrum, en sprints de una semana de duración
 
 ## Arquitectura
 
