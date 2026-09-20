@@ -11,11 +11,9 @@ import (
 )
 
 type ServiceUsers interface {
-	Create(context.Context, *CreateUserPayload) (*Users, error)
 	Update(context.Context, uuid.UUID, *UpdateUserPayload) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, util.RUT) (*Users, error)
-	GetByEmail(context.Context, string) (*Users, error)
 }
 
 type UsersHandler struct {
@@ -32,41 +30,6 @@ type CreateUserPayload struct {
 
 func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler {
 	return &UsersHandler{s, e}
-}
-
-/*
-*	Creación de usuario
-* 	recibe un http.ResponseWritter y un pointer
-+	a http.Request
-*/
-func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload CreateUserPayload
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	user, err := h.service.Create(r.Context(), &payload)
-	if err != nil {
-		switch err {
-		case ErrDuplicateEmail:
-			h.errors.BadRequestResponse(w, r, err)
-			return
-		default:
-			h.errors.InternalServerError(w, r, err)
-			return
-		}
-	}
-
-	if err := util.JsonResponse(w, http.StatusCreated, user); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
 }
 
 type UpdateUserPayload struct {
@@ -142,34 +105,6 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}
-}
-
-/*
-*	Busca un usuario por email
-* 	recibe un http.ResponseWritter y un pointer
-+	a http.Request
-*/
-func (h *UsersHandler) GetByEmail(w http.ResponseWriter, r *http.Request) {
-	email := chi.URLParam(r, "email")
-
-	user, err := h.service.GetByEmail(r.Context(), email)
-
-	if err != nil {
-		switch err {
-		case ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
-			return
-		default:
-			h.errors.InternalServerError(w, r, err)
-			return
-		}
-	}
-
-	if err = util.JsonResponse(w, http.StatusOK, user); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
-
 }
 
 /*

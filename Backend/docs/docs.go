@@ -24,14 +24,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/users": {
+        "/auth": {
             "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Crea un usuario en la base de datos",
+                "description": "Registra un nuevo usuario y devuelve un token de autenticación",
                 "consumes": [
                     "application/json"
                 ],
@@ -39,9 +34,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Users"
+                    "Auth"
                 ],
-                "summary": "Crear usuario",
+                "summary": "Registrar usuario",
                 "parameters": [
                     {
                         "description": "payload",
@@ -49,19 +44,61 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/users.CreateUserPayload"
+                            "$ref": "#/definitions/auth.CreateUserPayload"
                         }
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "usuario creado",
+                    "200": {
+                        "description": "token de autenticacion",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "400": {
-                        "description": "payload del usuario erroneo",
+                        "description": "payload erroneo o datos duplicados",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Iniciar sesión",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.LoginUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "token de autenticacion",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "credenciales invalidas",
                         "schema": {}
                     },
                     "500": {
@@ -105,48 +142,6 @@ const docTemplate = `{
                     "400": {
                         "description": "rut invalido",
                         "schema": {}
-                    },
-                    "404": {
-                        "description": "usuario no encontrado",
-                        "schema": {}
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {}
-                    }
-                }
-            }
-        },
-        "/users/{email}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Busca un usuario por su email",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Users"
-                ],
-                "summary": "Buscar usuario por email",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "email del usuario",
-                        "name": "email",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "usuario",
-                        "schema": {
-                            "$ref": "#/definitions/users.Users"
-                        }
                     },
                     "404": {
                         "description": "usuario no encontrado",
@@ -260,7 +255,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "users.CreateUserPayload": {
+        "auth.CreateUserPayload": {
             "type": "object",
             "required": [
                 "email",
@@ -285,6 +280,24 @@ const docTemplate = `{
                 "rut": {
                     "type": "string",
                     "maxLength": 10
+                }
+            }
+        },
+        "auth.LoginUserPayload": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
                 }
             }
         },

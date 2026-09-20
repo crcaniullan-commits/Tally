@@ -16,12 +16,10 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger) {
 	hdl := NewUserHandler(svc, err)
 
 	r.Route("/users", func(r chi.Router) {
-		r.Post("/", hdl.Create)
 		r.Route("/{userID}", func(r chi.Router) {
 			r.Patch("/", hdl.Update)
 			r.Delete("/", hdl.Delete)
 		})
-		r.Get("/{email}", hdl.GetByEmail)
 		r.Get("/municipal/{rut}", hdl.GetByRut)
 	})
 }

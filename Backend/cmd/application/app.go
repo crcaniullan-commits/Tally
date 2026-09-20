@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/docs"
+	"github.com/crcaniullan-commits/Tally/internal/auth"
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -23,9 +24,16 @@ type Application struct {
 }
 
 type Config struct {
-	Addr   string
-	Db     DbConfig
-	ApiURL string
+	Addr      string
+	Db        DbConfig
+	ApiURL    string
+	JwtConfig JwtConfig
+}
+
+type JwtConfig struct {
+	Secret string
+	Exp    time.Duration
+	Iss    string
 }
 
 type DbConfig struct {
@@ -57,6 +65,8 @@ func (app *Application) Run() error {
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		users.InitModule(r, app.db, app.logger)
+		auth.InitModule(r, app.db, app.logger,
+			app.config.JwtConfig.Secret, app.config.JwtConfig.Iss, app.config.JwtConfig.Exp)
 	})
 
 	srv := &http.Server{

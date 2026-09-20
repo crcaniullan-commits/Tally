@@ -9,15 +9,15 @@ import (
 	"github.com/google/uuid"
 )
 
-type StoreUser struct {
+type UserStore struct {
 	db *sql.DB
 }
 
-func NewStorage(db *sql.DB) StoreUser {
-	return StoreUser{db}
+func NewStorage(db *sql.DB) *UserStore {
+	return &UserStore{db}
 }
 
-func (s *StoreUser) GetByID(ctx context.Context, userID uuid.UUID) (*Users, error) {
+func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, error) {
 	query := `
 		SELECT id, email, nombre, rut
 		FROM users
@@ -57,7 +57,7 @@ func (s *StoreUser) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 	return user, nil
 }
 
-func (s *StoreUser) GetByRut(ctx context.Context, userRut string) (*Users, error) {
+func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error) {
 	query := `
 		SELECT id, email, nombre, rut 
 		FROM users
@@ -97,80 +97,7 @@ func (s *StoreUser) GetByRut(ctx context.Context, userRut string) (*Users, error
 	return user, nil
 }
 
-func (s *StoreUser) GetByEmail(ctx context.Context, email string) (*Users, error) {
-	query := `
-		SELECT id, email, nombre, rut 
-		FROM users
-		WHERE email = $1;
-	`
-
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
-	defer cancel()
-
-	user := &Users{}
-
-	var rawRut string
-
-	err := s.db.QueryRowContext(ctx, query, email).Scan(
-		&user.ID,
-		&user.Email,
-		&user.Nombre,
-		&rawRut,
-	)
-
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-
-	parsedRut, err := util.ParseRUT(rawRut)
-
-	if err != nil {
-		return nil, err
-	}
-
-	user.Rut = parsedRut
-
-	return user, nil
-}
-
-func (s *StoreUser) Create(ctx context.Context, user *Users) error {
-	query := `
-		INSERT INTO users (email, password_hash, nombre, role, rut)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at;
-	`
-
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
-	defer cancel()
-
-	role := user.Role
-	if role == "" {
-		role = "usuario"
-	}
-
-	err := s.db.QueryRowContext(ctx, query,
-		user.Email,
-		user.PasswordHash.hash,
-		user.Nombre,
-		user.Role,
-		user.Rut.String(),
-	).Scan(
-		&user.ID,
-		&user.CreatedAt,
-	)
-	if err != nil {
-		if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
-			return ErrDuplicateEmail
-		}
-		return err
-	}
-	return nil
-}
-
-func (s *StoreUser) Update(ctx context.Context, user *Users) error {
+func (s *UserStore) Update(ctx context.Context, user *Users) error {
 	query := `
 		UPDATE users
 		SET password_hash = $1, nombre = $2, updated_at = NOW()
@@ -180,7 +107,7 @@ func (s *StoreUser) Update(ctx context.Context, user *Users) error {
 	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.hash, user.Nombre, user.ID)
+	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.Hash, user.Nombre, user.ID)
 
 	if err != nil {
 		return err
@@ -199,7 +126,7 @@ func (s *StoreUser) Update(ctx context.Context, user *Users) error {
 	return nil
 }
 
-func (s *StoreUser) Delete(ctx context.Context, userID uuid.UUID) error {
+func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 	query := `
 		DELETE FROM users
 		WHERE ID = $1

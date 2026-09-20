@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/crcaniullan-commits/Tally/cmd/application"
 	"github.com/crcaniullan-commits/Tally/internal/db"
@@ -37,6 +38,11 @@ func main() {
 			MaxIdleTime:  env.GetString("DB_MAX_IDLE_TIME", "15m"),
 		},
 		ApiURL: env.GetString("EXTERNAL_URL", "localhost:8080"),
+		JwtConfig: application.JwtConfig{
+			Secret: env.GetString("JWT_SECRET", "llaveSecreta"),
+			Exp:    time.Hour * 24 * 3,
+			Iss:    "Tally",
+		},
 	}
 
 	//Logger

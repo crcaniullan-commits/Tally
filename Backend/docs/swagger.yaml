@@ -1,6 +1,6 @@
 basePath: /v1
 definitions:
-  users.CreateUserPayload:
+  auth.CreateUserPayload:
     properties:
       email:
         maxLength: 100
@@ -20,6 +20,19 @@ definitions:
     - nombre
     - password
     - rut
+    type: object
+  auth.LoginUserPayload:
+    properties:
+      email:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
     type: object
   users.UpdateUserPayload:
     properties:
@@ -80,63 +93,62 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Tally
 paths:
-  /users:
+  /auth:
     post:
       consumes:
       - application/json
-      description: Crea un usuario en la base de datos
+      description: Registra un nuevo usuario y devuelve un token de autenticación
       parameters:
       - description: payload
         in: body
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/users.CreateUserPayload'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: usuario creado
-          schema:
-            type: string
-        "400":
-          description: payload del usuario erroneo
-          schema: {}
-        "500":
-          description: error interno del servidor
-          schema: {}
-      security:
-      - ApiKeyAuth: []
-      summary: Crear usuario
-      tags:
-      - Users
-  /users/{email}:
-    get:
-      description: Busca un usuario por su email
-      parameters:
-      - description: email del usuario
-        in: path
-        name: email
-        required: true
-        type: string
+          $ref: '#/definitions/auth.CreateUserPayload'
       produces:
       - application/json
       responses:
         "200":
-          description: usuario
+          description: token de autenticacion
           schema:
-            $ref: '#/definitions/users.Users'
-        "404":
-          description: usuario no encontrado
+            type: string
+        "400":
+          description: payload erroneo o datos duplicados
           schema: {}
         "500":
           description: error interno del servidor
           schema: {}
-      security:
-      - ApiKeyAuth: []
-      summary: Buscar usuario por email
+      summary: Registrar usuario
       tags:
-      - Users
+      - Auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Inicia sesión con email y contraseña y devuelve un token de autenticación
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginUserPayload'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: token de autenticacion
+          schema:
+            type: string
+        "400":
+          description: credenciales invalidas
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      summary: Iniciar sesión
+      tags:
+      - Auth
   /users/{userID}:
     delete:
       description: Elimina un usuario de la base de datos
