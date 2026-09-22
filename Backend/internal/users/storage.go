@@ -19,7 +19,7 @@ func NewStorage(db *sql.DB) *UserStore {
 
 func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, error) {
 	query := `
-		SELECT id, email, nombre, rut
+		SELECT id, email, nombre, rut, role
 		FROM users
 		WHERE id = $1
 	`
@@ -36,6 +36,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 		&user.Email,
 		&user.Nombre,
 		&rawRut,
+		&user.Role,
 	)
 
 	if err != nil {
@@ -59,7 +60,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 
 func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error) {
 	query := `
-		SELECT id, email, nombre, rut 
+		SELECT id, email, nombre, rut, role
 		FROM users
 		WHERE rut = $1;
 	`
@@ -76,6 +77,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 		&user.Email,
 		&user.Nombre,
 		&rawRut,
+		&user.Role,
 	)
 
 	if err != nil {

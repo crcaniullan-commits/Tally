@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -59,4 +60,9 @@ func (s *UserService) GetByRut(ctx context.Context, rut util.RUT) (*Users, error
 	}
 
 	return user, nil
+}
+
+func GetUserFromContext(r *http.Request) *Users {
+	user, _ := r.Context().Value(util.UserCtx).(*Users)
+	return user
 }

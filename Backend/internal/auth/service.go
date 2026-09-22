@@ -41,7 +41,6 @@ func (s *AuthService) RegisterUser(ctx context.Context, payload *CreateUserPaylo
 	}
 
 	user.Rut = rut
-	user.Role = util.UserRoleUsuario
 
 	err = s.store.Create(ctx, user)
 
