@@ -93,63 +93,7 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Tally
 paths:
-  /auth:
-    post:
-      consumes:
-      - application/json
-      description: Registra un nuevo usuario y devuelve un token de autenticación
-      parameters:
-      - description: payload
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/auth.CreateUserPayload'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: token de autenticacion
-          schema:
-            type: string
-        "400":
-          description: payload erroneo o datos duplicados
-          schema: {}
-        "500":
-          description: error interno del servidor
-          schema: {}
-      summary: Registrar usuario
-      tags:
-      - Auth
-  /auth/login:
-    post:
-      consumes:
-      - application/json
-      description: Inicia sesión con email y contraseña y devuelve un token de autenticación
-      parameters:
-      - description: payload
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/auth.LoginUserPayload'
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: token de autenticacion
-          schema:
-            type: string
-        "400":
-          description: credenciales invalidas
-          schema: {}
-        "500":
-          description: error interno del servidor
-          schema: {}
-      summary: Iniciar sesión
-      tags:
-      - Auth
-  /users/{userID}:
+  /app/users/{userID}:
     delete:
       description: Elimina un usuario de la base de datos
       parameters:
@@ -214,7 +158,7 @@ paths:
       summary: Actualizar usuario
       tags:
       - Users
-  /users/municipal/{rut}:
+  /app/users/municipal/{rut}:
     get:
       description: Busca un usuario por su rut
       parameters:
@@ -244,6 +188,62 @@ paths:
       summary: Buscar usuario por rut
       tags:
       - Users
+  /auth:
+    post:
+      consumes:
+      - application/json
+      description: Registra un nuevo usuario y devuelve un token de autenticación
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CreateUserPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token de autenticacion
+          schema:
+            type: string
+        "400":
+          description: payload erroneo o datos duplicados
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      summary: Registrar usuario
+      tags:
+      - Auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Inicia sesión con email y contraseña y devuelve un token de autenticación
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginUserPayload'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: token de autenticacion
+          schema:
+            type: string
+        "400":
+          description: credenciales invalidas
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      summary: Iniciar sesión
+      tags:
+      - Auth
 securityDefinitions:
   ApiKeyAuth:
     in: header

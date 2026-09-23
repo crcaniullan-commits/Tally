@@ -5,19 +5,18 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"uuid"
 
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type UserFinder interface {
 	GetByID(context.Context, uuid.UUID) (*users.Users, error)
 }
-
 type AuthMiddleware struct {
 	error errorhandler.ErrorsResponse
 	auth  auth.Authenticator
@@ -88,7 +87,7 @@ func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (a *AuthMiddleware) CheckOwnership(requiredRole string, next http.HandlerFunc) http.HandlerFunc {
+func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := users.GetUserFromContext(r)
 
@@ -109,7 +108,7 @@ func (a *AuthMiddleware) CheckOwnership(requiredRole string, next http.HandlerFu
 	})
 }
 
-func (a *AuthMiddleware) checkRole(ctx context.Context, requiredUser string, userID uuid.UUID) (bool, error) {
+func (a *AuthMiddleware) checkRole(ctx context.Context, requiredUser util.UserRole, userID uuid.UUID) (bool, error) {
 	role, err := a.find.GetByID(ctx, userID)
 
 	if err != nil {

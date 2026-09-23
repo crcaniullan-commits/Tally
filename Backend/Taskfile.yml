@@ -18,19 +18,20 @@ tasks:
   migration:
     desc: "Crea una nueva migración (ej: go tool task migration NAME=create_users)"
     requires:
-      vars: [NAME]
+      vars: 
+        - name: NAME
     cmds:
-      - go tool migrate create -seq -ext sql -dir {{.MIGRATIONS_PATH}} {{.NAME}}
+      - go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate create -seq -ext sql -dir {{.MIGRATIONS_PATH}} {{.NAME}}
 
   migration-up:
     desc: Aplica las migraciones pendientes
     cmds:
-      - go tool migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} up
+      - go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} up
 
   migration-down:
     desc: "Reverte migraciones (ej: go tool task migration-down STEPS=2)"
     cmds:
-      - go tool migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} down {{.STEPS}}
+      - go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path={{.MIGRATIONS_PATH}} -database={{.DB_ADDR}} down {{.STEPS}}
 
   gen-docs:
     desc: Genera la documentación Swagger

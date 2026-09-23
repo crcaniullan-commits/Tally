@@ -8,6 +8,7 @@ import (
 
 	"github.com/crcaniullan-commits/Tally/docs"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -59,14 +60,27 @@ func (app *Application) Run() error {
 
 	r := chi.NewRouter()
 
+	middl := middleware.NewAuthMiddleware(
+		errorhandler.NewErrorResponse(app.logger),
+		auth.NewJWTAuthenticator(
+			app.config.JwtConfig.Secret,
+			app.config.JwtConfig.Iss,
+			app.config.JwtConfig.Iss,
+		),
+		users.NewStorage(app.db),
+	)
+
 	r.Use(middleware.GlobalMiddlewares()...)
 
 	r.Route("/v1", func(r chi.Router) {
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
-		users.InitModule(r, app.db, app.logger)
 		auth.InitModule(r, app.db, app.logger,
 			app.config.JwtConfig.Secret, app.config.JwtConfig.Iss, app.config.JwtConfig.Exp)
+		r.Route("/app", func(r chi.Router) {
+			r.Use(middl.AuthTokenMiddleware)
+			users.InitModule(r, app.db, app.logger, middl)
+		})
 	})
 
 	srv := &http.Server{

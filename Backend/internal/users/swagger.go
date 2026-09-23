@@ -14,7 +14,7 @@ package users
 //	@Failure		404		{object}	error				"usuario no encontrado"
 //	@Failure		500		{object}	error				"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/users/{userID}	[patch]
+//	@Router			/app/users/{userID}	[patch]
 func Update() {}
 
 // DeleteUser
@@ -28,7 +28,7 @@ func Update() {}
 //	@Failure		404		{object}	error	"usuario no encontrado"
 //	@Failure		500		{object}	error	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/users/{userID}	[delete]
+//	@Router			/app/users/{userID}	[delete]
 func Delete() {}
 
 // GetUserByRut
@@ -43,5 +43,5 @@ func Delete() {}
 //	@Failure		404	{object}	error	"usuario no encontrado"
 //	@Failure		500	{object}	error	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/users/municipal/{rut}	[get]
+//	@Router			/app/users/municipal/{rut}	[get]
 func GetByRut() {}

@@ -24,91 +24,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth": {
-            "post": {
-                "description": "Registra un nuevo usuario y devuelve un token de autenticación",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Registrar usuario",
-                "parameters": [
-                    {
-                        "description": "payload",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/auth.CreateUserPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "token de autenticacion",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "payload erroneo o datos duplicados",
-                        "schema": {}
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {}
-                    }
-                }
-            }
-        },
-        "/auth/login": {
-            "post": {
-                "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Iniciar sesión",
-                "parameters": [
-                    {
-                        "description": "payload",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/auth.LoginUserPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "token de autenticacion",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "credenciales invalidas",
-                        "schema": {}
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {}
-                    }
-                }
-            }
-        },
-        "/users/municipal/{rut}": {
+        "/app/users/municipal/{rut}": {
             "get": {
                 "security": [
                     {
@@ -154,7 +70,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/{userID}": {
+        "/app/users/{userID}": {
             "delete": {
                 "security": [
                     {
@@ -244,6 +160,90 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/auth": {
+            "post": {
+                "description": "Registra un nuevo usuario y devuelve un token de autenticación",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Registrar usuario",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.CreateUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token de autenticacion",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "payload erroneo o datos duplicados",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Iniciar sesión",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.LoginUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "token de autenticacion",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "credenciales invalidas",
                         "schema": {}
                     },
                     "500": {
