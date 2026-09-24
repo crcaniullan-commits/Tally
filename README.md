@@ -22,7 +22,7 @@ una vez creado el archivo .env se puede levantar el contenedor de la base de dat
 ```
 docker-compose up
 ```
-Una vez esté lista la base de datos prueba que exista usando un motor de base de datos de su preferencia para probar que puede
+Cuando el docker compose esté listo prueba que la base de datos exista usando un motor de base de datos de su preferencia, pruebe que pueda
 conectarse con el usuario definido en el .env
 
 una vez comprobado ejecute en su terminal:
@@ -33,16 +33,17 @@ y
 ```
 go mod tidy
 ```
-esto instalara las herramientas necesarias para continuar, una vez listo ejecuta los siguientes comandos
+esto instalara las herramientas necesarias para continuar, cuando tenga esto listo ejecuta los siguientes comandos
 ```
 go tool task migration-up
 ```
-esto ejecutara las migraciones y dejaran la base de datos con las tablas que se usaran
+esto ejecutara las migraciones y dejaran la base de datos con las tablas que se usaran.
+
 Finalmente ejecuta
 ```
 go tool task start
 ```
-para compilar y ejecutar el backend
+para compilar y ejecutar el backend, cuando este ejecutado
 ve a
 
 ```
@@ -53,8 +54,8 @@ un detalle es que el puerto dependerá de lo que coloques en el .env, fíjense q
 
 ### Ejecutando el archivo Docker-Compose
 
-En el Backend del proyecto habrá una carpeta docker, dentro encontrara un archivo dockerfile
-y un archivo docker compose y un .env.example y un script entrypoint.sh, antes que nada debe 
+En el Backend del proyecto habrá una carpeta docker, dentro encontrara un archivo dockerfile,
+un archivo docker compose, un .env.example y un script entrypoint.sh, antes que nada debe 
 crear un archivo .env en la misma carpeta use el .env.example para saber que variables debe 
 definir en el .env. si ya tiene listo puede ejecutar
 ```
