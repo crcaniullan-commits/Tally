@@ -22,10 +22,8 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl Middl
 	hdl := NewUserHandler(svc, err)
 
 	r.Route("/users", func(r chi.Router) {
-		r.Route("/{userID}", func(r chi.Router) {
-			r.Patch("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Update))
-			r.Delete("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Delete))
-		})
+		r.Patch("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Update))
+		r.Delete("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Delete))
 		r.Get("/municipal/{rut}", middl.CheckOwnership(util.UserRoleMunicipal, hdl.GetByRut))
 	})
 }

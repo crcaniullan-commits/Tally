@@ -12,7 +12,6 @@ type StoreUser interface {
 	Update(context.Context, *Users) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, string) (*Users, error)
-	GetByID(context.Context, uuid.UUID) (*Users, error)
 }
 
 type UserService struct {
@@ -23,21 +22,17 @@ func NewUserService(store StoreUser) *UserService {
 	return &UserService{store: store}
 }
 
-func (s *UserService) Update(ctx context.Context, userID uuid.UUID, payload *UpdateUserPayload) error {
+func (s *UserService) Update(ctx context.Context, user *Users, payload *UpdateUserPayload) error {
+	if payload.Password != "" {
+		if err := user.PasswordHash.Set(payload.Password); err != nil {
+			return err
+		}
+	} else if payload.Name != "" {
 
-	user, err := s.store.GetByID(ctx, userID)
-
-	if err != nil {
-		return err
+		user.Nombre = payload.Name
 	}
 
-	if err = user.PasswordHash.Set(payload.Password); err != nil {
-		return err
-	}
-
-	user.Nombre = payload.Name
-
-	if err = s.store.Update(ctx, user); err != nil {
+	if err := s.store.Update(ctx, user); err != nil {
 		return err
 	}
 
@@ -45,7 +40,6 @@ func (s *UserService) Update(ctx context.Context, userID uuid.UUID, payload *Upd
 }
 
 func (s *UserService) Delete(ctx context.Context, userID uuid.UUID) error {
-
 	if err := s.store.Delete(ctx, userID); err != nil {
 		return err
 	}

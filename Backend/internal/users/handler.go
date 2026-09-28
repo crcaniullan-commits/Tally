@@ -11,7 +11,7 @@ import (
 )
 
 type ServiceUsers interface {
-	Update(context.Context, uuid.UUID, *UpdateUserPayload) error
+	Update(context.Context, *Users, *UpdateUserPayload) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, util.RUT) (*Users, error)
 }
@@ -19,13 +19,6 @@ type ServiceUsers interface {
 type UsersHandler struct {
 	service ServiceUsers
 	errors  errorhandler.ErrorsResponse
-}
-
-type CreateUserPayload struct {
-	Email    string `json:"email" validate:"required,max=100,email"`
-	Password string `json:"password" validate:"required,min=8,max=72"`
-	Name     string `json:"nombre" validate:"required,max=100"`
-	Rut      string `json:"rut" validate:"required,max=10"`
 }
 
 func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler {
@@ -38,29 +31,23 @@ type UpdateUserPayload struct {
 }
 
 /*
-*	Actualiza un usuario
-* 	recibe un http.ResponseWritter y un pointer
-+	a http.Request
-*/
+*	handler para que el usuario actualize sus datos
+ */
 func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID, err := uuid.Parse(chi.URLParam(r, "userID"))
-	if err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
-
 	var payload UpdateUserPayload
-	if err = util.ReadJSON(w, r, &payload); err != nil {
+	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}
 
-	if err = util.Validate.Struct(payload); err != nil {
+	if err := util.Validate.Struct(payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
 
-	if err = h.service.Update(r.Context(), userID, &payload); err != nil {
+	user := GetUserFromContext(r)
+
+	if err := h.service.Update(r.Context(), user, &payload); err != nil {
 		switch err {
 		case ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
@@ -71,26 +58,20 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = util.JsonResponse(w, http.StatusOK, "Usuario actualizado con exito"); err != nil {
+	if err := util.JsonResponse(w, http.StatusOK, "Usuario actualizado con exito"); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}
 }
 
-/*
-*	Elimina un usuario de la base de datos
-* 	recibe un http.ResponseWritter y un pointer
-+	a http.Request
-*/
+/**
+*	Handler para que el usuario elimine su cuenta
+ */
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID, err := uuid.Parse(chi.URLParam(r, "userID"))
 
-	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
+	user := GetUserFromContext(r)
 
-	if err = h.service.Delete(r.Context(), userID); err != nil {
+	if err := h.service.Delete(r.Context(), user.ID); err != nil {
 		switch err {
 		case ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
@@ -101,17 +82,16 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = util.JsonResponse(w, http.StatusOK, "Usuario eliminado"); err != nil {
+	if err := util.JsonResponse(w, http.StatusOK, "Usuario eliminado"); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}
 }
 
-/*
-*	Busca un usuario por su rut
-* 	recibe un http.ResponseWritter y un pointer
-+	a http.Request
-*/
+/**
+*	Handler para que los usuarios municipales
+*	Buscen la cuenta de los usuarios emprendedores
+ */
 func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
 	rut, err := util.ParseRUT(chi.URLParam(r, "rut"))
 
