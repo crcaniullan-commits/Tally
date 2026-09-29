@@ -16,8 +16,26 @@ COPY migrations ./migrations
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /server ./cmd \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -tags 'postgres' -o /migrate github.com/golang-migrate/migrate/v4/cmd/migrate
 
+# Test stage
+# Debe ir ANTES del runtime: `docker build` sin --target usa la última etapa,
+# y el servicio `app` de docker-compose depende de que esa siga siendo runtime.
+FROM golang:1.27-alpine AS test
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+# _test.go viven dentro de internal/, así que_copy los incluye
+COPY cmd ./cmd
+COPY internal ./internal
+COPY docs ./docs
+COPY migrations ./migrations
+
+CMD ["go", "test", "-race", "-cover", "./..."]
+
 # Runtime stage
-FROM alpine:3.21
+FROM alpine:3.21 AS runtime
 
 RUN apk add --no-cache ca-certificates \
     && adduser -D -u 10001 app

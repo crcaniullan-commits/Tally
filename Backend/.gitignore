@@ -7,3 +7,5 @@
 
 # Go
 *.test
+coverage.out
+coverage.html

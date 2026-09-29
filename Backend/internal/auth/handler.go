@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 )
 
@@ -45,10 +46,10 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		switch err {
-		case ErrDuplicateEmail:
+		case users.ErrDuplicateEmail:
 			h.errors.BadRequestResponse(w, r, err)
 			return
-		case ErrDuplicateRut:
+		case users.ErrDuplicateRut:
 			h.errors.BadRequestResponse(w, r, err)
 			return
 		default:
@@ -84,7 +85,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		switch err {
-		case ErrNotFound:
+		case util.ErrNotFound:
 			h.errors.BadRequestResponse(w, r, err)
 			return
 		default:
