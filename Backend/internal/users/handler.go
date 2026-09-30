@@ -26,8 +26,8 @@ func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler
 }
 
 type UpdateUserPayload struct {
-	Password string `json:"password" validate:"required,min=8,max=72"`
-	Name     string `json:"nombre" validate:"required,max=100"`
+	Password string `json:"password" validate:"omitempty,min=8,max=72"`
+	Name     string `json:"nombre" validate:"omitempty,max=100"`
 }
 
 /*

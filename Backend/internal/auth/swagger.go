@@ -7,10 +7,10 @@ package auth
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body	CreateUserPayload	true	"payload"
-//	@Success		200		{object}	string			"token de autenticacion"
-//	@Failure		400		{object}	error			"payload erroneo o datos duplicados"
-//	@Failure		500		{object}	error			"error interno del servidor"
+//	@Param			payload	body		CreateUserPayload	true	"payload"
+//	@Success		200		{object}	string				"token de autenticacion"
+//	@Failure		400		{object}	error				"payload erroneo o datos duplicados"
+//	@Failure		500		{object}	error				"error interno del servidor"
 //	@Router			/auth	[post]
 func Register() {}
 
@@ -21,9 +21,9 @@ func Register() {}
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body	LoginUserPayload	true	"payload"
-//	@Success		202		{object}	string			"token de autenticacion"
-//	@Failure		400		{object}	error			"credenciales invalidas"
-//	@Failure		500		{object}	error			"error interno del servidor"
+//	@Param			payload		body		LoginUserPayload	true	"payload"
+//	@Success		202			{object}	string				"token de autenticacion"
+//	@Failure		400			{object}	error				"credenciales invalidas"
+//	@Failure		500			{object}	error				"error interno del servidor"
 //	@Router			/auth/login	[post]
 func Login() {}

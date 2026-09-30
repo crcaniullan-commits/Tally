@@ -32,6 +32,9 @@ type IncomePayload struct {
 	Descripcion   *string            `json:"descripcion" validate:"omitempty,max=100"`
 }
 
+/*
+*	Añade un nuveo income
+ */
 func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 	var payload IncomePayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
@@ -60,6 +63,9 @@ func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 
 }
 
+/*
+*	Elimina un income
+ */
 func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	incomeID, err := uuid.Parse(chi.URLParam(r, "incomeID"))
 
@@ -87,6 +93,9 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+/*
+*	Optiene todos los income del usuario
+ */
 func (h *IncomesHandler) GetIncomesOfUser(w http.ResponseWriter, r *http.Request) {
 	user := users.GetUserFromContext(r)
 

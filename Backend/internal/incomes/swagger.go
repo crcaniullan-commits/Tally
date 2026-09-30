@@ -7,8 +7,8 @@ package incomes
 //	@Tags			Incomes
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body		IncomePayload	true	"payload"
-//	@Success		201		{object}	IncomeStorage	"ingreso creado"
+//	@Param			payload	body		IncomePayload		true	"payload"
+//	@Success		201		{object}	IncomeStorage		"ingreso creado"
 //	@Failure		400		{object}	map[string]string	"payload del ingreso erroneo"
 //	@Failure		500		{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth

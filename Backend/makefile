@@ -16,7 +16,7 @@ migration-down:
 
 .PHONY: gen-docs
 gen-docs:
-	@swag init -g cmd/src/main.go -d cmd,internal && swag fmt
+	@swag init -g main.go -d cmd,internal && swag fmt
 
 # Flags que usan `make test` y `make test-cover`. Se pueden sobreescribir:
 #   make test TEST_FLAGS="-run TestUserService -v"

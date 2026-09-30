@@ -180,53 +180,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/users/municipal/{rut}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Busca un usuario por su rut",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Users"
-                ],
-                "summary": "Buscar usuario por rut",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "rut del usuario",
-                        "name": "rut",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "usuario",
-                        "schema": {
-                            "$ref": "#/definitions/users.Users"
-                        }
-                    },
-                    "400": {
-                        "description": "rut invalido",
-                        "schema": {}
-                    },
-                    "404": {
-                        "description": "usuario no encontrado",
-                        "schema": {}
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {}
-                    }
-                }
-            }
-        },
-        "/app/users/{userID}": {
+        "/app/users": {
             "delete": {
                 "security": [
                     {
@@ -238,15 +192,6 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Eliminar usuario",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID del usuario",
-                        "name": "userID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "usuario eliminado",
@@ -287,13 +232,6 @@ const docTemplate = `{
                 "summary": "Actualizar usuario",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "ID del usuario",
-                        "name": "userID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
                         "description": "payload",
                         "name": "payload",
                         "in": "body",
@@ -312,6 +250,52 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "payload del usuario erroneo",
+                        "schema": {}
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/app/users/municipal/{rut}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Busca un usuario por su rut",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Buscar usuario por rut",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "rut del usuario",
+                        "name": "rut",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario",
+                        "schema": {
+                            "$ref": "#/definitions/users.Users"
+                        }
+                    },
+                    "400": {
+                        "description": "rut invalido",
                         "schema": {}
                     },
                     "404": {

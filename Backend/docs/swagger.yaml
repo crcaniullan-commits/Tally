@@ -247,15 +247,9 @@ paths:
       summary: Eliminar ingreso
       tags:
       - Incomes
-  /app/users/{userID}:
+  /app/users:
     delete:
       description: Elimina un usuario de la base de datos
-      parameters:
-      - description: ID del usuario
-        in: path
-        name: userID
-        required: true
-        type: string
       responses:
         "200":
           description: usuario eliminado
@@ -280,11 +274,6 @@ paths:
       - application/json
       description: Actualiza un usuario en la base de datos
       parameters:
-      - description: ID del usuario
-        in: path
-        name: userID
-        required: true
-        type: string
       - description: payload
         in: body
         name: payload
