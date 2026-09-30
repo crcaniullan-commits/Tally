@@ -9,6 +9,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/docs"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -80,6 +81,7 @@ func (app *Application) Run() error {
 		r.Route("/app", func(r chi.Router) {
 			r.Use(middl.AuthTokenMiddleware)
 			users.InitModule(r, app.db, app.logger, middl)
+			incomes.InitModule(r, app.db, app.logger, middl)
 		})
 	})
 

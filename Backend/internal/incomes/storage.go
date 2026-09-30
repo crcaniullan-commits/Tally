@@ -12,9 +12,9 @@ import (
 type IncomeStorage struct {
 	ID            uuid.UUID          `json:"id"`
 	UserID        uuid.UUID          `json:"userID"`
-	Monto         float64            `json:"monto"`
+	Monto         int64              `json:"monto"`
 	PaymentMethod util.PaymentMethod `json:"payment_method"`
-	Descripcion   *string            `json:"description"`
+	Descripcion   *string            `json:"descripcion"`
 	Fecha         time.Time          `json:"fecha"`
 	CreatedAt     time.Time          `json:"created_at"`
 }
@@ -27,10 +27,11 @@ func NewStorage(db *sql.DB) *StoreIncome {
 	return &StoreIncome{db}
 }
 
-func (s *StoreIncome) AddIncome(ctx context.Context, income IncomeStorage, userID uuid.UUID) error {
+func (s *StoreIncome) AddIncome(ctx context.Context, income *IncomeStorage) error {
 	query := `
-		INSERT INTO incomes (userID, monto, patment_method, descripcion)
+		INSERT INTO incomes (user_id, monto, payment_method, descripcion)
 		VALUES ($1, $2, $3, $4)
+		RETURNING id, fecha, created_at
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
@@ -54,25 +55,25 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income IncomeStorage, userI
 	return nil
 }
 
-func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID) error {
+func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {
 	query := `
 		DELETE FROM incomes
-		WHERE id = $1
+		WHERE id = $1 and user_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query)
+	res, err := s.db.ExecContext(ctx, query, incomeID, userID)
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	rows, err := res.RowsAffected()
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	if rows == 0 {
@@ -84,9 +85,9 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID) erro
 
 func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID) ([]IncomeStorage, error) {
 	query := `
-		SELECT monto, payment_method, descripcion, fecha
+		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at
 		FROM incomes
-		WHERE userID = $1
+		WHERE user_id = $1
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
@@ -100,7 +101,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID)
 
 	defer rows.Close()
 
-	var incomes []IncomeStorage
+	incomes := make([]IncomeStorage, 0)
 
 	for rows.Next() {
 		var income IncomeStorage

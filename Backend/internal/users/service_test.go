@@ -41,10 +41,10 @@ func TestUserService_Update(t *testing.T) {
 		store.AssertNumberOfCalls(t, "Update", 1)
 	})
 
-	t.Run("BUG: ignora el nombre si el payload trae password (if/else if excluyente)", func(t *testing.T) {
-		// service.go:26 usa `if password != "" { ... } else if name != ""`,
-		// por lo que enviar ambos campos deja el nombre sin actualizar.
-		// Este test fija el comportamiento ACTUAL para hacerlo visible.
+	t.Run("actualiza nombre y contraseña a la vez cuando viene el payload completo", func(t *testing.T) {
+		// Regresión: antes service.go usaba `if password != "" { ... } else if name != ""`,
+		// y enviar ambos campos dejaba el nombre sin actualizar. Ahora son dos `if`
+		// independientes (service.go:26 y service.go:32).
 		store := new(StoreUserMock)
 		service := NewUserService(store)
 
@@ -54,7 +54,10 @@ func TestUserService_Update(t *testing.T) {
 		store.On("Update", mock.Anything, user).Return(nil).Once()
 
 		require.NoError(t, service.Update(context.Background(), user, payload))
-		assert.Equal(t, "Nombre Original", user.Nombre, "el nombre NO debería cambiar, ese es el bug")
+
+		assert.Equal(t, "Nombre Nuevo", user.Nombre, "el nombre debe actualizarse aunque venga password")
+		assert.NoError(t, user.PasswordHash.Compare("NuevaClave123"))
+		store.AssertExpectations(t)
 	})
 
 	t.Run("actualiza solo el nombre cuando no viene password", func(t *testing.T) {

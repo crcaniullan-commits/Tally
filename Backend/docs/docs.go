@@ -24,6 +24,162 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/app/incomes": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve todos los ingresos del usuario autenticado. La respuesta viene envuelta en {\"data\": [...]}. Si el usuario no tiene ingresos, \"data\" es una lista vacia. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Incomes"
+                ],
+                "summary": "Listar ingresos del usuario",
+                "responses": {
+                    "200": {
+                        "description": "lista de ingresos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/incomes.IncomeStorage"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Incomes"
+                ],
+                "summary": "Registrar ingreso",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/incomes.IncomePayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "ingreso creado",
+                        "schema": {
+                            "$ref": "#/definitions/incomes.IncomeStorage"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del ingreso erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/incomes/{incomeID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un ingreso por su ID, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Incomes"
+                ],
+                "summary": "Eliminar ingreso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID del ingreso",
+                        "name": "incomeID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ingreso eliminado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "incomeID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "ingreso no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/users/municipal/{rut}": {
             "get": {
                 "security": [
@@ -301,6 +457,61 @@ const docTemplate = `{
                 }
             }
         },
+        "incomes.IncomePayload": {
+            "type": "object",
+            "required": [
+                "monto",
+                "payment_method"
+            ],
+            "properties": {
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "payment_method": {
+                    "enum": [
+                        "debito",
+                        "credito",
+                        "transferencia",
+                        "efectivo"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/util.PaymentMethod"
+                        }
+                    ]
+                }
+            }
+        },
+        "incomes.IncomeStorage": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string"
+                },
+                "fecha": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/util.PaymentMethod"
+                },
+                "userID": {
+                    "type": "string"
+                }
+            }
+        },
         "users.UpdateUserPayload": {
             "type": "object",
             "required": [
@@ -344,6 +555,21 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "util.PaymentMethod": {
+            "type": "string",
+            "enum": [
+                "debito",
+                "credito",
+                "transferencia",
+                "efectivo"
+            ],
+            "x-enum-varnames": [
+                "PaymentMethodDebito",
+                "PaymentMethodCredito",
+                "PaymentMethodTransferencia",
+                "PaymentMethodEfectivo"
+            ]
         },
         "util.RUT": {
             "type": "object",

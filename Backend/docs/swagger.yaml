@@ -34,6 +34,42 @@ definitions:
     - email
     - password
     type: object
+  incomes.IncomePayload:
+    properties:
+      descripcion:
+        maxLength: 100
+        type: string
+      monto:
+        type: integer
+      payment_method:
+        allOf:
+        - $ref: '#/definitions/util.PaymentMethod'
+        enum:
+        - debito
+        - credito
+        - transferencia
+        - efectivo
+    required:
+    - monto
+    - payment_method
+    type: object
+  incomes.IncomeStorage:
+    properties:
+      created_at:
+        type: string
+      descripcion:
+        type: string
+      fecha:
+        type: string
+      id:
+        type: string
+      monto:
+        type: integer
+      payment_method:
+        $ref: '#/definitions/util.PaymentMethod'
+      userID:
+        type: string
+    type: object
   users.UpdateUserPayload:
     properties:
       nombre:
@@ -64,6 +100,18 @@ definitions:
       updated_at:
         type: string
     type: object
+  util.PaymentMethod:
+    enum:
+    - debito
+    - credito
+    - transferencia
+    - efectivo
+    type: string
+    x-enum-varnames:
+    - PaymentMethodDebito
+    - PaymentMethodCredito
+    - PaymentMethodTransferencia
+    - PaymentMethodEfectivo
   util.RUT:
     properties:
       cuerpo:
@@ -93,6 +141,112 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Tally
 paths:
+  /app/incomes:
+    get:
+      description: 'Devuelve todos los ingresos del usuario autenticado. La respuesta
+        viene envuelta en {"data": [...]}. Si el usuario no tiene ingresos, "data"
+        es una lista vacia. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lista de ingresos
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/incomes.IncomeStorage'
+              type: array
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar ingresos del usuario
+      tags:
+      - Incomes
+    post:
+      consumes:
+      - application/json
+      description: 'Registra un nuevo ingreso asociado al usuario autenticado. La
+        respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo
+        el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
+        (CLP, sin decimales).'
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/incomes.IncomePayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: ingreso creado
+          schema:
+            $ref: '#/definitions/incomes.IncomeStorage'
+        "400":
+          description: payload del ingreso erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar ingreso
+      tags:
+      - Incomes
+  /app/incomes/{incomeID}:
+    delete:
+      description: 'Elimina un ingreso por su ID, siempre que pertenezca al usuario
+        autenticado. La respuesta viene envuelta en {"data": ...} con el mensaje de
+        confirmación.'
+      parameters:
+      - description: ID del ingreso
+        in: path
+        name: incomeID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ingreso eliminado
+          schema:
+            type: string
+        "400":
+          description: incomeID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: ingreso no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar ingreso
+      tags:
+      - Incomes
   /app/users/{userID}:
     delete:
       description: Elimina un usuario de la base de datos

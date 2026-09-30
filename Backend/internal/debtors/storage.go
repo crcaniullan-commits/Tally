@@ -11,7 +11,7 @@ type DebtorStorage struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID
 	Nombre      string
-	Monto       float64
+	Monto       int64
 	Descripcion *string
 	Pagado      bool
 	FechaLimite *time.Time

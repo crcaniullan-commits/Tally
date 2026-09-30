@@ -10,7 +10,7 @@ import (
 type ExpenseStorage struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID
-	Monto       float64
+	Monto       int64
 	CategoryID  uuid.UUID
 	Descripcion *string
 	Fecha       time.Time

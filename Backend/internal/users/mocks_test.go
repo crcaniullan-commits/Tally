@@ -56,10 +56,12 @@ func (m *ServiceUsersMock) GetByRut(ctx context.Context, rut util.RUT) (*Users, 
 	return user, args.Error(1)
 }
 
+var testUserID = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
+
 // newTestUser construye un usuario válido y reutilizable en los tests.
 func newTestUser() *Users {
 	return &Users{
-		ID:     uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b"),
+		ID:     testUserID,
 		Email:  "emprendedor@correo.cl",
 		Nombre: "Nombre Original",
 		Role:   util.UserRoleUsuario,
