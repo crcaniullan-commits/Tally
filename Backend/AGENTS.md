@@ -4,6 +4,18 @@ API financiera (ingresos, gastos, deudores, metas) para emprendedores informales
 
 Este archivo cubre **solo el backend**. El frontend es un proyecto separado en `../Frontend/` con su propio `AGENTS.md`; no mezcles las convenciones de ambos.
 
+## Norma estricta: preguntar antes de tocar código
+
+**No edites ningún archivo sin autorización explícita del usuario en la conversación actual.** Antes de la primera modificación de una tarea, decí qué archivo vas a tocar, qué cambiás y por qué, y esperá el visto bueno. Autorización de una tarea anterior no habilita la siguiente.
+
+Alcance:
+
+- Aplica a todo archivo del repo: `.go`, tests, migraciones, `docs/` generado, `AGENTS.md`, Taskfile/makefile, swagger.
+- Solo queda exceptuado lo que el usuario pidió explícitamente en el mensaje actual ("arreglalo", "agregá el test", "actualizá AGENTS.md"). Pedir algo no autoriza los cambios que yo crea necesarios alrededor.
+- **No** hace falta permiso para leer, buscar, correr `go tool task test`, `gofmt -l`, `git diff` ni para reportar un bug.
+- Si encontrás un bug que no te pidieron arreglar, **reportalo y preguntá**. No lo fixes de pasada, por obvio que parezca.
+- Si el arreglo que te pidieron contradice un test existente (o al revés), avisá el conflicto y preguntá cuál de los dos cambia. No elijas por tu cuenta.
+
 ## Comandos
 
 Todos desde este directorio (`Backend/`). Las herramientas están declaradas en el bloque `tool` de `go.mod` (Go 1.24+), así que se invocan con `go tool <name>` — no hace falta instalarlas.

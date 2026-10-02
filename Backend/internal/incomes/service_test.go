@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -128,12 +129,33 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		service := NewIncomeService(store)
 
 		esperados := []IncomeStorage{newTestIncome()}
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID).Return(esperados, nil).Once()
+		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
+			Return(esperados, nil).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 
 		require.NoError(t, err)
 		assert.Equal(t, esperados, incomes)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("reenvía la paginación al store sin tocarla", func(t *testing.T) {
+		// El service es un pasamanos: si normalizara o reinterpretara la
+		// paginación, el usuario vería páginas distintas de las que pidió.
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		fq := filterQueryWithRango()
+
+		store.On("GetAllIncomesOfUser", mock.Anything, testUserID,
+			mock.MatchedBy(func(got pagination.IncomePaginationQuery) bool {
+				return got == fq
+			}),
+		).Return([]IncomeStorage{}, nil).Once()
+
+		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+
+		require.NoError(t, err)
 		store.AssertExpectations(t)
 	})
 
@@ -141,9 +163,10 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID).Return(nil, nil).Once()
+		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+			Return(nil, nil).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 
 		require.NoError(t, err)
 		assert.Nil(t, incomes, "sin ingresos debe quedar nil para que el JSON sea null")
@@ -154,9 +177,10 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID).Return(nil, errStoreBoom).Once()
+		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+			Return(nil, errStoreBoom).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, incomes)
@@ -167,10 +191,10 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID).
+		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
 			Return([]IncomeStorage{newTestIncome()}, errStoreBoom).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, incomes, "si hay error el servicio debe devolver nil")
@@ -182,12 +206,13 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		service := NewIncomeService(store)
 
 		otroUsuario := uuid.New()
-		store.On("GetAllIncomesOfUser", mock.Anything, otroUsuario).Return(nil, nil).Once()
+		store.On("GetAllIncomesOfUser", mock.Anything, otroUsuario, mock.Anything).
+			Return(nil, nil).Once()
 
-		_, err := service.GetAllIncomesOfUser(context.Background(), otroUsuario)
+		_, err := service.GetAllIncomesOfUser(context.Background(), otroUsuario, newTestFilterQuery())
 
 		require.NoError(t, err)
-		store.AssertCalled(t, "GetAllIncomesOfUser", mock.Anything, otroUsuario)
+		store.AssertCalled(t, "GetAllIncomesOfUser", mock.Anything, otroUsuario, mock.Anything)
 		store.AssertNumberOfCalls(t, "GetAllIncomesOfUser", 1)
 	})
 }

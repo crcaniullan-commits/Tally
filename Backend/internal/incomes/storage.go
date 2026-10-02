@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 )
@@ -83,17 +84,40 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, user
 	return nil
 }
 
-func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID) ([]IncomeStorage, error) {
+func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+	// El store es la última línea de defensa de la paginación: un
+	// IncomePaginationQuery{} (valor cero) pondría LIMIT 0 y devolvería siempre
+	// lista vacía, y un offset negativo hace fallar la query en Postgres.
+	if fq.Limit <= 0 {
+		fq.Limit = pagination.DefaultLimit
+	}
+	if fq.Offset < 0 {
+		fq.Offset = 0
+	}
+
+	// El ORDER BY no es cosmético: sin un orden determinista el LIMIT/OFFSET
+	// puede repetir o saltear filas entre páginas. El id desempata los ingresos
+	// que comparten fecha.
 	query := `
 		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at
 		FROM incomes
 		WHERE user_id = $1
+			  AND ($4 = '' OR fecha >= $4::date)
+			  AND ($5 = '' OR fecha <= $5::date)
+		ORDER BY fecha DESC, id DESC
+		LIMIT $2 OFFSET $3
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, userID)
+	rows, err := s.db.QueryContext(ctx, query,
+		userID,
+		fq.Limit,
+		fq.Offset,
+		fq.Since,
+		fq.Until,
+	)
 
 	if err != nil {
 		return nil, err

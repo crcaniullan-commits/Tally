@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -149,11 +150,13 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("mapea las 7 columnas a IncomeStorage", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 1)
@@ -170,18 +173,20 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("acumula varias filas", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		segunda := incomeRow()
 		otroID := uuid.New()
 		segunda[0] = otroID
 		segunda[2] = int64(99)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).
 				AddRow(incomeRow()...).
 				AddRow(segunda...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 2)
@@ -193,14 +198,16 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("acepta descripcion nula", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		fila := incomeRow()
 		fila[4] = nil
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(fila...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 1)
@@ -210,11 +217,13 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("devuelve slice vacio y no nil cuando el usuario no tiene ingresos", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 
 		require.NoError(t, err)
 		assert.NotNil(t, incomes, "un slice nil se serializa como null, no como []")
@@ -224,11 +233,13 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("propaga el error de la base", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnError(errDBBoom)
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, incomes)
@@ -237,15 +248,94 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 	t.Run("filtra por la columna user_id del esquema", func(t *testing.T) {
 		ms := newMockStore(t)
 
+		fq := newTestFilterQuery()
+
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID).
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID)
+		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
 		require.NoError(t, err)
 
 		assert.Contains(t, ms.sql, "WHERE user_id = $1",
 			"migrations/000001 creo la columna como user_id")
+	})
+
+	t.Run("pide LIMIT y OFFSET con los valores de la paginación", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		fq := pagination.IncomePaginationQuery{
+			Limit:  5,
+			Offset: 10,
+			Since:  "2026-09-01",
+			Until:  "2026-09-30",
+		}
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testUserID, 5, 10, "2026-09-01", "2026-09-30").
+			WillReturnRows(sqlmock.NewRows(incomeColumns()))
+
+		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		require.NoError(t, err)
+
+		assert.Contains(t, ms.sql, "LIMIT $2 OFFSET $3",
+			"la pagina se recorta en SQL, no en Go")
+		assert.Contains(t, ms.sql, "$4 = '' OR fecha >= $4::date",
+			"sin el guard, un since vacio compararia contra '' y no filtraria")
+		assert.Contains(t, ms.sql, "$5 = '' OR fecha <= $5::date")
+	})
+
+	t.Run("ordena antes de paginar: sin ORDER BY las páginas se repiten", func(t *testing.T) {
+		// Postgres no garantiza el orden de salida de un SELECT. Con
+		// LIMIT/OFFSET y dos pedidos seguidos, la segunda página puede repetir
+		// o saltarse filas. El id desempata los ingresos de la misma fecha.
+		ms := newMockStore(t)
+
+		fq := newTestFilterQuery()
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until).
+			WillReturnRows(sqlmock.NewRows(incomeColumns()))
+
+		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		require.NoError(t, err)
+
+		assert.Contains(t, ms.sql, "ORDER BY fecha DESC, id DESC")
+		assert.Less(t,
+			strings.Index(ms.sql, "ORDER BY"), strings.Index(ms.sql, "LIMIT"),
+			"el ORDER BY tiene que ir antes del LIMIT")
+	})
+
+	t.Run("una paginación vacía no deja la query en LIMIT 0", func(t *testing.T) {
+		// IncomePaginationQuery{} (valor cero) es fácil de obtener si alguien
+		// llama el service sin pasar por el handler: LIMIT 0 devolvería siempre
+		// lista vacía.
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testUserID, pagination.DefaultLimit, 0, "", "").
+			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
+
+		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID,
+			pagination.IncomePaginationQuery{})
+
+		require.NoError(t, err)
+		assert.Len(t, incomes, 1, "el store debe aplicar el limit por defecto")
+	})
+
+	t.Run("un offset negativo se normaliza a 0", func(t *testing.T) {
+		// OFFSET negativo hace fallar la query en Postgres, lo que el handler
+		// terminaría reportando como 500.
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testUserID, 10, 0, "", "").
+			WillReturnRows(sqlmock.NewRows(incomeColumns()))
+
+		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID,
+			pagination.IncomePaginationQuery{Limit: 10, Offset: -5})
+
+		require.NoError(t, err)
 	})
 }
 

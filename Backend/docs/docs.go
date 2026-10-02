@@ -31,7 +31,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve todos los ingresos del usuario autenticado. La respuesta viene envuelta en {\"data\": [...]}. Si el usuario no tiene ingresos, \"data\" es una lista vacia. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
@@ -39,9 +39,35 @@ const docTemplate = `{
                     "Incomes"
                 ],
                 "summary": "Listar ingresos del usuario",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "cantidad maxima de ingresos a devolver (1-30, default 30)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ingresos a saltar, para pedir la pagina siguiente",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha minima del rango (AAAA-MM-DD)",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha maxima del rango (AAAA-MM-DD)",
+                        "name": "until",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "lista de ingresos",
+                        "description": "pagina de ingresos",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -49,6 +75,15 @@ const docTemplate = `{
                                 "items": {
                                     "$ref": "#/definitions/incomes.IncomeStorage"
                                 }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
                             }
                         }
                     },
@@ -498,10 +533,6 @@ const docTemplate = `{
         },
         "users.UpdateUserPayload": {
             "type": "object",
-            "required": [
-                "nombre",
-                "password"
-            ],
             "properties": {
                 "nombre": {
                     "type": "string",

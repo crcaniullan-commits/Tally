@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -25,8 +26,10 @@ func (m *StoreIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID,
 	return args.Error(0)
 }
 
-func (m *StoreIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID) ([]IncomeStorage, error) {
-	args := m.Called(ctx, userID)
+// GetAllIncomesOfUser pasa la paginación a m.Called como tercer argumento para
+// que los tests puedan assertear los query params que llegaron al store.
+func (m *StoreIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+	args := m.Called(ctx, userID, fq)
 
 	incomes, _ := args.Get(0).([]IncomeStorage)
 
@@ -52,8 +55,8 @@ func (m *ServiceIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUI
 	return args.Error(0)
 }
 
-func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID) ([]IncomeStorage, error) {
-	args := m.Called(ctx, userID)
+func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+	args := m.Called(ctx, userID, fq)
 
 	incomes, _ := args.Get(0).([]IncomeStorage)
 
@@ -89,5 +92,23 @@ func newTestPayload() IncomePayload {
 		Monto:         1500,
 		PaymentMethod: util.PaymentMethodDebito,
 		Descripcion:   &descripcion,
+	}
+}
+
+// newTestFilterQuery es la paginación por defecto (primera página, sin rango de
+// fechas), que es lo que el handler manda cuando la query string viene vacía.
+// Los tests que agregan ?limit / ?offset / ?since / ?until arman la suya a mano.
+func newTestFilterQuery() pagination.IncomePaginationQuery {
+	return pagination.NewIncomePaginationQuery()
+}
+
+// filterQueryWithRango es una paginación con filtros de fecha, para probar que
+// llegan intactos hasta el store.
+func filterQueryWithRango() pagination.IncomePaginationQuery {
+	return pagination.IncomePaginationQuery{
+		Limit:  5,
+		Offset: 10,
+		Since:  "2026-09-01",
+		Until:  "2026-09-30",
 	}
 }

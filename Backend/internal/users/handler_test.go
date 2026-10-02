@@ -104,18 +104,46 @@ func TestUsersHandler_Update(t *testing.T) {
 		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 400 si falta el nombre", func(t *testing.T) {
+	t.Run("acepta una actualización parcial: solo la contraseña, sin nombre", func(t *testing.T) {
+		// Nombre va con omitempty a propósito: un PATCH puede cambiar el
+		// nombre, la contraseña, o las dos, pero no está obligado a mandar las
+		// dos. Por eso este caso NO es 400: tiene que llegar al service, que
+		// es quien decide si toca algo.
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
+
+		service.On("Update", mock.Anything, mock.Anything, &UpdateUserPayload{
+			Password: "NuevaClave123",
+			Name:     "",
+		}).Return(nil).Once()
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123"}`)
 
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "Name")
-		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, bodyUpdateOK, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("acepta una actualización parcial: solo el nombre, sin contraseña", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("Update", mock.Anything, mock.Anything, &UpdateUserPayload{
+			Password: "",
+			Name:     "Nombre Nuevo",
+		}).Return(nil).Once()
+
+		r := requestWithUser(http.MethodPatch, "/users", `{"nombre":"Nombre Nuevo"}`)
+
+		w := httptest.NewRecorder()
+		handler.Update(w, r)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, bodyUpdateOK, w.Body.String())
+		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 500 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {

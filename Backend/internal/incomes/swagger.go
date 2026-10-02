@@ -33,11 +33,16 @@ func Delete() {}
 // GetIncomesOfUser
 //
 //	@Summary		Listar ingresos del usuario
-//	@Description	Devuelve todos los ingresos del usuario autenticado. La respuesta viene envuelta en {"data": [...]}. Si el usuario no tiene ingresos, "data" es una lista vacia. Los montos son enteros en pesos chilenos (CLP, sin decimales).
+//	@Description	Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).
 //	@Tags			Incomes
 //	@Produce		json
-//	@Success		200	{object}	map[string][]IncomeStorage	"lista de ingresos"
-//	@Failure		500	{object}	map[string]string			"error interno del servidor"
+//	@Param			limit	query		int							false	"cantidad maxima de ingresos a devolver (1-30, default 30)"
+//	@Param			offset	query		int							false	"ingresos a saltar, para pedir la pagina siguiente"
+//	@Param			since	query		string						false	"fecha minima del rango (AAAA-MM-DD)"
+//	@Param			until	query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
+//	@Success		200		{object}	map[string][]IncomeStorage	"pagina de ingresos"
+//	@Failure		400		{object}	map[string]string			"parametros de paginacion erroneos"
+//	@Failure		500		{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/app/incomes	[get]
 func GetIncomesOfUser() {}

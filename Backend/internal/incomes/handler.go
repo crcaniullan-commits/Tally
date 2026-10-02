@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
@@ -14,7 +15,7 @@ import (
 type ServiceIncomes interface {
 	AddIncome(context.Context, IncomePayload, uuid.UUID) (IncomeStorage, error)
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllIncomesOfUser(context.Context, uuid.UUID) ([]IncomeStorage, error)
+	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]IncomeStorage, error)
 }
 
 type IncomesHandler struct {
@@ -95,11 +96,22 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 /*
 *	Optiene todos los income del usuario
+*
+*	Acepta los query params de paginación: limit (1..30, default 30), offset y
+*	el rango de fechas since/until (AAAA-MM-DD). Un parámetro mal formado es un
+*	400, no se cae al default en silencio.
  */
 func (h *IncomesHandler) GetIncomesOfUser(w http.ResponseWriter, r *http.Request) {
 	user := users.GetUserFromContext(r)
 
-	incomes, err := h.service.GetAllIncomesOfUser(r.Context(), user.ID)
+	fq, err := pagination.NewIncomePaginationQuery().Parse(r)
+
+	if err != nil {
+		h.errors.BadRequestResponse(w, r, err)
+		return
+	}
+
+	incomes, err := h.service.GetAllIncomesOfUser(r.Context(), user.ID, fq)
 
 	if err != nil {
 		h.errors.InternalServerError(w, r, err)

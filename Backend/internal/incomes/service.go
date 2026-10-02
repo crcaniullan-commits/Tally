@@ -3,13 +3,14 @@ package incomes
 import (
 	"context"
 
+	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/google/uuid"
 )
 
 type StoreIncomes interface {
 	AddIncome(context.Context, *IncomeStorage) error
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllIncomesOfUser(context.Context, uuid.UUID) ([]IncomeStorage, error)
+	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]IncomeStorage, error)
 }
 type IncomeService struct {
 	store StoreIncomes
@@ -41,8 +42,8 @@ func (s *IncomeService) DeleteIncome(ctx context.Context, incomeID uuid.UUID, us
 	return nil
 }
 
-func (s *IncomeService) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID) ([]IncomeStorage, error) {
-	incomes, err := s.store.GetAllIncomesOfUser(ctx, userID)
+func (s *IncomeService) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+	incomes, err := s.store.GetAllIncomesOfUser(ctx, userID, fq)
 	if err != nil {
 		return nil, err
 	}
