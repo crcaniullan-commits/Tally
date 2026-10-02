@@ -27,8 +27,9 @@ func (s *UserService) Update(ctx context.Context, user *Users, payload *UpdateUs
 		if err := user.PasswordHash.Set(payload.Password); err != nil {
 			return err
 		}
-	} else if payload.Name != "" {
+	}
 
+	if payload.Name != "" {
 		user.Nombre = payload.Name
 	}
 

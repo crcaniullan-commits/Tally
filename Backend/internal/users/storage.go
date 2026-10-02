@@ -24,7 +24,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 		WHERE id = $1
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	user := &Users{}
@@ -42,7 +42,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrNotFound
+			return nil, util.ErrNotFound
 		}
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 		WHERE rut = $1;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	user := &Users{}
@@ -83,7 +83,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrNotFound
+			return nil, util.ErrNotFound
 		}
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (s *UserStore) Update(ctx context.Context, user *Users) error {
 		WHERE id = $3
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.Hash, user.Nombre, user.ID)
@@ -122,7 +122,7 @@ func (s *UserStore) Update(ctx context.Context, user *Users) error {
 	}
 
 	if rows == 0 {
-		return ErrNotFound
+		return util.ErrNotFound
 	}
 
 	return nil
@@ -134,7 +134,7 @@ func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 		WHERE ID = $1
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	res, err := s.db.ExecContext(ctx, query, userID)
@@ -150,7 +150,7 @@ func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 	}
 
 	if rows == 0 {
-		return ErrNotFound
+		return util.ErrNotFound
 	}
 	return nil
 }

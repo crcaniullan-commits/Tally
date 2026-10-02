@@ -8,6 +8,9 @@ dotenv:
 
 vars:
   MIGRATIONS_PATH: ./migrations
+  # Flags que usan `task test`. Se pueden sobreescribir desde la CLI:
+  #   go tool task test TEST_FLAGS="-run TestUserService -v"
+  TEST_FLAGS: '{{.TEST_FLAGS | default "-race -cover"}}'
 
 tasks:
   default:
@@ -48,3 +51,20 @@ tasks:
     deps: [build] # <-- Esto obliga a que primero corra la tarea 'build'
     cmds:
       - ./bin/server
+
+  test:
+    desc: "Corre vet + los tests con race detector y cobertura (ej: go tool task test TEST_FLAGS='-run TestUserService -v')"
+    cmds:
+      - go vet ./...
+      - go test {{.TEST_FLAGS}} ./...
+
+  test-cover:
+    desc: Genera coverage.out y muestra el desglose de cobertura por función
+    cmds:
+      - go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out
+
+  clean-cover:
+    desc: Borra el archivo coverage.out
+    cmds:
+      - rm -f coverage.out

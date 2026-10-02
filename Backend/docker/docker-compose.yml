@@ -17,10 +17,25 @@ services:
       timeout: 5s
       retries: 5
 
+  tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: test
+    container_name: Tally-tests
+    restart: "no"
+    # Corre en paralelo con postgres y app: no bloquea el arranque.
+    # Hoy los tests son unitarios con mocks, así que no necesita DB.
+    # Cuando agregues tests de integración (storage.go), agrega aquí:
+    #   depends_on:
+    #     postgres:
+    #       condition: service_healthy
+
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      target: runtime
     container_name: Tally-api
     restart: unless-stopped
     environment:

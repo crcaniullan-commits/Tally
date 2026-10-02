@@ -7,14 +7,13 @@ package users
 //	@Tags			Users
 //	@Accept			json
 //	@Produce		json
-//	@Param			userID	path		string				true	"ID del usuario"
 //	@Param			payload	body		UpdateUserPayload	true	"payload"
 //	@Success		200		{object}	string				"usuario actualizado"
 //	@Failure		400		{object}	error				"payload del usuario erroneo"
 //	@Failure		404		{object}	error				"usuario no encontrado"
 //	@Failure		500		{object}	error				"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/users/{userID}	[patch]
+//	@Router			/app/users 	[patch]
 func Update() {}
 
 // DeleteUser
@@ -22,13 +21,12 @@ func Update() {}
 //	@Summary		Eliminar usuario
 //	@Description	Elimina un usuario de la base de datos
 //	@Tags			Users
-//	@Param			userID	path		string	true	"ID del usuario"
-//	@Success		200		{object}	string	"usuario eliminado"
-//	@Failure		400		{object}	error	"userID invalido"
-//	@Failure		404		{object}	error	"usuario no encontrado"
-//	@Failure		500		{object}	error	"error interno del servidor"
+//	@Success		200	{object}	string	"usuario eliminado"
+//	@Failure		400	{object}	error	"userID invalido"
+//	@Failure		404	{object}	error	"usuario no encontrado"
+//	@Failure		500	{object}	error	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/users/{userID}	[delete]
+//	@Router			/app/users	[delete]
 func Delete() {}
 
 // GetUserByRut

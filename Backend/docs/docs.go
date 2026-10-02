@@ -24,53 +24,198 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/app/users/municipal/{rut}": {
+        "/app/incomes": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Busca un usuario por su rut",
+                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Users"
+                    "Incomes"
                 ],
-                "summary": "Buscar usuario por rut",
+                "summary": "Listar ingresos del usuario",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "cantidad maxima de ingresos a devolver (1-30, default 30)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ingresos a saltar, para pedir la pagina siguiente",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha minima del rango (AAAA-MM-DD)",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha maxima del rango (AAAA-MM-DD)",
+                        "name": "until",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "pagina de ingresos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/incomes.IncomeStorage"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Incomes"
+                ],
+                "summary": "Registrar ingreso",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/incomes.IncomePayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "ingreso creado",
+                        "schema": {
+                            "$ref": "#/definitions/incomes.IncomeStorage"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del ingreso erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/incomes/{incomeID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un ingreso por su ID, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Incomes"
+                ],
+                "summary": "Eliminar ingreso",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "rut del usuario",
-                        "name": "rut",
+                        "description": "ID del ingreso",
+                        "name": "incomeID",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "usuario",
+                        "description": "ingreso eliminado",
                         "schema": {
-                            "$ref": "#/definitions/users.Users"
+                            "type": "string"
                         }
                     },
                     "400": {
-                        "description": "rut invalido",
-                        "schema": {}
+                        "description": "incomeID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "404": {
-                        "description": "usuario no encontrado",
-                        "schema": {}
+                        "description": "ingreso no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
-        "/app/users/{userID}": {
+        "/app/users": {
             "delete": {
                 "security": [
                     {
@@ -82,15 +227,6 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Eliminar usuario",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID del usuario",
-                        "name": "userID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "usuario eliminado",
@@ -131,13 +267,6 @@ const docTemplate = `{
                 "summary": "Actualizar usuario",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "ID del usuario",
-                        "name": "userID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
                         "description": "payload",
                         "name": "payload",
                         "in": "body",
@@ -156,6 +285,52 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "payload del usuario erroneo",
+                        "schema": {}
+                    },
+                    "404": {
+                        "description": "usuario no encontrado",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
+        },
+        "/app/users/municipal/{rut}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Busca un usuario por su rut",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Buscar usuario por rut",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "rut del usuario",
+                        "name": "rut",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "usuario",
+                        "schema": {
+                            "$ref": "#/definitions/users.Users"
+                        }
+                    },
+                    "400": {
+                        "description": "rut invalido",
                         "schema": {}
                     },
                     "404": {
@@ -301,12 +476,63 @@ const docTemplate = `{
                 }
             }
         },
-        "users.UpdateUserPayload": {
+        "incomes.IncomePayload": {
             "type": "object",
             "required": [
-                "nombre",
-                "password"
+                "monto",
+                "payment_method"
             ],
+            "properties": {
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "payment_method": {
+                    "enum": [
+                        "debito",
+                        "credito",
+                        "transferencia",
+                        "efectivo"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/util.PaymentMethod"
+                        }
+                    ]
+                }
+            }
+        },
+        "incomes.IncomeStorage": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string"
+                },
+                "fecha": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/util.PaymentMethod"
+                },
+                "userID": {
+                    "type": "string"
+                }
+            }
+        },
+        "users.UpdateUserPayload": {
+            "type": "object",
             "properties": {
                 "nombre": {
                     "type": "string",
@@ -344,6 +570,21 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "util.PaymentMethod": {
+            "type": "string",
+            "enum": [
+                "debito",
+                "credito",
+                "transferencia",
+                "efectivo"
+            ],
+            "x-enum-varnames": [
+                "PaymentMethodDebito",
+                "PaymentMethodCredito",
+                "PaymentMethodTransferencia",
+                "PaymentMethodEfectivo"
+            ]
         },
         "util.RUT": {
             "type": "object",

@@ -13,7 +13,7 @@ type GoalStorage struct {
 	UserID    uuid.UUID
 	Nombre    string
 	Periodo   util.GoalPeriod
-	MontoMeta float64
+	MontoMeta int64
 	CreatedAt time.Time
 }
 

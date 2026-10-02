@@ -24,7 +24,7 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*users.Users,
 		WHERE email = $1;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	user := &users.Users{}
@@ -42,7 +42,7 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*users.Users,
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrNotFound
+			return nil, util.ErrNotFound
 		}
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (s *StoreAuth) Create(ctx context.Context, user *users.Users) error {
 		VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
 	role := user.Role
@@ -84,9 +84,9 @@ func (s *StoreAuth) Create(ctx context.Context, user *users.Users) error {
 	)
 	if err != nil {
 		if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
-			return ErrDuplicateEmail
+			return users.ErrDuplicateEmail
 		} else if err.Error() == `pq: duplicate key value violates unique constraint "users_rut_key"` {
-			return ErrDuplicateRut
+			return users.ErrDuplicateRut
 		}
 		return err
 	}

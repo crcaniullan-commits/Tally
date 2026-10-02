@@ -26,8 +26,8 @@ func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler
 }
 
 type UpdateUserPayload struct {
-	Password string `json:"password" validate:"required,min=8,max=72"`
-	Name     string `json:"nombre" validate:"required,max=100"`
+	Password string `json:"password" validate:"omitempty,min=8,max=72"`
+	Name     string `json:"nombre" validate:"omitempty,max=100"`
 }
 
 /*
@@ -49,7 +49,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.Update(r.Context(), user, &payload); err != nil {
 		switch err {
-		case ErrNotFound:
+		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
 			return
 		default:
@@ -73,7 +73,7 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.service.Delete(r.Context(), user.ID); err != nil {
 		switch err {
-		case ErrNotFound:
+		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
 			return
 		default:
@@ -103,7 +103,7 @@ func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		switch err {
-		case ErrNotFound:
+		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
 			return
 		default:
