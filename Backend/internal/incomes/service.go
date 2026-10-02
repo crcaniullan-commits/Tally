@@ -26,6 +26,7 @@ func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, us
 		Monto:         payload.Monto,
 		PaymentMethod: payload.PaymentMethod,
 		Descripcion:   payload.Descripcion,
+		CategoryID:    payload.CategoryID,
 	}
 
 	if err := s.store.AddIncome(ctx, income); err != nil {

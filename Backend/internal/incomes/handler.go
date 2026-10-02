@@ -31,6 +31,7 @@ type IncomePayload struct {
 	Monto         int64              `json:"monto" validate:"required,gt=0"`
 	PaymentMethod util.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
 	Descripcion   *string            `json:"descripcion" validate:"omitempty,max=100"`
+	CategoryID    *uuid.UUID         `json:"category_id" validate:"omitempty,uuid4"`
 }
 
 /*
@@ -39,7 +40,7 @@ type IncomePayload struct {
 func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 	var payload IncomePayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
 

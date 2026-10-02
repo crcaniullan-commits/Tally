@@ -31,7 +31,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
@@ -62,6 +62,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "fecha maxima del rango (AAAA-MM-DD)",
                         "name": "until",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID de la categoria por la que filtrar",
+                        "name": "category_id",
                         "in": "query"
                     }
                 ],
@@ -104,7 +110,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales).",
+                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es opcional (la columna es nullable) y apunta a la tabla categories.",
                 "consumes": [
                     "application/json"
                 ],
@@ -483,6 +489,9 @@ const docTemplate = `{
                 "payment_method"
             ],
             "properties": {
+                "category_id": {
+                    "type": "string"
+                },
                 "descripcion": {
                     "type": "string",
                     "maxLength": 100
@@ -508,6 +517,9 @@ const docTemplate = `{
         "incomes.IncomeStorage": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },

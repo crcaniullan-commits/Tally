@@ -27,7 +27,8 @@ func TestIncomeService_AddIncome(t *testing.T) {
 				return i.UserID == testUserID &&
 					i.Monto == payload.Monto &&
 					i.PaymentMethod == util.PaymentMethodDebito &&
-					i.Descripcion != nil && *i.Descripcion == "Venta de almuerzo"
+					i.Descripcion != nil && *i.Descripcion == "Venta de almuerzo" &&
+					i.CategoryID != nil && *i.CategoryID == testCategoryID
 			}),
 		).Return(nil).Once()
 
@@ -49,6 +50,25 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		).Return(nil).Once()
 
 		_, err := service.AddIncome(context.Background(), payload, testUserID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("deja la categoria en null si el payload no trae category_id", func(t *testing.T) {
+		// incomes.category_id es nullable (migrations/000006). El service no
+		// tiene que inventar una categoria por defecto: un nil tiene que
+		// seguir siendo nil para que el INSERT escriba NULL y no un UUID cero
+		// que no matchearia ninguna fila de categories.
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("AddIncome", mock.Anything,
+			mock.MatchedBy(func(i *IncomeStorage) bool { return i.CategoryID == nil }),
+		).Return(nil).Once()
+
+		_, err := service.AddIncome(context.Background(),
+			IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}, testUserID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
@@ -145,17 +165,20 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		fq := filterQueryWithRango()
+		for _, fq := range []pagination.IncomePaginationQuery{
+			filterQueryWithRango(),
+			filterQueryWithCategory(),
+		} {
+			store.On("GetAllIncomesOfUser", mock.Anything, testUserID, fq).
+				Return([]IncomeStorage{}, nil).Once()
+		}
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID,
-			mock.MatchedBy(func(got pagination.IncomePaginationQuery) bool {
-				return got == fq
-			}),
-		).Return([]IncomeStorage{}, nil).Once()
-
-		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, fq)
-
+		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithRango())
 		require.NoError(t, err)
+
+		_, err = service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithCategory())
+		require.NoError(t, err)
+
 		store.AssertExpectations(t)
 	})
 

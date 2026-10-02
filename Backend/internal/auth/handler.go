@@ -33,7 +33,7 @@ type CreateUserPayload struct {
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var payload CreateUserPayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
 
@@ -54,6 +54,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			h.errors.InternalServerError(w, r, err)
+			return
 		}
 	}
 
@@ -72,7 +73,7 @@ type LoginUserPayload struct {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var payload LoginUserPayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
 

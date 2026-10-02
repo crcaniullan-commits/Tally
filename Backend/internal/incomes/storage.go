@@ -18,6 +18,7 @@ type IncomeStorage struct {
 	Descripcion   *string            `json:"descripcion"`
 	Fecha         time.Time          `json:"fecha"`
 	CreatedAt     time.Time          `json:"created_at"`
+	CategoryID    *uuid.UUID         `json:"category_id"`
 }
 
 type StoreIncome struct {
@@ -30,19 +31,23 @@ func NewStorage(db *sql.DB) *StoreIncome {
 
 func (s *StoreIncome) AddIncome(ctx context.Context, income *IncomeStorage) error {
 	query := `
-		INSERT INTO incomes (user_id, monto, payment_method, descripcion)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO incomes (user_id, monto, payment_method, descripcion, category_id)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, fecha, created_at
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
+	// income.CategoryID es un *uuid.UUID porque la columna es nullable: un nil
+	// viaja a la base como NULL, no como un UUID cero que no matchearía ninguna
+	// categoría.
 	err := s.db.QueryRowContext(ctx, query,
 		income.UserID,
 		income.Monto,
 		income.PaymentMethod,
 		income.Descripcion,
+		income.CategoryID,
 	).Scan(
 		&income.ID,
 		&income.Fecha,
@@ -98,12 +103,16 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 	// El ORDER BY no es cosmético: sin un orden determinista el LIMIT/OFFSET
 	// puede repetir o saltear filas entre páginas. El id desempata los ingresos
 	// que comparten fecha.
+	//
+	// category_id va último en la lista y en el Scan a propósito: mantenerlo al
+	// final deja intactas las posiciones de las otras 7 columnas.
 	query := `
-		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at
+		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at, category_id
 		FROM incomes
 		WHERE user_id = $1
 			  AND ($4 = '' OR fecha >= $4::date)
 			  AND ($5 = '' OR fecha <= $5::date)
+			  AND ($6 = '' OR category_id = $6::uuid)
 		ORDER BY fecha DESC, id DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -117,6 +126,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 		fq.Offset,
 		fq.Since,
 		fq.Until,
+		fq.CategoryID,
 	)
 
 	if err != nil {
@@ -137,6 +147,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 			&income.Descripcion,
 			&income.Fecha,
 			&income.CreatedAt,
+			&income.CategoryID,
 		)
 
 		if err != nil {

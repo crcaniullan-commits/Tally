@@ -14,6 +14,8 @@ type AccessKeyStorage struct {
 	RedeemedBy *uuid.UUID
 	RedeemedAt *time.Time
 	ExpiresAt  *time.Time
+	RevokedAt  *time.Time
+	RevokedBy  *uuid.UUID
 	CreatedAt  time.Time
 }
 

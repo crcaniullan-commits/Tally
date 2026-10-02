@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/google/uuid"
 )
 
 const (
@@ -22,16 +23,21 @@ const (
 // IncomePaginationQuery son los query params de GET /app/incomes.
 //
 // Since y Until van como "AAAA-MM-DD" porque incomes.fecha es un DATE (ver
-// migrations/000001). Si vienen vacíos el store los trata como "sin filtro".
+// migrations/000001). CategoryID es el UUID de incomes.category_id
+// (migrations/000006), no el nombre: filtrar por nombre exigiría un JOIN con
+// categories y no podría aprovechar el índice de la FK.
+//
+// Los tres filtros vacíos significan "sin filtro" y llegan al store como "".
 //
 // Ojo con los tags de validate: sin espacios después de la coma. Un tag mal
 // escrito no da 400, hace panear el Validate.Struct y el Recoverer de chi
 // convierte el endpoint entero en un 500 sin cuerpo.
 type IncomePaginationQuery struct {
-	Limit  int    `json:"limit" validate:"gte=1,lte=30"`
-	Offset int    `json:"offset" validate:"gte=0"`
-	Since  string `json:"since"`
-	Until  string `json:"until"`
+	Limit      int    `json:"limit" validate:"gte=1,lte=30"`
+	Offset     int    `json:"offset" validate:"gte=0"`
+	Since      string `json:"since"`
+	Until      string `json:"until"`
+	CategoryID string `json:"category_id"`
 }
 
 // NewIncomePaginationQuery devuelve la paginación por defecto (primera página
@@ -76,6 +82,13 @@ func (fq IncomePaginationQuery) Parse(r *http.Request) (IncomePaginationQuery, e
 			return fq, fmt.Errorf("until inválido: %q no es una fecha AAAA-MM-DD", v)
 		}
 		fq.Until = date
+	}
+
+	if v := qs.Get("category_id"); v != "" {
+		if _, err := uuid.Parse(v); err != nil {
+			return fq, fmt.Errorf("category_id inválido: %q no es un UUID", v)
+		}
+		fq.CategoryID = v
 	}
 
 	if err := util.Validate.Struct(fq); err != nil {

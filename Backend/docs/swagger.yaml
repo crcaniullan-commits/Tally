@@ -36,6 +36,8 @@ definitions:
     type: object
   incomes.IncomePayload:
     properties:
+      category_id:
+        type: string
       descripcion:
         maxLength: 100
         type: string
@@ -55,6 +57,8 @@ definitions:
     type: object
   incomes.IncomeStorage:
     properties:
+      category_id:
+        type: string
       created_at:
         type: string
       descripcion:
@@ -143,8 +147,9 @@ paths:
       description: 'Devuelve una página de los ingresos del usuario autenticado, ordenados
         del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}.
         Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota
-        con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde
-        400. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+        con since y until en formato AAAA-MM-DD, y por categoría con category_id (el
+        UUID de la categoría, no su nombre). Un parámetro mal formado responde 400.
+        Los montos son enteros en pesos chilenos (CLP, sin decimales).'
       parameters:
       - description: cantidad maxima de ingresos a devolver (1-30, default 30)
         in: query
@@ -161,6 +166,10 @@ paths:
       - description: fecha maxima del rango (AAAA-MM-DD)
         in: query
         name: until
+        type: string
+      - description: UUID de la categoria por la que filtrar
+        in: query
+        name: category_id
         type: string
       produces:
       - application/json
@@ -196,7 +205,8 @@ paths:
       description: 'Registra un nuevo ingreso asociado al usuario autenticado. La
         respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales).'
+        (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y
+        apunta a la tabla categories.'
       parameters:
       - description: payload
         in: body

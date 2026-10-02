@@ -146,7 +146,7 @@ func TestUsersHandler_Update(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("responde 500 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {
+	t.Run("responde 400 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
 
@@ -155,12 +155,11 @@ func TestUsersHandler_Update(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.JSONEq(t, bodyInternalError, w.Body.String())
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 500 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
+	t.Run("responde 400 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
 
@@ -170,7 +169,8 @@ func TestUsersHandler_Update(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "rol")
 		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 	})
 

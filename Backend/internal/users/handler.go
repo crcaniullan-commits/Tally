@@ -36,7 +36,7 @@ type UpdateUserPayload struct {
 func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var payload UpdateUserPayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
 
