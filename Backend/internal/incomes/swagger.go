@@ -8,7 +8,7 @@ package incomes
 //	@Accept			json
 //	@Produce		json
 //	@Param			payload	body		IncomePayload		true	"payload"
-//	@Success		201		{object}	IncomeStorage		"ingreso creado"
+//	@Success		201		{object}	model.Income		"ingreso creado"
 //	@Failure		400		{object}	map[string]string	"payload del ingreso erroneo"
 //	@Failure		500		{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
@@ -41,7 +41,7 @@ func Delete() {}
 //	@Param			since		query		string						false	"fecha minima del rango (AAAA-MM-DD)"
 //	@Param			until		query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
 //	@Param			category_id	query		string						false	"UUID de la categoria por la que filtrar"
-//	@Success		200			{object}	map[string][]IncomeStorage	"pagina de ingresos"
+//	@Success		200			{object}	map[string][]model.Income	"pagina de ingresos"
 //	@Failure		400			{object}	map[string]string			"parametros de paginacion erroneos"
 //	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth

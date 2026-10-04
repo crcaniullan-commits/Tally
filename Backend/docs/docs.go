@@ -79,7 +79,7 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/incomes.IncomeStorage"
+                                    "$ref": "#/definitions/model.Income"
                                 }
                             }
                         }
@@ -136,7 +136,7 @@ const docTemplate = `{
                     "201": {
                         "description": "ingreso creado",
                         "schema": {
-                            "$ref": "#/definitions/incomes.IncomeStorage"
+                            "$ref": "#/definitions/model.Income"
                         }
                     },
                     "400": {
@@ -304,6 +304,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/app/users/exchange/{code}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Canjea un código de acceso y extiende el plan del usuario autenticado hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado se responde 400; uno inexistente, 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Canjear un código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "codigo de acceso",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "codigo canjeado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "codigo invalido, vencido, revocado o ya canjeado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "codigo inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/users/municipal/{rut}": {
             "get": {
                 "security": [
@@ -332,7 +393,7 @@ const docTemplate = `{
                     "200": {
                         "description": "usuario",
                         "schema": {
-                            "$ref": "#/definitions/users.Users"
+                            "$ref": "#/definitions/model.User"
                         }
                     },
                     "400": {
@@ -508,13 +569,13 @@ const docTemplate = `{
                     ],
                     "allOf": [
                         {
-                            "$ref": "#/definitions/util.PaymentMethod"
+                            "$ref": "#/definitions/model.PaymentMethod"
                         }
                     ]
                 }
             }
         },
-        "incomes.IncomeStorage": {
+        "model.Income": {
             "type": "object",
             "properties": {
                 "category_id": {
@@ -536,54 +597,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/util.PaymentMethod"
+                    "$ref": "#/definitions/model.PaymentMethod"
                 },
-                "userID": {
+                "user_id": {
                     "type": "string"
                 }
             }
         },
-        "users.UpdateUserPayload": {
-            "type": "object",
-            "properties": {
-                "nombre": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "minLength": 8
-                }
-            }
-        },
-        "users.Users": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "nombre": {
-                    "type": "string"
-                },
-                "role": {
-                    "$ref": "#/definitions/util.UserRole"
-                },
-                "rut": {
-                    "$ref": "#/definitions/util.RUT"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "util.PaymentMethod": {
+        "model.PaymentMethod": {
             "type": "string",
             "enum": [
                 "debito",
@@ -598,7 +619,7 @@ const docTemplate = `{
                 "PaymentMethodEfectivo"
             ]
         },
-        "util.RUT": {
+        "model.RUT": {
             "type": "object",
             "properties": {
                 "cuerpo": {
@@ -611,7 +632,36 @@ const docTemplate = `{
                 }
             }
         },
-        "util.UserRole": {
+        "model.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "nombre": {
+                    "type": "string"
+                },
+                "plan_expires_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/model.UserRole"
+                },
+                "rut": {
+                    "$ref": "#/definitions/model.RUT"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.UserRole": {
             "type": "string",
             "enum": [
                 "usuario",
@@ -621,6 +671,20 @@ const docTemplate = `{
                 "UserRoleUsuario",
                 "UserRoleMunicipal"
             ]
+        },
+        "users.UpdateUserPayload": {
+            "type": "object",
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
+                }
+            }
         }
     },
     "securityDefinitions": {

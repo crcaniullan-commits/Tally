@@ -1,13 +1,18 @@
 package application
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/docs"
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	"github.com/crcaniullan-commits/Tally/internal/email"
+	"github.com/crcaniullan-commits/Tally/internal/env"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
@@ -26,10 +31,11 @@ type Application struct {
 }
 
 type Config struct {
-	Addr      string
-	Db        DbConfig
-	ApiURL    string
-	JwtConfig JwtConfig
+	Addr        string
+	Db          DbConfig
+	ApiURL      string
+	JwtConfig   JwtConfig
+	EmailResend EmailResend
 }
 
 type JwtConfig struct {
@@ -43,6 +49,11 @@ type DbConfig struct {
 	MaxOpenConns int
 	MaxIdleConns int
 	MaxIdleTime  string
+}
+
+type EmailResend struct {
+	Apikey string
+	From   string
 }
 
 func NewApplication(cfg Config, db *sql.DB, logger *zap.SugaredLogger) *Application {
@@ -71,6 +82,18 @@ func (app *Application) Run() error {
 		users.NewStorage(app.db),
 	)
 
+	var resend accesskeys.SendEmail
+
+	if apikey := env.GetString("API_KEY", ""); apikey != "" {
+		resend = email.Newclient(
+			app.config.EmailResend.Apikey,
+			app.config.EmailResend.From,
+		)
+	} else {
+		app.logger.Errorf("Api key no configurada - usando mock de envío de correos")
+		resend = NewMockSender()
+	}
+
 	r.Use(middleware.GlobalMiddlewares()...)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -82,6 +105,7 @@ func (app *Application) Run() error {
 			r.Use(middl.AuthTokenMiddleware)
 			users.InitModule(r, app.db, app.logger, middl)
 			incomes.InitModule(r, app.db, app.logger, middl)
+			accesskeys.InitModule(r, app.db, app.logger, middl, resend)
 		})
 	})
 
@@ -96,4 +120,18 @@ func (app *Application) Run() error {
 	app.logger.Infow("Server has started at http://localhost/", "addr", app.config.Addr)
 
 	return srv.ListenAndServe()
+}
+
+type emailMock struct{}
+
+func NewMockSender() *emailMock {
+	return &emailMock{}
+}
+
+func (e *emailMock) SendActivationCode(ctx context.Context, to, code string, expiresAt time.Time) error {
+	log.Printf(
+		"[MOCK EMAIL] Para: %s | Código: %s | Vence: %s",
+		to, code, expiresAt.Format("02/01/2006 15:04"),
+	)
+	return nil
 }

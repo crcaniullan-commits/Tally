@@ -45,7 +45,7 @@ definitions:
         type: integer
       payment_method:
         allOf:
-        - $ref: '#/definitions/util.PaymentMethod'
+        - $ref: '#/definitions/model.PaymentMethod'
         enum:
         - debito
         - credito
@@ -55,7 +55,7 @@ definitions:
     - monto
     - payment_method
     type: object
-  incomes.IncomeStorage:
+  model.Income:
     properties:
       category_id:
         type: string
@@ -70,38 +70,11 @@ definitions:
       monto:
         type: integer
       payment_method:
-        $ref: '#/definitions/util.PaymentMethod'
-      userID:
+        $ref: '#/definitions/model.PaymentMethod'
+      user_id:
         type: string
     type: object
-  users.UpdateUserPayload:
-    properties:
-      nombre:
-        maxLength: 100
-        type: string
-      password:
-        maxLength: 72
-        minLength: 8
-        type: string
-    type: object
-  users.Users:
-    properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      nombre:
-        type: string
-      role:
-        $ref: '#/definitions/util.UserRole'
-      rut:
-        $ref: '#/definitions/util.RUT'
-      updated_at:
-        type: string
-    type: object
-  util.PaymentMethod:
+  model.PaymentMethod:
     enum:
     - debito
     - credito
@@ -113,7 +86,7 @@ definitions:
     - PaymentMethodCredito
     - PaymentMethodTransferencia
     - PaymentMethodEfectivo
-  util.RUT:
+  model.RUT:
     properties:
       cuerpo:
         description: 'Ej: 19234567'
@@ -122,7 +95,26 @@ definitions:
         description: 'Ej: "K" o "4"'
         type: string
     type: object
-  util.UserRole:
+  model.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      nombre:
+        type: string
+      plan_expires_at:
+        type: string
+      role:
+        $ref: '#/definitions/model.UserRole'
+      rut:
+        $ref: '#/definitions/model.RUT'
+      updated_at:
+        type: string
+    type: object
+  model.UserRole:
     enum:
     - usuario
     - municipal
@@ -130,6 +122,16 @@ definitions:
     x-enum-varnames:
     - UserRoleUsuario
     - UserRoleMunicipal
+  users.UpdateUserPayload:
+    properties:
+      nombre:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    type: object
 info:
   contact:
     email: support@swagger.io
@@ -179,7 +181,7 @@ paths:
           schema:
             additionalProperties:
               items:
-                $ref: '#/definitions/incomes.IncomeStorage'
+                $ref: '#/definitions/model.Income'
               type: array
             type: object
         "400":
@@ -220,7 +222,7 @@ paths:
         "201":
           description: ingreso creado
           schema:
-            $ref: '#/definitions/incomes.IncomeStorage'
+            $ref: '#/definitions/model.Income'
         "400":
           description: payload del ingreso erroneo
           schema:
@@ -333,6 +335,47 @@ paths:
       summary: Actualizar usuario
       tags:
       - Users
+  /app/users/exchange/{code}:
+    post:
+      description: Canjea un código de acceso y extiende el plan del usuario autenticado
+        hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado
+        se responde 400; uno inexistente, 404.
+      parameters:
+      - description: codigo de acceso
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: codigo canjeado
+          schema:
+            type: string
+        "400":
+          description: codigo invalido, vencido, revocado o ya canjeado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: codigo inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Canjear un código de acceso
+      tags:
+      - Users
   /app/users/municipal/{rut}:
     get:
       description: Busca un usuario por su rut
@@ -348,7 +391,7 @@ paths:
         "200":
           description: usuario
           schema:
-            $ref: '#/definitions/users.Users'
+            $ref: '#/definitions/model.User'
         "400":
           description: rut invalido
           schema: {}

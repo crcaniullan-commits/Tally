@@ -3,11 +3,11 @@ package users
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -233,26 +233,117 @@ func TestUserService_GetByRut(t *testing.T) {
 	})
 }
 
-func TestGetUserFromContext(t *testing.T) {
-	t.Run("devuelve el usuario inyectado por el middleware", func(t *testing.T) {
-		usuario := newTestUser()
+func TestUserService_ExchangeCode(t *testing.T) {
+	t.Run("canjea un codigo vigente y extiende el plan hasta su vencimiento", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
 
-		r := httptest.NewRequest(http.MethodPatch, "/users", nil)
-		r = r.WithContext(context.WithValue(r.Context(), util.UserCtx, usuario))
+		accessKey := newTestAccessKey()
 
-		assert.Same(t, usuario, GetUserFromContext(r))
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+		store.On("setExpire", mock.Anything, *accessKey.ExpiresAt, testUserID).Return(nil).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
 	})
 
-	t.Run("devuelve nil si no hay usuario en el contexto", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodDelete, "/users", nil)
+	t.Run("rechaza un codigo que ya fue canjeado", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
 
-		assert.Nil(t, GetUserFromContext(r))
+		accessKey := newTestAccessKey()
+		canjeado := time.Now().Add(-time.Hour)
+		accessKey.RedeemedAt = &canjeado
+		accessKey.RedeemedBy = &testUserID
+
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.ErrorIs(t, err, ErrCodeRedemed)
+		store.AssertNotCalled(t, "setExpire", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
 	})
 
-	t.Run("devuelve nil si el valor del contexto es de otro tipo", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodDelete, "/users", nil)
-		r = r.WithContext(context.WithValue(r.Context(), util.UserCtx, "no soy un usuario"))
+	t.Run("rechaza un codigo revocado aunque siga vigente", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
 
-		assert.Nil(t, GetUserFromContext(r))
+		accessKey := newTestAccessKey()
+		revocado := time.Now().Add(-time.Hour)
+		accessKey.RevokedAt = &revocado
+		accessKey.RevokedBy = &testMunicipalID
+
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.ErrorIs(t, err, ErrCodeRevocado)
+		store.AssertNotCalled(t, "setExpire", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("rechaza un codigo vencido", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
+
+		accessKey := newTestAccessKey()
+		vencido := time.Now().Add(-time.Minute)
+		accessKey.ExpiresAt = &vencido
+
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.ErrorIs(t, err, ErrCodeVencido)
+		store.AssertNotCalled(t, "setExpire", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("rechaza un codigo sin vencimiento en vez de entrar en panic", func(t *testing.T) {
+		// expires_at es nullable (migrations/000001). Desreferenciarlo a ciegas
+		// hace que el service entre en panic y el Recoverer de chi lo convierta
+		// en un 500 sin cuerpo.
+		store := new(StoreUserMock)
+		service := NewUserService(store)
+
+		accessKey := newTestAccessKey()
+		accessKey.ExpiresAt = nil
+
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.ErrorIs(t, err, ErrCodeVencido)
+		store.AssertNotCalled(t, "setExpire", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("propaga util.ErrNotFound sin tocar el store si el codigo no existe", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
+
+		store.On("GetExpire", mock.Anything, "no-existe").
+			Return(model.AccessKey{}, util.ErrNotFound).Once()
+
+		err := service.ExchangeCode(context.Background(), "no-existe", testUserID)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
+		store.AssertNotCalled(t, "setExpire", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("propaga el error del store al extender el plan", func(t *testing.T) {
+		store := new(StoreUserMock)
+		service := NewUserService(store)
+
+		accessKey := newTestAccessKey()
+
+		store.On("GetExpire", mock.Anything, testAccessKeyCod).Return(accessKey, nil).Once()
+		store.On("setExpire", mock.Anything, *accessKey.ExpiresAt, testUserID).
+			Return(errStoreBoom).Once()
+
+		err := service.ExchangeCode(context.Background(), testAccessKeyCod, testUserID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		store.AssertExpectations(t)
 	})
 }

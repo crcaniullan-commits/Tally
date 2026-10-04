@@ -2,18 +2,21 @@ package users
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type ServiceUsers interface {
-	Update(context.Context, *Users, *UpdateUserPayload) error
+	Update(context.Context, *model.User, *UpdateUserPayload) error
 	Delete(context.Context, uuid.UUID) error
-	GetByRut(context.Context, util.RUT) (*Users, error)
+	GetByRut(context.Context, util.RUT) (*model.User, error)
+	ExchangeCode(context.Context, string, uuid.UUID) error
 }
 
 type UsersHandler struct {
@@ -45,7 +48,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
 	if err := h.service.Update(r.Context(), user, &payload); err != nil {
 		switch err {
@@ -69,7 +72,7 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
  */
 func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
-	user := GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
 	if err := h.service.Delete(r.Context(), user.ID); err != nil {
 		switch err {
@@ -117,4 +120,37 @@ func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func (h *UsersHandler) Exchange(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+
+	if code == "" {
+		h.errors.BadRequestResponse(w, r, errors.New("Debe haber un codigo"))
+		return
+	}
+
+	users := util.GetUserFromContext(r)
+
+	if err := h.service.ExchangeCode(r.Context(), code, users.ID); err != nil {
+		switch err {
+		case util.ErrNotFound:
+			h.errors.NotFoundResponse(w, r, err)
+			return
+		case ErrCodeRedemed:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		case ErrCodeVencido, ErrCodeRevocado:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		default:
+			h.errors.InternalServerError(w, r, err)
+			return
+		}
+	}
+
+	if err := util.JsonResponse(w, http.StatusAccepted, "Canjeado con exito, ¡Felicidades!"); err != nil {
+		h.errors.InternalServerError(w, r, err)
+		return
+	}
 }

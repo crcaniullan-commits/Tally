@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,7 +24,7 @@ import (
 const (
 	bodyIncomeCreated = `{"data":{
 		"id": "9c8b7a65-4d3c-4b2a-9f8e-7d6c5b4a3f2e",
-		"userID": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b",
+		"user_id": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b",
 		"monto": 1500,
 		"payment_method": "debito",
 		"descripcion": "Venta de almuerzo",
@@ -53,7 +53,7 @@ func requestWithUser(method, target, body string) *http.Request {
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 	}
 
-	usuario := &users.Users{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
 
 	return r.WithContext(context.WithValue(r.Context(), util.UserCtx, usuario))
 }
@@ -68,7 +68,7 @@ func requestWithIncomeIDParam(method, target, incomeID string) *http.Request {
 		context.WithValue(context.Background(), chi.RouteCtxKey, routeCtx),
 	)
 
-	usuario := &users.Users{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
 
 	return r.WithContext(context.WithValue(r.Context(), util.UserCtx, usuario))
 }
@@ -112,7 +112,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 		body := `{"monto":1500,"payment_method":"debito"}`
 
-		service.On("AddIncome", mock.Anything, mock.Anything, testUserID).Return(IncomeStorage{}, nil).Once()
+		service.On("AddIncome", mock.Anything, mock.Anything, testUserID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
@@ -133,7 +133,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 				body := `{"monto":100,"payment_method":"` + metodo + `"}`
 				service.On("AddIncome", mock.Anything, mock.Anything, mock.Anything).
-					Return(IncomeStorage{}, nil).Once()
+					Return(model.Income{}, nil).Once()
 
 				r := requestWithUser(http.MethodPost, "/incomes", body)
 
@@ -237,7 +237,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
 			return p.CategoryID == nil
-		}), testUserID).Return(IncomeStorage{}, nil).Once()
+		}), testUserID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
@@ -317,7 +317,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":100,"payment_method":"debito"}`)
 		service.On("AddIncome", mock.Anything, mock.Anything, mock.Anything).
-			Return(IncomeStorage{}, errStoreBoom).Once()
+			Return(model.Income{}, errStoreBoom).Once()
 
 		w := httptest.NewRecorder()
 		handler.AddIncome(w, r)
@@ -436,7 +436,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		esperados := []IncomeStorage{newTestIncome()}
+		esperados := []model.Income{newTestIncome()}
 		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
@@ -456,7 +456,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		ingreso := data[0].(map[string]any)
 
 		assert.Equal(t, testIncomeID.String(), ingreso["id"])
-		assert.Equal(t, testUserID.String(), ingreso["userID"])
+		assert.Equal(t, testUserID.String(), ingreso["user_id"])
 		assert.Equal(t, float64(1500), ingreso["monto"])
 		assert.Equal(t, "debito", ingreso["payment_method"])
 		assert.Equal(t, "Venta de almuerzo", ingreso["descripcion"])
@@ -470,7 +470,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 			mock.MatchedBy(func(fq pagination.IncomePaginationQuery) bool {
 				return fq == pagination.NewIncomePaginationQuery()
 			}),
-		).Return([]IncomeStorage{}, nil).Once()
+		).Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
@@ -493,7 +493,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		}
 
 		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, esperada).
-			Return([]IncomeStorage{}, nil).Once()
+			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
 			"/incomes?limit=5&offset=10&since=2026-09-01&until=2026-09-30", "")
@@ -513,7 +513,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		esperada := filterQueryWithCategory()
 
 		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, esperada).
-			Return([]IncomeStorage{}, nil).Once()
+			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
 			"/incomes?category_id="+testCategoryID.String(), "")
@@ -622,7 +622,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		handler := newTestHandler(service)
 
 		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
-			Return([]IncomeStorage{}, nil).Once()
+			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
@@ -664,7 +664,7 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 	t.Run("el handler construye un IncomeService real sobre un store mockeado", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
-			Return([]IncomeStorage{newTestIncome()}, nil).Once()
+			Return([]model.Income{newTestIncome()}, nil).Once()
 
 		handler := newTestHandler(NewIncomeService(store))
 
@@ -690,7 +690,7 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 		require.Equal(t, http.StatusCreated, w.Code)
 		store.AssertCalled(t, "AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool {
+			mock.MatchedBy(func(i *model.Income) bool {
 				return i.UserID == testUserID &&
 					i.Monto == 100 &&
 					i.PaymentMethod == util.PaymentMethodEfectivo &&

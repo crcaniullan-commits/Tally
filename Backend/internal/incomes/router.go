@@ -2,7 +2,6 @@ package incomes
 
 import (
 	"database/sql"
-	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/util"
@@ -10,11 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type MiddlewareAuth interface {
-	CheckOwnership(util.UserRole, http.HandlerFunc) http.HandlerFunc
-}
-
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl MiddlewareAuth) {
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
 	err := errorhandler.NewErrorResponse(logger)
 
 	repo := NewStorage(db)

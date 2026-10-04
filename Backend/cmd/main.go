@@ -43,6 +43,10 @@ func main() {
 			Exp:    time.Hour * 24 * 3,
 			Iss:    "Tally",
 		},
+		EmailResend: application.EmailResend{
+			Apikey: env.GetString("API_KEY", ",,,,"),
+			From:   env.GetString("TALLY_EMAIL", "tally@gmail.com"),
+		},
 	}
 
 	//Logger
@@ -76,7 +80,8 @@ func main() {
 	app := application.NewApplication(
 		cfg,
 		db,
-		logger)
+		logger,
+	)
 
 	logger.Fatal(app.Run())
 }

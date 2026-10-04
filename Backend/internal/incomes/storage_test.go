@@ -153,7 +153,7 @@ func TestStoreIncome_DeleteIncome(t *testing.T) {
 }
 
 func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
-	t.Run("mapea las 8 columnas a IncomeStorage", func(t *testing.T) {
+	t.Run("mapea las 8 columnas a model.Income", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		fq := newTestFilterQuery()
@@ -440,7 +440,7 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 	})
 
 	t.Run("escribe en el income recibido el id y las fechas del RETURNING", func(t *testing.T) {
-		// La firma recibe *IncomeStorage, asi que el Scan debe mutatear el
+		// La firma recibe *model.Income, asi que el Scan debe mutatear el
 		// struct del service y no una copia. Si volviera a ser por valor, el
 		// service devolveria un ingreso con uuid.Nil y fechas cero.
 		ms := newMockStore(t)

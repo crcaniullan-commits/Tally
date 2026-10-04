@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -16,14 +17,14 @@ import (
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
 func TestIncomeService_AddIncome(t *testing.T) {
-	t.Run("mapea el payload a IncomeStorage con el userID del usuario", func(t *testing.T) {
+	t.Run("mapea el payload a model.Income con el userID del usuario", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
 		payload := newTestPayload()
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool {
+			mock.MatchedBy(func(i *model.Income) bool {
 				return i.UserID == testUserID &&
 					i.Monto == payload.Monto &&
 					i.PaymentMethod == util.PaymentMethodDebito &&
@@ -46,7 +47,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		payload := IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool { return i.Descripcion == nil }),
+			mock.MatchedBy(func(i *model.Income) bool { return i.Descripcion == nil }),
 		).Return(nil).Once()
 
 		_, err := service.AddIncome(context.Background(), payload, testUserID)
@@ -64,7 +65,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		service := NewIncomeService(store)
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool { return i.CategoryID == nil }),
+			mock.MatchedBy(func(i *model.Income) bool { return i.CategoryID == nil }),
 		).Return(nil).Once()
 
 		_, err := service.AddIncome(context.Background(),
@@ -79,7 +80,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		service := NewIncomeService(store)
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool {
+			mock.MatchedBy(func(i *model.Income) bool {
 				return i.ID == uuid.Nil && i.Fecha.IsZero() && i.CreatedAt.IsZero()
 			}),
 		).Return(nil).Once()
@@ -148,7 +149,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		esperados := []IncomeStorage{newTestIncome()}
+		esperados := []model.Income{newTestIncome()}
 		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
@@ -170,7 +171,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 			filterQueryWithCategory(),
 		} {
 			store.On("GetAllIncomesOfUser", mock.Anything, testUserID, fq).
-				Return([]IncomeStorage{}, nil).Once()
+				Return([]model.Income{}, nil).Once()
 		}
 
 		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithRango())
@@ -215,7 +216,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		service := NewIncomeService(store)
 
 		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
-			Return([]IncomeStorage{newTestIncome()}, errStoreBoom).Once()
+			Return([]model.Income{newTestIncome()}, errStoreBoom).Once()
 
 		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 

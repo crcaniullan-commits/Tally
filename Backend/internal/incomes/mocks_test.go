@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -16,7 +17,7 @@ type StoreIncomesMock struct {
 	mock.Mock
 }
 
-func (m *StoreIncomesMock) AddIncome(ctx context.Context, income *IncomeStorage) error {
+func (m *StoreIncomesMock) AddIncome(ctx context.Context, income *model.Income) error {
 	args := m.Called(ctx, income)
 	return args.Error(0)
 }
@@ -28,10 +29,10 @@ func (m *StoreIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID,
 
 // GetAllIncomesOfUser pasa la paginación a m.Called como tercer argumento para
 // que los tests puedan assertear los query params que llegaron al store.
-func (m *StoreIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+func (m *StoreIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
 	args := m.Called(ctx, userID, fq)
 
-	incomes, _ := args.Get(0).([]IncomeStorage)
+	incomes, _ := args.Get(0).([]model.Income)
 
 	return incomes, args.Error(1)
 }
@@ -42,10 +43,10 @@ type ServiceIncomesMock struct {
 	mock.Mock
 }
 
-func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayload, userID uuid.UUID) (IncomeStorage, error) {
+func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayload, userID uuid.UUID) (model.Income, error) {
 	args := m.Called(ctx, payload, userID)
 
-	income, _ := args.Get(0).(IncomeStorage)
+	income, _ := args.Get(0).(model.Income)
 
 	return income, args.Error(1)
 }
@@ -55,10 +56,10 @@ func (m *ServiceIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUI
 	return args.Error(0)
 }
 
-func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
 	args := m.Called(ctx, userID, fq)
 
-	incomes, _ := args.Get(0).([]IncomeStorage)
+	incomes, _ := args.Get(0).([]model.Income)
 
 	return incomes, args.Error(1)
 }
@@ -70,11 +71,11 @@ var (
 	testFecha      = time.Date(2026, time.September, 30, 0, 0, 0, 0, time.UTC)
 )
 
-// newTestIncome construye un IncomeStorage válido y reutilizable en los tests.
-func newTestIncome() IncomeStorage {
+// newTestIncome construye un model.Income válido y reutilizable en los tests.
+func newTestIncome() model.Income {
 	descripcion := "Venta de almuerzo"
 
-	return IncomeStorage{
+	return model.Income{
 		ID:            testIncomeID,
 		UserID:        testUserID,
 		Monto:         1500,

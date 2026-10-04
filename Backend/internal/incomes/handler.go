@@ -5,17 +5,17 @@ import (
 	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type ServiceIncomes interface {
-	AddIncome(context.Context, IncomePayload, uuid.UUID) (IncomeStorage, error)
+	AddIncome(context.Context, IncomePayload, uuid.UUID) (model.Income, error)
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]IncomeStorage, error)
+	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
 }
 
 type IncomesHandler struct {
@@ -28,10 +28,10 @@ func NewIncomesHandler(s ServiceIncomes, e errorhandler.ErrorsResponse) *Incomes
 }
 
 type IncomePayload struct {
-	Monto         int64              `json:"monto" validate:"required,gt=0"`
-	PaymentMethod util.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
-	Descripcion   *string            `json:"descripcion" validate:"omitempty,max=100"`
-	CategoryID    *uuid.UUID         `json:"category_id" validate:"omitempty,uuid4"`
+	Monto         int64               `json:"monto" validate:"required,gt=0"`
+	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
+	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
+	CategoryID    *uuid.UUID          `json:"category_id" validate:"omitempty,uuid4"`
 }
 
 /*
@@ -49,7 +49,7 @@ func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := users.GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
 	income, err := h.service.AddIncome(r.Context(), payload, user.ID)
 
@@ -76,7 +76,7 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := users.GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
 	if err = h.service.DeleteIncome(r.Context(), incomeID, user.ID); err != nil {
 		switch err {
@@ -103,7 +103,7 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 *	400, no se cae al default en silencio.
  */
 func (h *IncomesHandler) GetIncomesOfUser(w http.ResponseWriter, r *http.Request) {
-	user := users.GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
 	fq, err := pagination.NewIncomePaginationQuery().Parse(r)
 

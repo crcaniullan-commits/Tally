@@ -3,23 +3,12 @@ package incomes
 import (
 	"context"
 	"database/sql"
-	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 )
-
-type IncomeStorage struct {
-	ID            uuid.UUID          `json:"id"`
-	UserID        uuid.UUID          `json:"userID"`
-	Monto         int64              `json:"monto"`
-	PaymentMethod util.PaymentMethod `json:"payment_method"`
-	Descripcion   *string            `json:"descripcion"`
-	Fecha         time.Time          `json:"fecha"`
-	CreatedAt     time.Time          `json:"created_at"`
-	CategoryID    *uuid.UUID         `json:"category_id"`
-}
 
 type StoreIncome struct {
 	db *sql.DB
@@ -29,7 +18,7 @@ func NewStorage(db *sql.DB) *StoreIncome {
 	return &StoreIncome{db}
 }
 
-func (s *StoreIncome) AddIncome(ctx context.Context, income *IncomeStorage) error {
+func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error {
 	query := `
 		INSERT INTO incomes (user_id, monto, payment_method, descripcion, category_id)
 		VALUES ($1, $2, $3, $4, $5)
@@ -89,7 +78,7 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, user
 	return nil
 }
 
-func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
 	// El store es la última línea de defensa de la paginación: un
 	// IncomePaginationQuery{} (valor cero) pondría LIMIT 0 y devolvería siempre
 	// lista vacía, y un offset negativo hace fallar la query en Postgres.
@@ -135,10 +124,10 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 
 	defer rows.Close()
 
-	incomes := make([]IncomeStorage, 0)
+	incomes := make([]model.Income, 0)
 
 	for rows.Next() {
-		var income IncomeStorage
+		var income model.Income
 		err := rows.Scan(
 			&income.ID,
 			&income.UserID,

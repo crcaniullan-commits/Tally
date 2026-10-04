@@ -1,22 +1,22 @@
-package users
+package model
 
 import (
 	"time"
 
-	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Users struct {
-	ID           uuid.UUID     `json:"id"`
-	Email        string        `json:"email"`
-	PasswordHash password      `json:"-"`
-	Nombre       string        `json:"nombre"`
-	Role         util.UserRole `json:"role"`
-	Rut          util.RUT      `json:"rut"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+type User struct {
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	PasswordHash  password  `json:"-"`
+	Nombre        string    `json:"nombre"`
+	Role          UserRole  `json:"role"`
+	Rut           RUT       `json:"rut"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	PlanExpiresAt time.Time `json:"plan_expires_at"`
 }
 
 type password struct {

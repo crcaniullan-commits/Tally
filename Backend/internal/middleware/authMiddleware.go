@@ -8,14 +8,14 @@ import (
 
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/users"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 type UserFinder interface {
-	GetByID(context.Context, uuid.UUID) (*users.Users, error)
+	GetByID(context.Context, uuid.UUID) (*model.User, error)
 }
 type AuthMiddleware struct {
 	error errorhandler.ErrorsResponse
@@ -89,7 +89,7 @@ func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 
 func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := users.GetUserFromContext(r)
+		user := util.GetUserFromContext(r)
 
 		allowed, err := a.checkRole(r.Context(), requiredRole, uuid.UUID(user.ID))
 
