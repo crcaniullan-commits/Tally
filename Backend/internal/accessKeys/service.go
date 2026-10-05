@@ -13,7 +13,6 @@ import (
 type AccessKeyStore interface {
 	Create(context.Context, *model.AccessKey) error
 	GetByID(context.Context, uuid.UUID) (model.AccessKey, error)
-	Redeem(context.Context, CodeOfUser) error
 	Revoke(context.Context, RevokeCodeData) error
 }
 
@@ -88,17 +87,4 @@ func (s *AccessKeyService) sendEmailAsync(to, code string, expire time.Time) {
 			log.Printf("error enviando correo de actvación a %s: %v", to, err)
 		}
 	}()
-}
-
-func (s *AccessKeyService) Redeem(ctx context.Context, code string, userID uuid.UUID) error {
-	codeUser := &CodeOfUser{
-		user_Id: userID,
-		code:    code,
-	}
-
-	if err := s.store.Redeem(ctx, *codeUser); err != nil {
-		return err
-	}
-
-	return nil
 }

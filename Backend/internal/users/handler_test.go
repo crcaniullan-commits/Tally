@@ -393,14 +393,14 @@ func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
 	t.Run("UserService satisface la interfaz que espera el handler", func(t *testing.T) {
 		// Guarda contra regresiones de firmas: si cambia ServiceUsers, esto
 		// deja de compilar.
-		var _ ServiceUsers = NewUserService(new(StoreUserMock))
+		var _ ServiceUsers = NewUserService(new(StoreUserMock), new(RedeemerMock), nil)
 	})
 
 	t.Run("el handler construye un UserService real sobre un store mockeado", func(t *testing.T) {
 		store := new(StoreUserMock)
 		store.On("GetByRut", mock.Anything, "19.234.567-K").Return(newTestUser(), nil).Once()
 
-		handler := newTestHandler(NewUserService(store))
+		handler := newTestHandler(NewUserService(store, new(RedeemerMock), nil))
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 		w := httptest.NewRecorder()

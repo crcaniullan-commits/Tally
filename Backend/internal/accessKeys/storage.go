@@ -3,7 +3,10 @@ package accesskeys
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -78,36 +81,32 @@ func (s *StoreAccessKey) GetByID(ctx context.Context, accessKeyID uuid.UUID) (mo
 	return AccessKey, nil
 }
 
-func (s *StoreAccessKey) Redeem(ctx context.Context, codeOfUser CodeOfUser) error {
+func (s *StoreAccessKey) Redeem(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error) {
 	query := `
 		UPDATE access_keys
 		SET redeemed_by = $1, redeemed_at = now()
-		WHERE code = $2 AND redeemed_by IS NULL AND expires_at > now()
+		WHERE code = $2 AND redeemed_by IS NULL 
+			  AND expires_at > now() AND revoked_at IS NULL
+		RETURNING id, expires_at
 	`
+
+	exec := dbtx.FromContext(ctx, s.db)
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query,
-		codeOfUser.user_Id,
-		codeOfUser.code,
-	)
+	row := exec.QueryRowContext(ctx, query, userID, code)
 
-	if err != nil {
-		return err
+	var ak model.AccessKey
+
+	if err := row.Scan(&ak.ID, &ak.ExpiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotRedeemable
+		}
+		return nil, fmt.Errorf("canjeando access key: %w", err)
 	}
 
-	row, err := res.RowsAffected()
-
-	if err != nil {
-		return err
-	}
-
-	if row == 0 {
-		return util.ErrNotFound
-	}
-
-	return nil
+	return &ak, nil
 }
 
 func (s *StoreAccessKey) Revoke(ctx context.Context, revokeData RevokeCodeData) error {

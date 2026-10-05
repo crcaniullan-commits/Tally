@@ -16,7 +16,6 @@ type ServiceAccessKey interface {
 	IssueForUser(context.Context, uuid.UUID, string) (model.AccessKey, error)
 	Resend(context.Context, uuid.UUID, string) error
 	RevokePremature(context.Context, uuid.UUID, string) error
-	Redeem(context.Context, string, uuid.UUID) error
 }
 
 type AccessKeysHandler struct {
@@ -112,33 +111,6 @@ func (h *AccessKeysHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := util.JsonResponse(w, http.StatusOK, "Codigo desabilitado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
-}
-
-func (h *AccessKeysHandler) Redeem(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-
-	if code == "" {
-		h.errors.BadRequestResponse(w, r, errors.New("Se debe recibier un codigo"))
-		return
-	}
-
-	user := util.GetUserFromContext(r)
-
-	if err := h.service.Redeem(r.Context(), code, user.ID); err != nil {
-		switch err {
-		case util.ErrNotFound:
-			h.errors.BadRequestResponse(w, r, err)
-			return
-		default:
-			h.errors.InternalServerError(w, r, err)
-			return
-		}
-	}
-
-	if err := util.JsonResponse(w, http.StatusAccepted, "canjeado"); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}

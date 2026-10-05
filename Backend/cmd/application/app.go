@@ -11,6 +11,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/docs"
 	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/email"
 	"github.com/crcaniullan-commits/Tally/internal/env"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
@@ -94,6 +95,8 @@ func (app *Application) Run() error {
 		resend = NewMockSender()
 	}
 
+	transactor := dbtx.NewTransactor(app.db)
+
 	r.Use(middleware.GlobalMiddlewares()...)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -103,7 +106,7 @@ func (app *Application) Run() error {
 			app.config.JwtConfig.Secret, app.config.JwtConfig.Iss, app.config.JwtConfig.Exp)
 		r.Route("/app", func(r chi.Router) {
 			r.Use(middl.AuthTokenMiddleware)
-			users.InitModule(r, app.db, app.logger, middl)
+			users.InitModule(r, app.db, app.logger, transactor, middl)
 			incomes.InitModule(r, app.db, app.logger, middl)
 			accesskeys.InitModule(r, app.db, app.logger, middl, resend)
 		})

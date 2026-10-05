@@ -34,19 +34,27 @@ func (m *StoreUserMock) GetByRut(ctx context.Context, rut string) (*model.User, 
 	return user, args.Error(1)
 }
 
-func (m *StoreUserMock) GetExpire(ctx context.Context, code string) (model.AccessKey, error) {
-	args := m.Called(ctx, code)
-
-	accessKey, _ := args.Get(0).(model.AccessKey)
-
-	return accessKey, args.Error(1)
-}
-
 // setExpire implementa el metodo unexportado de StoreUser. Es posible porque el
 // mock vive en el mismo package que la interfaz.
 func (m *StoreUserMock) setExpire(ctx context.Context, expiresAt time.Time, userID uuid.UUID) error {
 	args := m.Called(ctx, expiresAt, userID)
 	return args.Error(0)
+}
+
+// RedeemerMock es un mock de la interfaz Redeemer (la que resuelve el canje de
+// un codigo de acceso). En produccion la implementa el store de accessKeys:
+// mockeandolo, el test de ExchangeCode no depende de access_keys ni necesita una
+// transacion de verdad para el canje en si.
+type RedeemerMock struct {
+	mock.Mock
+}
+
+func (m *RedeemerMock) Redeem(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error) {
+	args := m.Called(ctx, code, userID)
+
+	accessKey, _ := args.Get(0).(*model.AccessKey)
+
+	return accessKey, args.Error(1)
 }
 
 // ServiceUsersMock es un mock de la capa de servicio (ServiceUsers) usado para

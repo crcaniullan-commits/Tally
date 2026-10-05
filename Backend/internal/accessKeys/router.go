@@ -21,9 +21,8 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.
 		r.Route("/AccessID", func(r chi.Router) {
 			r.Post("/{keyID}", middl.CheckOwnership(util.UserRoleMunicipal, hdl.Resend))
 		})
-		r.Route("/code", func(r chi.Router) {
-			r.Post("/revoke/{code}", middl.CheckOwnership(util.UserRoleMunicipal, hdl.Revoke))
-			r.Post("/redeem/{code}", middl.CheckOwnership(util.UserRoleUsuario, hdl.Redeem))
+		r.Route("/revoke", func(r chi.Router) {
+			r.Post("/{code}", middl.CheckOwnership(util.UserRoleMunicipal, hdl.Revoke))
 		})
 	})
 }

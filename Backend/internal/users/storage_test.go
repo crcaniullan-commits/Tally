@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/util"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -281,89 +281,10 @@ func TestUserStore_ContextCancelado(t *testing.T) {
 	})
 }
 
-// columnas de la query de GetExpire: id, code, created_by, redeemed_by,
-// redeemed_at, expires_at, revoked_at, revoked_by, created_at
-func accessKeyColumns() []string {
-	return []string{
-		"id", "code", "created_by", "redeemed_by",
-		"redeemed_at", "expires_at", "revoked_at", "revoked_by", "created_at",
-	}
-}
-
-// accessKeyRow devuelve una llave vigente y no canjeada. redeemed_by,
-// redeemed_at, revoked_at y revoked_by van en NULL, que es el estado normal de
-// una llave recien emitida.
-func accessKeyRow(expiresAt time.Time) []driver.Value {
-	return []driver.Value{
-		testAccessKeyID,
-		testAccessKeyCod,
-		testMunicipalID,
-		nil,
-		nil,
-		expiresAt,
-		nil,
-		nil,
-		testAccessKeyCreatedAt,
-	}
-}
-
-var (
-	regexGetExpire         = regexp.QuoteMeta("SELECT id, code, created_by, redeemed_by")
-	testAccessKeyCreatedAt = time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
-)
-
-func TestUserStore_GetExpire(t *testing.T) {
-	t.Run("devuelve la llave con las 9 columnas de access_keys", func(t *testing.T) {
-		store, mock := newMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectQuery(regexGetExpire).
-			WithArgs(testAccessKeyCod).
-			WillReturnRows(sqlmock.NewRows(accessKeyColumns()).AddRow(accessKeyRow(expire)...))
-
-		accessKey, err := store.GetExpire(context.Background(), testAccessKeyCod)
-
-		require.NoError(t, err)
-		assert.Equal(t, testAccessKeyID, accessKey.ID)
-		assert.Equal(t, testAccessKeyCod, accessKey.Code)
-		assert.Equal(t, testMunicipalID, accessKey.CreatedBy)
-		assert.Nil(t, accessKey.RedeemedBy)
-		assert.Nil(t, accessKey.RedeemedAt)
-		require.NotNil(t, accessKey.ExpiresAt)
-		assert.True(t, expire.Equal(*accessKey.ExpiresAt))
-		assert.Nil(t, accessKey.RevokedAt)
-		assert.Nil(t, accessKey.RevokedBy)
-		assert.True(t, testAccessKeyCreatedAt.Equal(accessKey.CreatedAt))
-	})
-
-	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
-		store, mock := newMockStore(t)
-
-		mock.ExpectQuery(regexGetExpire).
-			WithArgs("no-existe").
-			WillReturnRows(sqlmock.NewRows(accessKeyColumns()))
-
-		accessKey, err := store.GetExpire(context.Background(), "no-existe")
-
-		require.ErrorIs(t, err, util.ErrNotFound)
-		assert.Equal(t, uuid.Nil, accessKey.ID)
-	})
-
-	t.Run("propaga otros errores de la base", func(t *testing.T) {
-		store, mock := newMockStore(t)
-
-		mock.ExpectQuery(regexGetExpire).
-			WithArgs(testAccessKeyCod).
-			WillReturnError(errDBBoom)
-
-		accessKey, err := store.GetExpire(context.Background(), testAccessKeyCod)
-
-		require.ErrorIs(t, err, errDBBoom)
-		assert.Equal(t, uuid.Nil, accessKey.ID)
-	})
-}
-
+// setExpire escribe plan_expires_at (migrations/000004), que es la unica
+// columna de users que el service de canje toca. No devuelve util.ErrNotFound
+// si no actualiza ninguna fila: el canje ya mostro que el usuario existe y la
+// transaction que envuelve la llamada ya revierte ante cualquier error.
 func TestUserStore_setExpire(t *testing.T) {
 	t.Run("fija plan_expires_at del usuario", func(t *testing.T) {
 		store, mock := newMockStore(t)
@@ -379,7 +300,10 @@ func TestUserStore_setExpire(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se actualizo ninguna fila", func(t *testing.T) {
+	t.Run("no falla si el UPDATE no toca ninguna fila", func(t *testing.T) {
+		// El store ya no mira RowsAffected (antes devolvia util.ErrNotFound).
+		// Con un usuario inexistente el canje queda reportado como exitoso y el
+		// commit hace su trabajo sin extender ningun plan.
 		store, mock := newMockStore(t)
 
 		expire := time.Now().Add(24 * time.Hour)
@@ -390,10 +314,10 @@ func TestUserStore_setExpire(t *testing.T) {
 
 		err := store.setExpire(context.Background(), expire, testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.NoError(t, err)
 	})
 
-	t.Run("propaga el error de la base sin convertirlo", func(t *testing.T) {
+	t.Run("envuelve el error de la base con el nombre de la operacion", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		expire := time.Now().Add(24 * time.Hour)
@@ -405,7 +329,37 @@ func TestUserStore_setExpire(t *testing.T) {
 		err := store.setExpire(context.Background(), expire, testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
+		assert.Contains(t, err.Error(), "plan_expires_at")
 		assert.NotErrorIs(t, err, util.ErrNotFound)
+	})
+
+	t.Run("escribe por la transaccion del contexto si hay una abierta", func(t *testing.T) {
+		// dbtx.FromContext hace que el canje y la extension del plan sean
+		// atomicos: dentro de ExchangeCode la llamada tiene que salir por el
+		// *sql.Tx del contexto, no por la conexion suelta.
+		db, sqlm, err := sqlmock.New()
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			if err := sqlm.ExpectationsWereMet(); err != nil {
+				t.Errorf("expectativas de sql sin cumplir: %v", err)
+			}
+			_ = db.Close()
+		})
+
+		expire := time.Now().Add(24 * time.Hour)
+
+		sqlm.ExpectBegin()
+		sqlm.ExpectExec(regexUpdate).
+			WithArgs(expire, testUserID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		sqlm.ExpectCommit()
+
+		tx, err := db.BeginTx(context.Background(), nil)
+		require.NoError(t, err)
+
+		require.NoError(t, NewStorage(db).setExpire(dbtx.WithTx(context.Background(), tx), expire, testUserID))
+		require.NoError(t, tx.Commit())
 	})
 }
 
@@ -452,43 +406,6 @@ func columnasDe(query string) []string {
 	return proyeccion
 }
 
-func TestUserStore_GetExpire_query(t *testing.T) {
-	// El Scan de GetExpire y su SELECT estan desalineados si el orden o la
-	// cantidad de columnas difieren: el Scan se come un valor de la columna
-	// vecina sin que ningun test lo note.
-	t.Run("la proyeccion esta en el mismo orden que el Scan", func(t *testing.T) {
-		store, mock, sql := newCapturingMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(accessKeyColumns()).AddRow(accessKeyRow(expire)...))
-
-		_, err := store.GetExpire(context.Background(), testAccessKeyCod)
-
-		require.NoError(t, err)
-		assert.Equal(t, accessKeyColumns(), columnasDe(*sql))
-	})
-
-	t.Run("created_at es una columna propia, no un alias de revoked_by", func(t *testing.T) {
-		// "revoked_by created_at" es SQL valido en Postgres (alias implicito),
-		// por eso el typo no se ve al leer la query: devuelve revoked_by dos
-		// veces, created_at queda NULL y el Scan lee la columna equivocada.
-		store, mock, sql := newCapturingMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(accessKeyColumns()).AddRow(accessKeyRow(expire)...))
-
-		_, err := store.GetExpire(context.Background(), testAccessKeyCod)
-
-		require.NoError(t, err)
-		assert.NotContains(t, *sql, "revoked_by created_at")
-		assert.Contains(t, *sql, "revoked_by, created_at")
-	})
-}
-
 func TestUserStore_setExpire_query(t *testing.T) {
 	t.Run("escribe en users.plan_expires_at, no en expires_at", func(t *testing.T) {
 		// plan_expires_at es de users (migrations/000004) y expires_at es de
@@ -504,5 +421,64 @@ func TestUserStore_setExpire_query(t *testing.T) {
 
 		assert.Contains(t, *sql, "SET plan_expires_at = $1")
 		assert.NotRegexp(t, `\bexpires_at\b`, *sql, "la query no debe tocar expires_at")
+	})
+
+	t.Run("filtra por id, no por el codigo de una llave", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectExec("").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		expire := time.Now().Add(24 * time.Hour)
+		require.NoError(t, store.setExpire(context.Background(), expire, testUserID))
+
+		assert.Contains(t, *sql, "WHERE id = $2")
+		assert.NotContains(t, *sql, "code")
+	})
+}
+
+// columnas de lectura que el Scan de GetByID / GetByRut realmente consume.
+func userColumnsConPlan() []string {
+	return append(userColumns(), "plan_expires_at")
+}
+
+// fila de lectura con las 6 columnas que devuelve el SELECT real.
+func userRowConPlan() []driver.Value {
+	return append(userRow(), time.Now().Add(24*time.Hour))
+}
+
+func TestUserStore_lectura_query(t *testing.T) {
+	// El SELECT de GetByID y GetByRut pide plan_expires_at (migrations/000004)
+	// pero el Scan solo lee 5 destinos. Contra Postgres eso es
+	// "sql: expected 6 destination arguments in Scan, not 5" en TODAS las filas,
+	// y como GetByID es lo que usa el middleware de autenticacion para resolver
+	// el usuario del token, ningun endpoint bajo /v1/app llega a ejecutarse.
+	// Los tests de arriba pasan porque(sqlmock) devuelven 5 columnas.
+	t.Run("BUG: GetByID lee una columna de menos y falla siempre", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(userColumnsConPlan()).AddRow(userRowConPlan()...))
+
+		user, err := store.GetByID(context.Background(), testUserID)
+
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "expected 6 destination arguments in Scan, not 5")
+		assert.Len(t, columnasDe(*sql), 6, "la proyeccion real pide 6 columnas")
+	})
+
+	t.Run("BUG: GetByRut lee una columna de menos y falla siempre", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(userColumnsConPlan()).AddRow(userRowConPlan()...))
+
+		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+
+		require.Error(t, err)
+		assert.Nil(t, user)
+		assert.Contains(t, err.Error(), "expected 6 destination arguments in Scan, not 5")
+		assert.Len(t, columnasDe(*sql), 6, "la proyeccion real pide 6 columnas")
 	})
 }

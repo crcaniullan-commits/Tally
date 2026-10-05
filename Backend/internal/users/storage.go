@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -157,44 +159,6 @@ func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-func (s *UserStore) GetExpire(ctx context.Context, code string) (model.AccessKey, error) {
-	query := `
-		SELECT id, code, created_by, redeemed_by,
-		       redeemed_at, expires_at, revoked_at, revoked_by, created_at
-		FROM access_keys
-		WHERE code = $1
-	`
-
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
-	defer cancel()
-
-	var AccessKey model.AccessKey
-
-	err := s.db.QueryRowContext(ctx, query, code).Scan(
-		&AccessKey.ID,
-		&AccessKey.Code,
-		&AccessKey.CreatedBy,
-		&AccessKey.RedeemedBy,
-		&AccessKey.RedeemedAt,
-		&AccessKey.ExpiresAt,
-		&AccessKey.RevokedAt,
-		&AccessKey.RevokedBy,
-		&AccessKey.CreatedAt,
-	)
-
-	if err != nil {
-		switch {
-		case err == sql.ErrNoRows:
-			return model.AccessKey{}, util.ErrNotFound
-		default:
-			return model.AccessKey{}, err
-		}
-	}
-
-	return AccessKey, nil
-
-}
-
 func (s *UserStore) setExpire(ctx context.Context, expires_at time.Time, userID uuid.UUID) error {
 	query := `
 		UPDATE users
@@ -202,23 +166,15 @@ func (s *UserStore) setExpire(ctx context.Context, expires_at time.Time, userID 
 		WHERE id = $2
 	`
 
+	exec := dbtx.FromContext(ctx, s.db)
+
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, expires_at, userID)
+	_, err := exec.ExecContext(ctx, query, expires_at, userID)
 
 	if err != nil {
-		return err
-	}
-
-	rows, err := res.RowsAffected()
-
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return util.ErrNotFound
+		return fmt.Errorf("actualizando plan_expires_at: %w", err)
 	}
 
 	return nil

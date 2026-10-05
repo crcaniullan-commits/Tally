@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -13,16 +14,21 @@ type StoreUser interface {
 	Update(context.Context, *model.User) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, string) (*model.User, error)
-	GetExpire(context.Context, string) (model.AccessKey, error)
 	setExpire(context.Context, time.Time, uuid.UUID) error
 }
 
-type UserService struct {
-	store StoreUser
+type Redeemer interface {
+	Redeem(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error)
 }
 
-func NewUserService(store StoreUser) *UserService {
-	return &UserService{store: store}
+type UserService struct {
+	store      StoreUser
+	redeemer   Redeemer
+	transactor *dbtx.Transactor
+}
+
+func NewUserService(store StoreUser, redeemer Redeemer, transactor *dbtx.Transactor) *UserService {
+	return &UserService{store: store, redeemer: redeemer, transactor: transactor}
 }
 
 func (s *UserService) Update(ctx context.Context, user *model.User, payload *UpdateUserPayload) error {
@@ -61,33 +67,13 @@ func (s *UserService) GetByRut(ctx context.Context, rut util.RUT) (*model.User, 
 }
 
 func (s *UserService) ExchangeCode(ctx context.Context, code string, userID uuid.UUID) error {
-	accessKey, err := s.store.GetExpire(ctx, code)
+	return s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		accesskey, err := s.redeemer.Redeem(ctx, code, userID)
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	if accessKey.RedeemedAt != nil {
-		return ErrCodeRedemed
-	}
-
-	if accessKey.RevokedAt != nil {
-		return ErrCodeRevocado
-	}
-
-	// expires_at es nullable: una llave sin vencimiento no se puede canjear, y
-	// desreferenciarla a ciegas haría entrar el service en panic.
-	if accessKey.ExpiresAt == nil {
-		return ErrCodeVencido
-	}
-
-	if !accessKey.ExpiresAt.After(time.Now()) {
-		return ErrCodeVencido
-	}
-
-	if err := s.store.setExpire(ctx, *accessKey.ExpiresAt, userID); err != nil {
-		return err
-	}
-
-	return nil
+		return s.store.setExpire(ctx, *accesskey.ExpiresAt, userID)
+	})
 }
