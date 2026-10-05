@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
@@ -138,6 +139,12 @@ func (h *UsersHandler) Exchange(w http.ResponseWriter, r *http.Request) {
 			h.errors.NotFoundResponse(w, r, err)
 			return
 		case ErrCodeRedemed:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		case accesskeys.ErrNotRedeemable:
+			// El UPDATE de access_keys filtra las llaves canjeables (no canjeada,
+			// sin vencer y no revocada): si no matchea ninguna fila, el código
+			// está vencido, revocado o ya se usó.
 			h.errors.BadRequestResponse(w, r, err)
 			return
 		case ErrCodeVencido, ErrCodeRevocado:

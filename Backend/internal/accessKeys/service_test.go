@@ -2,7 +2,6 @@ package accesskeys
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -199,13 +198,14 @@ func TestAccessKeyService_Resend(t *testing.T) {
 		email := newEmailQueAcepta(nil)
 		service := newTestService(store, email)
 
-		// Así lo devuelve el store real: GetByID no traduce sql.ErrNoRows.
+		// Así lo devuelve el store real: GetByID traduce sql.ErrNoRows a
+		// util.ErrNotFound, que el handler traduce a 404.
 		store.On("GetByID", mock.Anything, testAccessKeyID).
-			Return(model.AccessKey{}, sql.ErrNoRows).Once()
+			Return(model.AccessKey{}, util.ErrNotFound).Once()
 
 		err := service.Resend(context.Background(), testAccessKeyID, testEmail)
 
-		require.ErrorIs(t, err, sql.ErrNoRows)
+		require.ErrorIs(t, err, util.ErrNotFound)
 		email.sinCorreos(t)
 		store.AssertExpectations(t)
 	})
@@ -224,11 +224,10 @@ func TestAccessKeyService_Resend(t *testing.T) {
 		email.sinCorreos(t)
 	})
 
-	t.Run("BUG: entra en panic si la llave no tiene vencimiento", func(t *testing.T) {
-		// access_keys.expires_at es nullable (migrations/000001) y Resend lo
-		// desreferencia a ciegas en service.go:63, asi que una llave emitida
-		// sin vencimiento tumba el request (el Recoverer de chi lo convierte en
-		// un 500 sin cuerpo). Este test fija el comportamiento ACTUAL.
+	t.Run("no entra en panic si la llave no tiene vencimiento", func(t *testing.T) {
+		// access_keys.expires_at es nullable (migrations/000001). Desreferenciarlo
+		// a ciegas tumbaba el request con un panic que el Recoverer de chi
+		// convertia en un 500 sin cuerpo.
 		store := new(AccessKeyStoreMock)
 		email := newEmailQueAcepta(nil)
 		service := newTestService(store, email)
@@ -238,10 +237,11 @@ func TestAccessKeyService_Resend(t *testing.T) {
 
 		store.On("GetByID", mock.Anything, testAccessKeyID).Return(accessKey, nil).Once()
 
-		assert.Panics(t, func() {
-			_ = service.Resend(context.Background(), testAccessKeyID, testEmail)
-		})
+		err := service.Resend(context.Background(), testAccessKeyID, testEmail)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
 		email.sinCorreos(t)
+		store.AssertExpectations(t)
 	})
 }
 

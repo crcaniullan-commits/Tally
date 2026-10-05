@@ -356,7 +356,8 @@ paths:
       description: 'Vuelve a mandar por correo el código de una llave existente, sin
         crear una llave nueva ni mover su vencimiento: si el correo se perdió, el
         código sigue siendo el mismo. La respuesta viene envuelta en {"data": ...}
-        con el mensaje de confirmación. Un keyID que no sea un UUID responde 400.'
+        con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y
+        una llave inexistente, 404.'
       parameters:
       - description: ID de la llave de acceso
         in: path
@@ -382,8 +383,14 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "404":
+          description: llave de acceso inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
-          description: error interno del servidor o llave inexistente
+          description: error interno del servidor
           schema:
             additionalProperties:
               type: string

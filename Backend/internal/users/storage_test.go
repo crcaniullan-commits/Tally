@@ -37,6 +37,8 @@ func newMockStore(t *testing.T) (*UserStore, sqlmock.Sqlmock) {
 }
 
 // Fragments de las queries reales, para no duplicar el SQL en cada test.
+var testPlanExpiresAt = time.Date(2027, time.January, 15, 12, 0, 0, 0, time.UTC)
+
 var (
 	regexGetByID  = regexp.QuoteMeta("SELECT id, email, nombre, rut, role")
 	regexGetByRut = regexp.QuoteMeta("SELECT id, email, nombre, rut, role")
@@ -44,9 +46,10 @@ var (
 	regexDelete   = regexp.QuoteMeta("DELETE FROM users")
 )
 
-// columnas de la query de lectura: id, email, nombre, rut, role
+// columnas de la query de lectura: id, email, nombre, rut, role,
+// plan_expires_at. El orden tiene que calzar con el Scan de GetByID / GetByRut.
 func userColumns() []string {
-	return []string{"id", "email", "nombre", "rut", "role"}
+	return []string{"id", "email", "nombre", "rut", "role", "plan_expires_at"}
 }
 
 func userRow() []driver.Value {
@@ -56,6 +59,7 @@ func userRow() []driver.Value {
 		"Nombre Original",
 		"19.234.567-K",
 		string(util.UserRoleUsuario),
+		testPlanExpiresAt,
 	}
 }
 
@@ -75,6 +79,8 @@ func TestUserStore_GetByID(t *testing.T) {
 		assert.Equal(t, "Nombre Original", user.Nombre)
 		assert.Equal(t, util.UserRoleUsuario, user.Role)
 		assert.Equal(t, util.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
+		require.NotNil(t, user.PlanExpiresAt)
+		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
 	t.Run("acepta el rut sin separadores", func(t *testing.T) {
@@ -149,6 +155,8 @@ func TestUserStore_GetByRut(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testUserID, user.ID)
 		assert.Equal(t, util.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
+		require.NotNil(t, user.PlanExpiresAt)
+		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
 	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
@@ -437,48 +445,75 @@ func TestUserStore_setExpire_query(t *testing.T) {
 	})
 }
 
-// columnas de lectura que el Scan de GetByID / GetByRut realmente consume.
-func userColumnsConPlan() []string {
-	return append(userColumns(), "plan_expires_at")
-}
-
-// fila de lectura con las 6 columnas que devuelve el SELECT real.
-func userRowConPlan() []driver.Value {
-	return append(userRow(), time.Now().Add(24*time.Hour))
-}
-
 func TestUserStore_lectura_query(t *testing.T) {
-	// El SELECT de GetByID y GetByRut pide plan_expires_at (migrations/000004)
-	// pero el Scan solo lee 5 destinos. Contra Postgres eso es
-	// "sql: expected 6 destination arguments in Scan, not 5" en TODAS las filas,
-	// y como GetByID es lo que usa el middleware de autenticacion para resolver
-	// el usuario del token, ningun endpoint bajo /v1/app llega a ejecutarse.
-	// Los tests de arriba pasan porque(sqlmock) devuelven 5 columnas.
-	t.Run("BUG: GetByID lee una columna de menos y falla siempre", func(t *testing.T) {
+	// GetByID y GetByRut comparten la misma proyección, así que si cantidad u
+	// orden de columnas y del Scan difieren, el Scan se come el valor de la
+	// columna vecina: sqlmock no lo detecta (solo compara strings) y contra
+	// Postgres es "expected N destination arguments in Scan, not M" en todas las
+	// filas. Como GetByID es lo que usa el middleware de autenticación, eso
+	// tumbaba todos los endpoints bajo /v1/app.
+	t.Run("la proyección de GetByID está en el mismo orden que el Scan", func(t *testing.T) {
 		store, mock, sql := newCapturingMockStore(t)
 
 		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumnsConPlan()).AddRow(userRowConPlan()...))
+			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
 
 		user, err := store.GetByID(context.Background(), testUserID)
 
-		require.Error(t, err)
-		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "expected 6 destination arguments in Scan, not 5")
-		assert.Len(t, columnasDe(*sql), 6, "la proyeccion real pide 6 columnas")
+		require.NoError(t, err)
+		assert.Equal(t, userColumns(), columnasDe(*sql))
+		require.NotNil(t, user.PlanExpiresAt)
+		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
-	t.Run("BUG: GetByRut lee una columna de menos y falla siempre", func(t *testing.T) {
+	t.Run("la proyección de GetByRut está en el mismo orden que el Scan", func(t *testing.T) {
 		store, mock, sql := newCapturingMockStore(t)
 
 		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumnsConPlan()).AddRow(userRowConPlan()...))
+			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
 
 		user, err := store.GetByRut(context.Background(), "19.234.567-K")
 
-		require.Error(t, err)
-		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "expected 6 destination arguments in Scan, not 5")
-		assert.Len(t, columnasDe(*sql), 6, "la proyeccion real pide 6 columnas")
+		require.NoError(t, err)
+		assert.Equal(t, userColumns(), columnasDe(*sql))
+		require.NotNil(t, user.PlanExpiresAt)
+		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
+	})
+
+	t.Run("GetByID deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
+		// plan_expires_at es nullable a propósito (migrations/000004) y NULL es
+		// "plan gratuito", o sea el caso de casi todos los usuarios. Por eso
+		// PlanExpiresAt es *time.Time y no time.Time: escanear NULL en un
+		// time.Time falla con "unsupported Scan, storing driver.Value type
+		// <nil> into type *time.Time" y tumbaba el AuthTokenMiddleware.
+		store, mock, sql := newCapturingMockStore(t)
+
+		row := userRow()
+		row[5] = nil
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+
+		user, err := store.GetByID(context.Background(), testUserID)
+
+		require.NoError(t, err)
+		assert.Equal(t, userColumns(), columnasDe(*sql))
+		assert.Nil(t, user.PlanExpiresAt)
+	})
+
+	t.Run("GetByRut deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
+		store, mock := newMockStore(t)
+
+		row := userRow()
+		row[5] = nil
+
+		mock.ExpectQuery(regexGetByRut).
+			WithArgs("19.234.567-K").
+			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+
+		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+
+		require.NoError(t, err)
+		assert.Nil(t, user.PlanExpiresAt)
 	})
 }

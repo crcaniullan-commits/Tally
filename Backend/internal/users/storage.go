@@ -41,6 +41,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*model.User,
 		&user.Nombre,
 		&rawRut,
 		&user.Role,
+		&user.PlanExpiresAt,
 	)
 
 	if err != nil {
@@ -82,6 +83,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*model.User, 
 		&user.Nombre,
 		&rawRut,
 		&user.Role,
+		&user.PlanExpiresAt,
 	)
 
 	if err != nil {

@@ -18,7 +18,7 @@ func IssueForUser() {}
 // Resend
 //
 //	@Summary		Reenviar el código de acceso
-//	@Description	Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400.
+//	@Description	Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y una llave inexistente, 404.
 //	@Tags			AccessKeys
 //	@Accept			json
 //	@Produce		json
@@ -26,7 +26,8 @@ func IssueForUser() {}
 //	@Param			payload	body		EmailPayload		true	"correo del destinatario"
 //	@Success		200		{object}	string				"correo reenviado"
 //	@Failure		400		{object}	map[string]string	"keyID inválido o payload inválido"
-//	@Failure		500		{object}	map[string]string	"error interno del servidor o llave inexistente"
+//	@Failure		404		{object}	map[string]string	"llave de acceso inexistente"
+//	@Failure		500		{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/app/key/AccessID/{keyID}	[post]
 func Resend() {}

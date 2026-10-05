@@ -285,7 +285,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400.",
+                "description": "Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y una llave inexistente, 404.",
                 "consumes": [
                     "application/json"
                 ],
@@ -330,8 +330,17 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "404": {
+                        "description": "llave de acceso inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
-                        "description": "error interno del servidor o llave inexistente",
+                        "description": "error interno del servidor",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {

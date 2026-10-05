@@ -260,10 +260,26 @@ func TestAccessKeysHandler_Resend(t *testing.T) {
 		service.AssertNotCalled(t, "Resend", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 500 si la llave no existe", func(t *testing.T) {
-		// GetByID no traduce sql.ErrNoRows a util.ErrNotFound, así que el
-		// handler no tiene con qué responder 404 y todo error del service cae
-		// en el 500 genérico.
+	t.Run("responde 404 si la llave no existe", func(t *testing.T) {
+		// GetByID traduce sql.ErrNoRows a util.ErrNotFound justamente para que
+		// este endpoint pueda contestar 404 en vez del 500 genérico.
+		service := new(ServiceAccessKeyMock)
+		handler := newTestHandler(service)
+
+		service.On("Resend", mock.Anything, testAccessKeyID, testEmail).
+			Return(util.ErrNotFound).Once()
+
+		r := requestWithKeyIDParam(http.MethodPost, "/key/AccessID/"+testAccessKeyID.String(), testAccessKeyID.String())
+		w := httptest.NewRecorder()
+
+		handler.Resend(w, r)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.JSONEq(t, bodyNotFound, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
 		service := new(ServiceAccessKeyMock)
 		handler := newTestHandler(service)
 
@@ -346,15 +362,9 @@ func TestAccessKeysHandler_Revoke(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("BUG: con código vacío responde 400 pero igual revoca con código vacío", func(t *testing.T) {
-		// handler.go:96-98 escribe el 400 pero NO hace return, así que sigue
-		// revocando con la cadena vacía y, si el service no falla, después
-		// intenta escribir un 200 encima del 400 ya enviado.
-		// Este test fija el comportamiento ACTUAL para hacerlo visible.
+	t.Run("responde 400 y no llama al servicio si el código viene vacío", func(t *testing.T) {
 		service := new(ServiceAccessKeyMock)
 		handler := newTestHandler(service)
-
-		service.On("RevokePremature", mock.Anything, mock.Anything, "").Return(util.ErrNotFound).Once()
 
 		r := requestWithCodeParam(http.MethodPost, "/key/revoke/", "")
 		w := httptest.NewRecorder()
@@ -363,8 +373,7 @@ func TestAccessKeysHandler_Revoke(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "have to be a code")
-		service.AssertCalled(t, "RevokePremature", mock.Anything, mock.Anything, "")
-		service.AssertExpectations(t)
+		service.AssertNotCalled(t, "RevokePremature", mock.Anything, mock.Anything, mock.Anything)
 	})
 }
 

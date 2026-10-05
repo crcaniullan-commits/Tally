@@ -8,15 +8,15 @@ import (
 )
 
 type User struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	PasswordHash  password  `json:"-"`
-	Nombre        string    `json:"nombre"`
-	Role          UserRole  `json:"role"`
-	Rut           RUT       `json:"rut"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	PlanExpiresAt time.Time `json:"plan_expires_at"`
+	ID            uuid.UUID  `json:"id"`
+	Email         string     `json:"email"`
+	PasswordHash  password   `json:"-"`
+	Nombre        string     `json:"nombre"`
+	Role          UserRole   `json:"role"`
+	Rut           RUT        `json:"rut"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	PlanExpiresAt *time.Time `json:"plan_expires_at"`
 }
 
 type password struct {

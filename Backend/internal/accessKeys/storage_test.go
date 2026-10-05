@@ -204,10 +204,10 @@ func TestAccessKeyStore_GetByID(t *testing.T) {
 		assert.Nil(t, accessKey.ExpiresAt)
 	})
 
-	t.Run("devuelve sql.ErrNoRows sin traducir", func(t *testing.T) {
-		// GetByID no mapea sql.ErrNoRows a util.ErrNotFound como sí lo hacen los
-		// otros stores: por eso el handler de Resend responde 500 y no 404 ante
-		// una llave inexistente. Este test fija el comportamiento ACTUAL.
+	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
+		// Es lo que permite que el handler de Resend distinga "no existe" (404)
+		// de "se rompió algo" (500), como ya hacían Revoke y los stores de
+		// users.
 		store, mock := newMockStore(t)
 
 		mock.ExpectQuery(regexGetByID).
@@ -216,8 +216,8 @@ func TestAccessKeyStore_GetByID(t *testing.T) {
 
 		accessKey, err := store.GetByID(context.Background(), testAccessKeyID)
 
-		require.ErrorIs(t, err, sql.ErrNoRows)
-		assert.NotErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, util.ErrNotFound)
+		assert.NotErrorIs(t, err, sql.ErrNoRows, "el error de sql no debe filtrarse al handler")
 		assert.Equal(t, uuid.Nil, accessKey.ID)
 	})
 

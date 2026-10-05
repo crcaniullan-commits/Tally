@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -544,6 +545,26 @@ func TestUsersHandler_Exchange(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.JSONEq(t, `{"error":"the code was revoked"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el código no es canjeable", func(t *testing.T) {
+		// accesskeys.ErrNotRedeemable es lo único que devuelve el UPDATE de
+		// access_keys cuando el código está vencido, revocado o ya canjeado: los
+		// tres casos colapsan en este error, así que un solo 400 los cubre.
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(accesskeys.ErrNotRedeemable).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), accesskeys.ErrNotRedeemable.Error())
 		service.AssertExpectations(t)
 	})
 

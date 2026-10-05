@@ -80,8 +80,14 @@ func (h *AccessKeysHandler) Resend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.Resend(r.Context(), accessKeyId, payload.Email); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
+		switch err {
+		case util.ErrNotFound:
+			h.errors.NotFoundResponse(w, r, err)
+			return
+		default:
+			h.errors.InternalServerError(w, r, err)
+			return
+		}
 	}
 
 	if err := util.JsonResponse(w, http.StatusOK, "Correo reenviado"); err != nil {
@@ -95,6 +101,7 @@ func (h *AccessKeysHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 
 	if code == "" {
 		h.errors.BadRequestResponse(w, r, errors.New("have to be a code"))
+		return
 	}
 
 	users := util.GetUserFromContext(r)

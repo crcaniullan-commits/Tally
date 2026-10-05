@@ -75,6 +75,9 @@ func (s *StoreAccessKey) GetByID(ctx context.Context, accessKeyID uuid.UUID) (mo
 	)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.AccessKey{}, util.ErrNotFound
+		}
 		return model.AccessKey{}, err
 	}
 

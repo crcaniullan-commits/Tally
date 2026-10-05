@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
+	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -58,6 +59,10 @@ func (s *AccessKeyService) Resend(ctx context.Context, accessKeyId uuid.UUID, em
 
 	if err != nil {
 		return err
+	}
+
+	if accessKey.ExpiresAt == nil {
+		return util.ErrNotFound
 	}
 
 	s.sendEmailAsync(email, accessKey.Code, *accessKey.ExpiresAt)
