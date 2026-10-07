@@ -29,7 +29,7 @@ func NewAuthMiddleware(e errorhandler.ErrorsResponse, a auth.Authenticator, f Us
 
 func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Autorization")
+		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			a.error.UnauthorizedErrorResponse(w, r, fmt.Errorf("Authorization header is missing"))
 			return
