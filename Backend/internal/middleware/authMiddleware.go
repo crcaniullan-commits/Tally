@@ -8,14 +8,14 @@ import (
 
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/users"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 type UserFinder interface {
-	GetByID(context.Context, uuid.UUID) (*users.Users, error)
+	GetByID(context.Context, uuid.UUID) (*model.User, error)
 }
 type AuthMiddleware struct {
 	error errorhandler.ErrorsResponse
@@ -29,7 +29,7 @@ func NewAuthMiddleware(e errorhandler.ErrorsResponse, a auth.Authenticator, f Us
 
 func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Autorization")
+		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			a.error.UnauthorizedErrorResponse(w, r, fmt.Errorf("Authorization header is missing"))
 			return
@@ -69,6 +69,7 @@ func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 
 		if err != nil {
 			a.error.UnauthorizedErrorResponse(w, r, err)
+			return
 		}
 
 		ctx := r.Context()
@@ -89,14 +90,9 @@ func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 
 func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := users.GetUserFromContext(r)
+		user := util.GetUserFromContext(r)
 
-		allowed, err := a.checkRole(r.Context(), requiredRole, uuid.UUID(user.ID))
-
-		if err != nil {
-			a.error.InternalServerError(w, r, err)
-			return
-		}
+		allowed := a.checkRole(requiredRole, user)
 
 		if !allowed {
 			a.error.ForbiddenResponse(w, r)
@@ -108,12 +104,6 @@ func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.Ha
 	})
 }
 
-func (a *AuthMiddleware) checkRole(ctx context.Context, requiredUser util.UserRole, userID uuid.UUID) (bool, error) {
-	role, err := a.find.GetByID(ctx, userID)
-
-	if err != nil {
-		return false, err
-	}
-
-	return role.Role == util.UserRole(requiredUser), err
+func (a *AuthMiddleware) checkRole(requiredUser util.UserRole, user *model.User) bool {
+	return user.Role == util.UserRole(requiredUser)
 }

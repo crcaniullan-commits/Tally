@@ -3,22 +3,12 @@ package incomes
 import (
 	"context"
 	"database/sql"
-	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 )
-
-type IncomeStorage struct {
-	ID            uuid.UUID          `json:"id"`
-	UserID        uuid.UUID          `json:"userID"`
-	Monto         int64              `json:"monto"`
-	PaymentMethod util.PaymentMethod `json:"payment_method"`
-	Descripcion   *string            `json:"descripcion"`
-	Fecha         time.Time          `json:"fecha"`
-	CreatedAt     time.Time          `json:"created_at"`
-}
 
 type StoreIncome struct {
 	db *sql.DB
@@ -28,21 +18,25 @@ func NewStorage(db *sql.DB) *StoreIncome {
 	return &StoreIncome{db}
 }
 
-func (s *StoreIncome) AddIncome(ctx context.Context, income *IncomeStorage) error {
+func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error {
 	query := `
-		INSERT INTO incomes (user_id, monto, payment_method, descripcion)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO incomes (user_id, monto, payment_method, descripcion, category_id)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, fecha, created_at
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
+	// income.CategoryID es un *uuid.UUID porque la columna es nullable: un nil
+	// viaja a la base como NULL, no como un UUID cero que no matchearía ninguna
+	// categoría.
 	err := s.db.QueryRowContext(ctx, query,
 		income.UserID,
 		income.Monto,
 		income.PaymentMethod,
 		income.Descripcion,
+		income.CategoryID,
 	).Scan(
 		&income.ID,
 		&income.Fecha,
@@ -84,7 +78,7 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, user
 	return nil
 }
 
-func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]IncomeStorage, error) {
+func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
 	// El store es la última línea de defensa de la paginación: un
 	// IncomePaginationQuery{} (valor cero) pondría LIMIT 0 y devolvería siempre
 	// lista vacía, y un offset negativo hace fallar la query en Postgres.
@@ -98,12 +92,16 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 	// El ORDER BY no es cosmético: sin un orden determinista el LIMIT/OFFSET
 	// puede repetir o saltear filas entre páginas. El id desempata los ingresos
 	// que comparten fecha.
+	//
+	// category_id va último en la lista y en el Scan a propósito: mantenerlo al
+	// final deja intactas las posiciones de las otras 7 columnas.
 	query := `
-		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at
+		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at, category_id
 		FROM incomes
 		WHERE user_id = $1
 			  AND ($4 = '' OR fecha >= $4::date)
 			  AND ($5 = '' OR fecha <= $5::date)
+			  AND ($6 = '' OR category_id = $6::uuid)
 		ORDER BY fecha DESC, id DESC
 		LIMIT $2 OFFSET $3
 	`
@@ -117,6 +115,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 		fq.Offset,
 		fq.Since,
 		fq.Until,
+		fq.CategoryID,
 	)
 
 	if err != nil {
@@ -125,10 +124,10 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 
 	defer rows.Close()
 
-	incomes := make([]IncomeStorage, 0)
+	incomes := make([]model.Income, 0)
 
 	for rows.Next() {
-		var income IncomeStorage
+		var income model.Income
 		err := rows.Scan(
 			&income.ID,
 			&income.UserID,
@@ -137,6 +136,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 			&income.Descripcion,
 			&income.Fecha,
 			&income.CreatedAt,
+			&income.CategoryID,
 		)
 
 		if err != nil {

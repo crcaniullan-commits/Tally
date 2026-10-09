@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 )
@@ -17,7 +18,7 @@ func NewStorage(db *sql.DB) *StoreAuth {
 	return &StoreAuth{db}
 }
 
-func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*users.Users, error) {
+func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
 		SELECT id, email, nombre, rut, password_hash
 		FROM users
@@ -27,7 +28,7 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*users.Users,
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	user := &users.Users{}
+	user := &model.User{}
 
 	var rawRut string
 
@@ -58,7 +59,7 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*users.Users,
 	return user, nil
 }
 
-func (s *StoreAuth) Create(ctx context.Context, user *users.Users) error {
+func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
 	query := `
 		INSERT INTO users (email, password_hash, nombre, role, rut)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at;

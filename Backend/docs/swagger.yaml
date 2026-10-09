@@ -1,5 +1,12 @@
 basePath: /v1
 definitions:
+  accesskeys.EmailPayload:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
   auth.CreateUserPayload:
     properties:
       email:
@@ -36,6 +43,8 @@ definitions:
     type: object
   incomes.IncomePayload:
     properties:
+      category_id:
+        type: string
       descripcion:
         maxLength: 100
         type: string
@@ -43,7 +52,7 @@ definitions:
         type: integer
       payment_method:
         allOf:
-        - $ref: '#/definitions/util.PaymentMethod'
+        - $ref: '#/definitions/model.PaymentMethod'
         enum:
         - debito
         - credito
@@ -53,8 +62,31 @@ definitions:
     - monto
     - payment_method
     type: object
-  incomes.IncomeStorage:
+  model.AccessKey:
     properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      redeemed_at:
+        type: string
+      redeemed_by:
+        type: string
+      revoked_at:
+        type: string
+      revoked_by:
+        type: string
+    type: object
+  model.Income:
+    properties:
+      category_id:
+        type: string
       created_at:
         type: string
       descripcion:
@@ -66,38 +98,11 @@ definitions:
       monto:
         type: integer
       payment_method:
-        $ref: '#/definitions/util.PaymentMethod'
-      userID:
+        $ref: '#/definitions/model.PaymentMethod'
+      user_id:
         type: string
     type: object
-  users.UpdateUserPayload:
-    properties:
-      nombre:
-        maxLength: 100
-        type: string
-      password:
-        maxLength: 72
-        minLength: 8
-        type: string
-    type: object
-  users.Users:
-    properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      nombre:
-        type: string
-      role:
-        $ref: '#/definitions/util.UserRole'
-      rut:
-        $ref: '#/definitions/util.RUT'
-      updated_at:
-        type: string
-    type: object
-  util.PaymentMethod:
+  model.PaymentMethod:
     enum:
     - debito
     - credito
@@ -109,7 +114,7 @@ definitions:
     - PaymentMethodCredito
     - PaymentMethodTransferencia
     - PaymentMethodEfectivo
-  util.RUT:
+  model.RUT:
     properties:
       cuerpo:
         description: 'Ej: 19234567'
@@ -118,7 +123,26 @@ definitions:
         description: 'Ej: "K" o "4"'
         type: string
     type: object
-  util.UserRole:
+  model.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      nombre:
+        type: string
+      plan_expires_at:
+        type: string
+      role:
+        $ref: '#/definitions/model.UserRole'
+      rut:
+        $ref: '#/definitions/model.RUT'
+      updated_at:
+        type: string
+    type: object
+  model.UserRole:
     enum:
     - usuario
     - municipal
@@ -126,6 +150,16 @@ definitions:
     x-enum-varnames:
     - UserRoleUsuario
     - UserRoleMunicipal
+  users.UpdateUserPayload:
+    properties:
+      nombre:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    type: object
 info:
   contact:
     email: support@swagger.io
@@ -143,8 +177,9 @@ paths:
       description: 'Devuelve una página de los ingresos del usuario autenticado, ordenados
         del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}.
         Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota
-        con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde
-        400. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+        con since y until en formato AAAA-MM-DD, y por categoría con category_id (el
+        UUID de la categoría, no su nombre). Un parámetro mal formado responde 400.
+        Los montos son enteros en pesos chilenos (CLP, sin decimales).'
       parameters:
       - description: cantidad maxima de ingresos a devolver (1-30, default 30)
         in: query
@@ -162,6 +197,10 @@ paths:
         in: query
         name: until
         type: string
+      - description: UUID de la categoria por la que filtrar
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:
@@ -170,7 +209,7 @@ paths:
           schema:
             additionalProperties:
               items:
-                $ref: '#/definitions/incomes.IncomeStorage'
+                $ref: '#/definitions/model.Income'
               type: array
             type: object
         "400":
@@ -196,7 +235,8 @@ paths:
       description: 'Registra un nuevo ingreso asociado al usuario autenticado. La
         respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales).'
+        (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y
+        apunta a la tabla categories.'
       parameters:
       - description: payload
         in: body
@@ -210,7 +250,7 @@ paths:
         "201":
           description: ingreso creado
           schema:
-            $ref: '#/definitions/incomes.IncomeStorage'
+            $ref: '#/definitions/model.Income'
         "400":
           description: payload del ingreso erroneo
           schema:
@@ -269,6 +309,139 @@ paths:
       summary: Eliminar ingreso
       tags:
       - Incomes
+  /app/key:
+    post:
+      consumes:
+      - application/json
+      description: 'Genera un código de acceso, lo guarda asociado al municipal autenticado
+        (created_by) con un año de vencimiento y lo envía por correo al destinatario
+        del payload. La respuesta viene envuelta en {"data": ...} con la llave creada;
+        el código también viaja en el correo. Emitir es independiente de canjear:
+        el emprendedor lo canjea después en POST /app/users/exchange/{code}.'
+      parameters:
+      - description: correo del destinatario
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/accesskeys.EmailPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: código creado
+          schema:
+            $ref: '#/definitions/model.AccessKey'
+        "400":
+          description: payload inválido o email mal formado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Emitir un código de acceso
+      tags:
+      - AccessKeys
+  /app/key/AccessID/{keyID}:
+    post:
+      consumes:
+      - application/json
+      description: 'Vuelve a mandar por correo el código de una llave existente, sin
+        crear una llave nueva ni mover su vencimiento: si el correo se perdió, el
+        código sigue siendo el mismo. La respuesta viene envuelta en {"data": ...}
+        con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y
+        una llave inexistente, 404.'
+      parameters:
+      - description: ID de la llave de acceso
+        in: path
+        name: keyID
+        required: true
+        type: string
+      - description: correo del destinatario
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/accesskeys.EmailPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: correo reenviado
+          schema:
+            type: string
+        "400":
+          description: keyID inválido o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: llave de acceso inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Reenviar el código de acceso
+      tags:
+      - AccessKeys
+  /app/key/revoke/{code}:
+    post:
+      description: 'Revoca una llave por su código, dejando registro de quién la revocó
+        (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer:
+        deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {"data":
+        ...} con el mensaje de confirmación. Un código que no existe responde 404.'
+      parameters:
+      - description: código de acceso a revocar
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: código revocado
+          schema:
+            type: string
+        "400":
+          description: código vacío
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: código inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Revocar un código de acceso
+      tags:
+      - AccessKeys
   /app/users:
     delete:
       description: Elimina un usuario de la base de datos
@@ -323,6 +496,47 @@ paths:
       summary: Actualizar usuario
       tags:
       - Users
+  /app/users/exchange/{code}:
+    post:
+      description: Canjea un código de acceso y extiende el plan del usuario autenticado
+        hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado
+        se responde 400; uno inexistente, 404.
+      parameters:
+      - description: codigo de acceso
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: codigo canjeado
+          schema:
+            type: string
+        "400":
+          description: codigo invalido, vencido, revocado o ya canjeado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: codigo inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Canjear un código de acceso
+      tags:
+      - Users
   /app/users/municipal/{rut}:
     get:
       description: Busca un usuario por su rut
@@ -338,7 +552,7 @@ paths:
         "200":
           description: usuario
           schema:
-            $ref: '#/definitions/users.Users'
+            $ref: '#/definitions/model.User'
         "400":
           description: rut invalido
           schema: {}
@@ -409,9 +623,37 @@ paths:
       summary: Iniciar sesión
       tags:
       - Auth
+  /auth/municipal:
+    post:
+      consumes:
+      - application/json
+      description: Registra un usuario con rol municipal y devuelve un token de autenticación
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CreateUserPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token de autenticacion
+          schema:
+            type: string
+        "400":
+          description: payload erroneo o datos duplicados
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      summary: Registrar usuario municipal
+      tags:
+      - Auth
 securityDefinitions:
   ApiKeyAuth:
     in: header
-    name: Autorization
+    name: Authorization
     type: apiKey
 swagger: "2.0"

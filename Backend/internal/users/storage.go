@@ -4,7 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
 )
@@ -17,9 +21,9 @@ func NewStorage(db *sql.DB) *UserStore {
 	return &UserStore{db}
 }
 
-func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, error) {
+func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*model.User, error) {
 	query := `
-		SELECT id, email, nombre, rut, role
+		SELECT id, email, nombre, rut, role, plan_expires_at
 		FROM users
 		WHERE id = $1
 	`
@@ -27,7 +31,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	user := &Users{}
+	user := &model.User{}
 
 	var rawRut string
 
@@ -37,6 +41,7 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 		&user.Nombre,
 		&rawRut,
 		&user.Role,
+		&user.PlanExpiresAt,
 	)
 
 	if err != nil {
@@ -58,9 +63,9 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*Users, erro
 	return user, nil
 }
 
-func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error) {
+func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*model.User, error) {
 	query := `
-		SELECT id, email, nombre, rut, role
+		SELECT id, email, nombre, rut, role, plan_expires_at
 		FROM users
 		WHERE rut = $1;
 	`
@@ -68,7 +73,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	user := &Users{}
+	user := &model.User{}
 
 	var rawRut string
 
@@ -78,6 +83,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 		&user.Nombre,
 		&rawRut,
 		&user.Role,
+		&user.PlanExpiresAt,
 	)
 
 	if err != nil {
@@ -99,7 +105,7 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*Users, error
 	return user, nil
 }
 
-func (s *UserStore) Update(ctx context.Context, user *Users) error {
+func (s *UserStore) Update(ctx context.Context, user *model.User) error {
 	query := `
 		UPDATE users
 		SET password_hash = $1, nombre = $2, updated_at = NOW()
@@ -152,5 +158,26 @@ func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 	if rows == 0 {
 		return util.ErrNotFound
 	}
+	return nil
+}
+
+func (s *UserStore) setExpire(ctx context.Context, expires_at time.Time, userID uuid.UUID) error {
+	query := `
+		UPDATE users
+		SET plan_expires_at = $1
+		WHERE id = $2
+	`
+
+	exec := dbtx.FromContext(ctx, s.db)
+
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	defer cancel()
+
+	_, err := exec.ExecContext(ctx, query, expires_at, userID)
+
+	if err != nil {
+		return fmt.Errorf("actualizando plan_expires_at: %w", err)
+	}
+
 	return nil
 }

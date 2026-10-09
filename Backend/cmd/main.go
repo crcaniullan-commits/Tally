@@ -26,7 +26,7 @@ import (
 //
 // @securityDefinitions.apiKey	ApiKeyAuth
 // @in							header
-// @name						Autorization
+// @name						Authorization
 // @description
 func main() {
 	cfg := application.Config{
@@ -42,6 +42,10 @@ func main() {
 			Secret: env.GetString("JWT_SECRET", "llaveSecreta"),
 			Exp:    time.Hour * 24 * 3,
 			Iss:    "Tally",
+		},
+		EmailResend: application.EmailResend{
+			Apikey: env.GetString("API_KEY", ",,,,"),
+			From:   env.GetString("TALLY_EMAIL", "tally@gmail.com"),
 		},
 	}
 
@@ -76,7 +80,8 @@ func main() {
 	app := application.NewApplication(
 		cfg,
 		db,
-		logger)
+		logger,
+	)
 
 	logger.Fatal(app.Run())
 }

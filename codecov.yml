@@ -1,0 +1,46 @@
+# Codecov config para el monorepo Tally (backend Go + futuro frontend).
+# Este archivo vive en la RAÍZ del repo porque es donde Codecov busca la config.
+
+flags:
+  # Reportes generados por `go test -coverprofile` en Backend/
+  backend:
+    paths:
+      - Backend/
+  # Cuando exista el frontend, su job subirá los reportes con `flags: frontend`
+  frontend:
+    paths:
+      - Frontend/
+
+coverage:
+  status:
+    project:
+      default:
+        # Umbral laxo mientras la base de tests es pequeña. Súbelo cuando
+        # tengas coverage en storage.go y en los demás módulos.
+        target: auto
+        threshold: 1%
+        # El status del proyecto se calcula solo con el backend por ahora.
+        # Cuando agregues el job de frontend, quita esto para promediar ambas.
+        flags:
+          - backend
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+# Carpetas que no son código fuente: evidencias, docs generadas y artefactos.
+ignore:
+  - "Fase 1/**"
+  - "Fase 2/**"
+  - "Backend/docs/**"
+  - "Backend/bin/**"
+  - "Backend/tmp/**"
+  - "Backend/tests/**"
+  - "**/*.md"
+  - "**/*.sql"
+  - "**/*_test.go"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true

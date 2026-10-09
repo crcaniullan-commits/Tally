@@ -1,0 +1,66 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancela runs anteriores del mismo branch cuando llega un push nuevo.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: Backend/go.mod
+          cache-dependency-path: Backend/go.sum
+
+      - name: Descargar dependencias
+        working-directory: Backend
+        run: go mod download
+
+      - name: go vet
+        working-directory: Backend
+        run: go vet ./...
+
+      - name: Tests con race detector y cobertura
+        working-directory: Backend
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Resumen de cobertura
+        working-directory: Backend
+        run: go tool cover -func=coverage.out
+
+      # El repo es público, así que el upload funciona sin token.
+      # Si Codecov te lo pide: Settings > Secrets and variables > Actions >
+      # New repository secret > CODECOV_TOKEN, y descomenta la línea de abajo.
+      - name: Subir cobertura a Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ./Backend
+          files: coverage.out
+          flags: backend
+          name: backend-${{ github.ref_name }}
+          disable_search: true
+          # Que un fallo de Codecov no tumbe el pipeline de tests.
+          fail_ci_if_error: false
+          # token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Placeholder: cuando exista el frontend, copia este job y ajusta el comando
+  # de test según el stack. Sube el reporte con `flags: frontend` para que
+  # Codecov lo separe del backend según codecov.yml.

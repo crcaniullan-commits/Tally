@@ -27,3 +27,17 @@ func Register() {}
 //	@Failure		500			{object}	error				"error interno del servidor"
 //	@Router			/auth/login	[post]
 func Login() {}
+
+// CrearMunicipal
+//
+//	@Summary		Registrar usuario municipal
+//	@Description	Registra un usuario con rol municipal y devuelve un token de autenticación
+//	@Tags			Auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload			body		CreateUserPayload	true	"payload"
+//	@Success		200				{object}	string				"token de autenticacion"
+//	@Failure		400				{object}	error				"payload erroneo o datos duplicados"
+//	@Failure		500				{object}	error				"error interno del servidor"
+//	@Router			/auth/municipal	[post]
+func CrearMunicipal() {}

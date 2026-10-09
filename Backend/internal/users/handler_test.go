@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ const (
 	bodyDeleteOK      = `{"data":"Usuario eliminado"}`
 	bodyNotFound      = `{"error":"not found"}`
 	bodyInternalError = `{"error":"the server encountered a problem"}`
+	bodyExchangeOK    = `{"data":"Canjeado con exito, ¡Felicidades!"}`
 )
 
 // newTestHandler arma un UsersHandler con un service mockeado y el logger de
@@ -56,6 +58,18 @@ func requestWithRutParam(method, target, rut string) *http.Request {
 	)
 }
 
+// requestWithCodeParam arma una request con el usuario del middleware en el
+// contexto y el URL param "code" que lee el handler vía chi.URLParam. A diferencia
+// de requestWithRutParam no descarta el contexto: Exchange necesita las dos cosas.
+func requestWithCodeParam(method, target, code string) *http.Request {
+	r := requestWithUser(method, target, "")
+
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add("code", code)
+
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx))
+}
+
 func decodeEnvelope(t *testing.T, body string) map[string]any {
 	t.Helper()
 
@@ -79,7 +93,7 @@ func TestUsersHandler_Update(t *testing.T) {
 		}).Return(nil).Once()
 
 		r := requestWithUser(http.MethodPatch, "/users", body)
-		usuario = GetUserFromContext(r)
+		usuario = util.GetUserFromContext(r)
 
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
@@ -146,7 +160,7 @@ func TestUsersHandler_Update(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("responde 500 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {
+	t.Run("responde 400 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
 
@@ -155,12 +169,11 @@ func TestUsersHandler_Update(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.JSONEq(t, bodyInternalError, w.Body.String())
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 500 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
+	t.Run("responde 400 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
 
@@ -170,7 +183,8 @@ func TestUsersHandler_Update(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Update(w, r)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "rol")
 		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
 	})
 
@@ -179,7 +193,7 @@ func TestUsersHandler_Update(t *testing.T) {
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123","nombre":"Nombre Nuevo"}`)
-		usuario := GetUserFromContext(r)
+		usuario := util.GetUserFromContext(r)
 
 		service.On("Update", mock.Anything, usuario, mock.Anything).Return(util.ErrNotFound).Once()
 
@@ -196,7 +210,7 @@ func TestUsersHandler_Update(t *testing.T) {
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123","nombre":"Nombre Nuevo"}`)
-		usuario := GetUserFromContext(r)
+		usuario := util.GetUserFromContext(r)
 
 		service.On("Update", mock.Anything, usuario, mock.Anything).Return(errStoreBoom).Once()
 
@@ -263,7 +277,7 @@ func TestUsersHandler_Delete(t *testing.T) {
 	})
 
 	t.Run("BUG: entra en panic si la request no trae usuario en el contexto", func(t *testing.T) {
-		// handler.go:72 no valida que GetUserFromContext devuelva != nil,
+		// handler.go:72 no valida que util.GetUserFromContext devuelva != nil,
 		// por lo que user.ID (handler.go:74) explota con un nil pointer.
 		// Este test fija el comportamiento ACTUAL para hacerlo visible.
 		service := new(ServiceUsersMock)
@@ -380,14 +394,14 @@ func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
 	t.Run("UserService satisface la interfaz que espera el handler", func(t *testing.T) {
 		// Guarda contra regresiones de firmas: si cambia ServiceUsers, esto
 		// deja de compilar.
-		var _ ServiceUsers = NewUserService(new(StoreUserMock))
+		var _ ServiceUsers = NewUserService(new(StoreUserMock), new(RedeemerMock), nil)
 	})
 
 	t.Run("el handler construye un UserService real sobre un store mockeado", func(t *testing.T) {
 		store := new(StoreUserMock)
 		store.On("GetByRut", mock.Anything, "19.234.567-K").Return(newTestUser(), nil).Once()
 
-		handler := newTestHandler(NewUserService(store))
+		handler := newTestHandler(NewUserService(store, new(RedeemerMock), nil))
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 		w := httptest.NewRecorder()
@@ -424,7 +438,7 @@ func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 		r := requestWithUser(http.MethodDelete, "/users", "")
 		// sanity: el helper inyecta el usuario que esperamos
-		require.Equal(t, usuario.ID, GetUserFromContext(r).ID)
+		require.Equal(t, usuario.ID, util.GetUserFromContext(r).ID)
 		assert.NotEqual(t, uuid.Nil, usuario.ID)
 
 		w := httptest.NewRecorder()
@@ -432,5 +446,142 @@ func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		service.AssertCalled(t, "Delete", mock.Anything, uuid.MustParse(usuario.ID.String()))
+	})
+}
+
+func TestUsersHandler_Exchange(t *testing.T) {
+	t.Run("responde 202 y canjea el código con el usuario del contexto", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).Return(nil).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusAccepted, w.Code)
+		assert.JSONEq(t, bodyExchangeOK, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 y no llama al servicio si el código viene vacío", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/", "")
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Debe haber un codigo")
+		service.AssertNotCalled(t, "ExchangeCode", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 404 si el código no existe", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(util.ErrNotFound).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.JSONEq(t, bodyNotFound, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el código ya fue canjeado", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(ErrCodeRedemed).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"the code was already exchanged"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el código está vencido", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(ErrCodeVencido).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"the code is expired"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el código fue revocado", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(ErrCodeRevocado).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"the code was revoked"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el código no es canjeable", func(t *testing.T) {
+		// accesskeys.ErrNotRedeemable es lo único que devuelve el UPDATE de
+		// access_keys cuando el código está vencido, revocado o ya canjeado: los
+		// tres casos colapsan en este error, así que un solo 400 los cubre.
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(accesskeys.ErrNotRedeemable).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), accesskeys.ErrNotRedeemable.Error())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
+		service := new(ServiceUsersMock)
+		handler := newTestHandler(service)
+
+		service.On("ExchangeCode", mock.Anything, testAccessKeyCod, testUserID).
+			Return(errStoreBoom).Once()
+
+		r := requestWithCodeParam(http.MethodPost, "/users/exchange/"+testAccessKeyCod, testAccessKeyCod)
+		w := httptest.NewRecorder()
+
+		handler.Exchange(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.JSONEq(t, bodyInternalError, w.Body.String())
+		service.AssertExpectations(t)
 	})
 }

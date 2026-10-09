@@ -34,5 +34,6 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger,
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/", hdl.RegisterHandler)
 		r.Post("/login", hdl.Login)
+		r.Post("/municipal", hdl.CrearMunicipal)
 	})
 }

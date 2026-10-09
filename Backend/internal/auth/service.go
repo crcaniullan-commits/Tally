@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/crcaniullan-commits/Tally/internal/users"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthStore interface {
-	Create(context.Context, *users.Users) error
-	GetByEmail(context.Context, string) (*users.Users, error)
+	Create(context.Context, *model.User) error
+	GetByEmail(context.Context, string) (*model.User, error)
 }
 
 type AuthService struct {
@@ -24,7 +24,7 @@ func NewAuthService(store AuthStore, auth Authenticator) *AuthService {
 }
 
 func (s *AuthService) RegisterUser(ctx context.Context, payload *CreateUserPayload) (string, error) {
-	user := &users.Users{
+	user := &model.User{
 		Nombre: payload.Name,
 		Email:  payload.Email,
 		Role:   util.UserRoleUsuario,
@@ -77,7 +77,7 @@ func (s *AuthService) Login(ctx context.Context, payload *LoginUserPayload) (str
 	return token, nil
 }
 
-func (s *AuthService) createToken(user *users.Users) (string, error) {
+func (s *AuthService) createToken(user *model.User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": user.ID,
 		"exp": time.Now().Add(cExp).Unix(),
@@ -94,4 +94,38 @@ func (s *AuthService) createToken(user *users.Users) (string, error) {
 
 	return token, err
 
+}
+
+func (s *AuthService) CreateMunicipal(ctx context.Context, payload *CreateUserPayload) (string, error) {
+	user := &model.User{
+		Nombre: payload.Name,
+		Email:  payload.Email,
+		Role:   util.UserRoleMunicipal,
+	}
+
+	if err := user.PasswordHash.Set(payload.Password); err != nil {
+		return "", err
+	}
+
+	rut, err := util.ParseRUT(payload.Rut)
+
+	if err != nil {
+		return "", err
+	}
+
+	user.Rut = rut
+
+	err = s.store.Create(ctx, user)
+
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.createToken(user)
+
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }

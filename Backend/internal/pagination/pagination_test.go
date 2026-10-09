@@ -128,6 +128,40 @@ func TestIncomePaginationQuery_Parse(t *testing.T) {
 		assert.Contains(t, err.Error(), "until")
 	})
 
+	t.Run("lee category_id como UUID", func(t *testing.T) {
+		const catID = "b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"
+
+		fq, err := NewIncomePaginationQuery().Parse(
+			httptest.NewRequest("GET", "/incomes?category_id="+catID, nil))
+
+		require.NoError(t, err)
+		assert.Equal(t, catID, fq.CategoryID)
+	})
+
+	t.Run("sin category_id el filtro queda vacio", func(t *testing.T) {
+		// Vacío significa "sin filtro": el store lo traduce a ($6 = '' OR ...).
+		fq, err := NewIncomePaginationQuery().Parse(
+			httptest.NewRequest("GET", "/incomes?category_id=", nil))
+
+		require.NoError(t, err)
+		assert.Empty(t, fq.CategoryID)
+	})
+
+	t.Run("rechaza category_id que no es un UUID", func(t *testing.T) {
+		// El filtro es por id, no por nombre. Aceptar "Ventas" como categoría
+		// devolvería una lista vacía en vez de un error, y el cliente no
+		// distinguiría "no hay ingresos" de "mandaste mal el filtro".
+		for _, categoria := range []string{"Ventas", "123", "b1c2d3e4"} {
+			t.Run(categoria, func(t *testing.T) {
+				_, err := NewIncomePaginationQuery().Parse(
+					httptest.NewRequest("GET", "/incomes?category_id="+categoria, nil))
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "category_id")
+			})
+		}
+	})
+
 	t.Run("no devuelve una paginación usable si un parametro es inválido", func(t *testing.T) {
 		// Con limit=abc el handler tiene que cortar con 400. Si Parse devolviera
 		// la struct con el default, el cliente creería que pidió otra página y

@@ -31,7 +31,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD. Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
@@ -63,6 +63,12 @@ const docTemplate = `{
                         "description": "fecha maxima del rango (AAAA-MM-DD)",
                         "name": "until",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID de la categoria por la que filtrar",
+                        "name": "category_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -73,7 +79,7 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "array",
                                 "items": {
-                                    "$ref": "#/definitions/incomes.IncomeStorage"
+                                    "$ref": "#/definitions/model.Income"
                                 }
                             }
                         }
@@ -104,7 +110,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales).",
+                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es opcional (la columna es nullable) y apunta a la tabla categories.",
                 "consumes": [
                     "application/json"
                 ],
@@ -130,7 +136,7 @@ const docTemplate = `{
                     "201": {
                         "description": "ingreso creado",
                         "schema": {
-                            "$ref": "#/definitions/incomes.IncomeStorage"
+                            "$ref": "#/definitions/model.Income"
                         }
                     },
                     "400": {
@@ -196,6 +202,197 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "ingreso no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/key": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Genera un código de acceso, lo guarda asociado al municipal autenticado (created_by) con un año de vencimiento y lo envía por correo al destinatario del payload. La respuesta viene envuelta en {\"data\": ...} con la llave creada; el código también viaja en el correo. Emitir es independiente de canjear: el emprendedor lo canjea después en POST /app/users/exchange/{code}.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AccessKeys"
+                ],
+                "summary": "Emitir un código de acceso",
+                "parameters": [
+                    {
+                        "description": "correo del destinatario",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/accesskeys.EmailPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "código creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.AccessKey"
+                        }
+                    },
+                    "400": {
+                        "description": "payload inválido o email mal formado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/key/AccessID/{keyID}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y una llave inexistente, 404.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AccessKeys"
+                ],
+                "summary": "Reenviar el código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la llave de acceso",
+                        "name": "keyID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "correo del destinatario",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/accesskeys.EmailPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "correo reenviado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "keyID inválido o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "llave de acceso inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/key/revoke/{code}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Revoca una llave por su código, dejando registro de quién la revocó (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer: deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un código que no existe responde 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AccessKeys"
+                ],
+                "summary": "Revocar un código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "código de acceso a revocar",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "código revocado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "código vacío",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "código inexistente",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -298,6 +495,67 @@ const docTemplate = `{
                 }
             }
         },
+        "/app/users/exchange/{code}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Canjea un código de acceso y extiende el plan del usuario autenticado hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado se responde 400; uno inexistente, 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Canjear un código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "codigo de acceso",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "codigo canjeado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "codigo invalido, vencido, revocado o ya canjeado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "codigo inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/users/municipal/{rut}": {
             "get": {
                 "security": [
@@ -326,7 +584,7 @@ const docTemplate = `{
                     "200": {
                         "description": "usuario",
                         "schema": {
-                            "$ref": "#/definitions/users.Users"
+                            "$ref": "#/definitions/model.User"
                         }
                     },
                     "400": {
@@ -427,9 +685,62 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/auth/municipal": {
+            "post": {
+                "description": "Registra un usuario con rol municipal y devuelve un token de autenticación",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Registrar usuario municipal",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.CreateUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token de autenticacion",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "payload erroneo o datos duplicados",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "accesskeys.EmailPayload": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
         "auth.CreateUserPayload": {
             "type": "object",
             "required": [
@@ -483,6 +794,9 @@ const docTemplate = `{
                 "payment_method"
             ],
             "properties": {
+                "category_id": {
+                    "type": "string"
+                },
                 "descripcion": {
                     "type": "string",
                     "maxLength": 100
@@ -499,15 +813,50 @@ const docTemplate = `{
                     ],
                     "allOf": [
                         {
-                            "$ref": "#/definitions/util.PaymentMethod"
+                            "$ref": "#/definitions/model.PaymentMethod"
                         }
                     ]
                 }
             }
         },
-        "incomes.IncomeStorage": {
+        "model.AccessKey": {
             "type": "object",
             "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "redeemed_at": {
+                    "type": "string"
+                },
+                "redeemed_by": {
+                    "type": "string"
+                },
+                "revoked_at": {
+                    "type": "string"
+                },
+                "revoked_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Income": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -524,54 +873,14 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/util.PaymentMethod"
+                    "$ref": "#/definitions/model.PaymentMethod"
                 },
-                "userID": {
+                "user_id": {
                     "type": "string"
                 }
             }
         },
-        "users.UpdateUserPayload": {
-            "type": "object",
-            "properties": {
-                "nombre": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "minLength": 8
-                }
-            }
-        },
-        "users.Users": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "nombre": {
-                    "type": "string"
-                },
-                "role": {
-                    "$ref": "#/definitions/util.UserRole"
-                },
-                "rut": {
-                    "$ref": "#/definitions/util.RUT"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "util.PaymentMethod": {
+        "model.PaymentMethod": {
             "type": "string",
             "enum": [
                 "debito",
@@ -586,7 +895,7 @@ const docTemplate = `{
                 "PaymentMethodEfectivo"
             ]
         },
-        "util.RUT": {
+        "model.RUT": {
             "type": "object",
             "properties": {
                 "cuerpo": {
@@ -599,7 +908,36 @@ const docTemplate = `{
                 }
             }
         },
-        "util.UserRole": {
+        "model.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "nombre": {
+                    "type": "string"
+                },
+                "plan_expires_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/model.UserRole"
+                },
+                "rut": {
+                    "$ref": "#/definitions/model.RUT"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.UserRole": {
             "type": "string",
             "enum": [
                 "usuario",
@@ -609,12 +947,26 @@ const docTemplate = `{
                 "UserRoleUsuario",
                 "UserRoleMunicipal"
             ]
+        },
+        "users.UpdateUserPayload": {
+            "type": "object",
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
+                }
+            }
         }
     },
     "securityDefinitions": {
         "ApiKeyAuth": {
             "type": "apiKey",
-            "name": "Autorization",
+            "name": "Authorization",
             "in": "header"
         }
     }

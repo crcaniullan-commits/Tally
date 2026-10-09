@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -16,18 +17,19 @@ import (
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
 func TestIncomeService_AddIncome(t *testing.T) {
-	t.Run("mapea el payload a IncomeStorage con el userID del usuario", func(t *testing.T) {
+	t.Run("mapea el payload a model.Income con el userID del usuario", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
 		payload := newTestPayload()
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool {
+			mock.MatchedBy(func(i *model.Income) bool {
 				return i.UserID == testUserID &&
 					i.Monto == payload.Monto &&
 					i.PaymentMethod == util.PaymentMethodDebito &&
-					i.Descripcion != nil && *i.Descripcion == "Venta de almuerzo"
+					i.Descripcion != nil && *i.Descripcion == "Venta de almuerzo" &&
+					i.CategoryID != nil && *i.CategoryID == testCategoryID
 			}),
 		).Return(nil).Once()
 
@@ -45,10 +47,29 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		payload := IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool { return i.Descripcion == nil }),
+			mock.MatchedBy(func(i *model.Income) bool { return i.Descripcion == nil }),
 		).Return(nil).Once()
 
 		_, err := service.AddIncome(context.Background(), payload, testUserID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("deja la categoria en null si el payload no trae category_id", func(t *testing.T) {
+		// incomes.category_id es nullable (migrations/000006). El service no
+		// tiene que inventar una categoria por defecto: un nil tiene que
+		// seguir siendo nil para que el INSERT escriba NULL y no un UUID cero
+		// que no matchearia ninguna fila de categories.
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("AddIncome", mock.Anything,
+			mock.MatchedBy(func(i *model.Income) bool { return i.CategoryID == nil }),
+		).Return(nil).Once()
+
+		_, err := service.AddIncome(context.Background(),
+			IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}, testUserID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
@@ -59,7 +80,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		service := NewIncomeService(store)
 
 		store.On("AddIncome", mock.Anything,
-			mock.MatchedBy(func(i *IncomeStorage) bool {
+			mock.MatchedBy(func(i *model.Income) bool {
 				return i.ID == uuid.Nil && i.Fecha.IsZero() && i.CreatedAt.IsZero()
 			}),
 		).Return(nil).Once()
@@ -128,7 +149,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		esperados := []IncomeStorage{newTestIncome()}
+		esperados := []model.Income{newTestIncome()}
 		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
@@ -145,17 +166,20 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		fq := filterQueryWithRango()
+		for _, fq := range []pagination.IncomePaginationQuery{
+			filterQueryWithRango(),
+			filterQueryWithCategory(),
+		} {
+			store.On("GetAllIncomesOfUser", mock.Anything, testUserID, fq).
+				Return([]model.Income{}, nil).Once()
+		}
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID,
-			mock.MatchedBy(func(got pagination.IncomePaginationQuery) bool {
-				return got == fq
-			}),
-		).Return([]IncomeStorage{}, nil).Once()
-
-		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, fq)
-
+		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithRango())
 		require.NoError(t, err)
+
+		_, err = service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithCategory())
+		require.NoError(t, err)
+
 		store.AssertExpectations(t)
 	})
 
@@ -192,7 +216,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		service := NewIncomeService(store)
 
 		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
-			Return([]IncomeStorage{newTestIncome()}, errStoreBoom).Once()
+			Return([]model.Income{newTestIncome()}, errStoreBoom).Once()
 
 		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
 
