@@ -69,6 +69,7 @@ func (a *AuthMiddleware) AuthTokenMiddleware(next http.Handler) http.Handler {
 
 		if err != nil {
 			a.error.UnauthorizedErrorResponse(w, r, err)
+			return
 		}
 
 		ctx := r.Context()
@@ -91,12 +92,7 @@ func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.Ha
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := util.GetUserFromContext(r)
 
-		allowed, err := a.checkRole(r.Context(), requiredRole, uuid.UUID(user.ID))
-
-		if err != nil {
-			a.error.InternalServerError(w, r, err)
-			return
-		}
+		allowed := a.checkRole(requiredRole, user)
 
 		if !allowed {
 			a.error.ForbiddenResponse(w, r)
@@ -108,12 +104,6 @@ func (a *AuthMiddleware) CheckOwnership(requiredRole util.UserRole, next http.Ha
 	})
 }
 
-func (a *AuthMiddleware) checkRole(ctx context.Context, requiredUser util.UserRole, userID uuid.UUID) (bool, error) {
-	role, err := a.find.GetByID(ctx, userID)
-
-	if err != nil {
-		return false, err
-	}
-
-	return role.Role == util.UserRole(requiredUser), err
+func (a *AuthMiddleware) checkRole(requiredUser util.UserRole, user *model.User) bool {
+	return user.Role == util.UserRole(requiredUser)
 }

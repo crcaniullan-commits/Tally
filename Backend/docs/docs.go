@@ -685,6 +685,48 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/auth/municipal": {
+            "post": {
+                "description": "Registra un usuario con rol municipal y devuelve un token de autenticación",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Registrar usuario municipal",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.CreateUserPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token de autenticacion",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "payload erroneo o datos duplicados",
+                        "schema": {}
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {}
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -924,7 +966,7 @@ const docTemplate = `{
     "securityDefinitions": {
         "ApiKeyAuth": {
             "type": "apiKey",
-            "name": "Autorization",
+            "name": "Authorization",
             "in": "header"
         }
     }

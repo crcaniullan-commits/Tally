@@ -623,9 +623,37 @@ paths:
       summary: Iniciar sesión
       tags:
       - Auth
+  /auth/municipal:
+    post:
+      consumes:
+      - application/json
+      description: Registra un usuario con rol municipal y devuelve un token de autenticación
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CreateUserPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token de autenticacion
+          schema:
+            type: string
+        "400":
+          description: payload erroneo o datos duplicados
+          schema: {}
+        "500":
+          description: error interno del servidor
+          schema: {}
+      summary: Registrar usuario municipal
+      tags:
+      - Auth
 securityDefinitions:
   ApiKeyAuth:
     in: header
-    name: Autorization
+    name: Authorization
     type: apiKey
 swagger: "2.0"

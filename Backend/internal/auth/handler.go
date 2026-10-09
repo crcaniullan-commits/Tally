@@ -7,11 +7,13 @@ import (
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ServiceAuth interface {
 	RegisterUser(context.Context, *CreateUserPayload) (string, error)
 	Login(context.Context, *LoginUserPayload) (string, error)
+	CreateMunicipal(context.Context, *CreateUserPayload) (string, error)
 }
 
 type AuthHandler struct {
@@ -89,6 +91,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		case util.ErrNotFound:
 			h.errors.BadRequestResponse(w, r, err)
 			return
+		case bcrypt.ErrMismatchedHashAndPassword:
+			h.errors.BadRequestResponse(w, r, err)
+			return
 		default:
 			h.errors.InternalServerError(w, r, err)
 			return
@@ -96,6 +101,41 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = util.JsonResponse(w, http.StatusAccepted, data); err != nil {
+		h.errors.InternalServerError(w, r, err)
+		return
+	}
+
+}
+
+func (h *AuthHandler) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
+	var payload CreateUserPayload
+	if err := util.ReadJSON(w, r, &payload); err != nil {
+		h.errors.BadRequestResponse(w, r, err)
+		return
+	}
+
+	if err := util.Validate.Struct(payload); err != nil {
+		h.errors.BadRequestResponse(w, r, err)
+		return
+	}
+
+	data, err := h.service.CreateMunicipal(r.Context(), &payload)
+
+	if err != nil {
+		switch err {
+		case users.ErrDuplicateEmail:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		case users.ErrDuplicateRut:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		default:
+			h.errors.InternalServerError(w, r, err)
+			return
+		}
+	}
+
+	if err := util.JsonResponse(w, http.StatusOK, data); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}

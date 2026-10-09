@@ -26,7 +26,7 @@ import (
 //
 // @securityDefinitions.apiKey	ApiKeyAuth
 // @in							header
-// @name						Autorization
+// @name						Authorization
 // @description
 func main() {
 	cfg := application.Config{

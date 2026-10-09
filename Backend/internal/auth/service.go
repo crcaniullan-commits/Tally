@@ -95,3 +95,37 @@ func (s *AuthService) createToken(user *model.User) (string, error) {
 	return token, err
 
 }
+
+func (s *AuthService) CreateMunicipal(ctx context.Context, payload *CreateUserPayload) (string, error) {
+	user := &model.User{
+		Nombre: payload.Name,
+		Email:  payload.Email,
+		Role:   util.UserRoleMunicipal,
+	}
+
+	if err := user.PasswordHash.Set(payload.Password); err != nil {
+		return "", err
+	}
+
+	rut, err := util.ParseRUT(payload.Rut)
+
+	if err != nil {
+		return "", err
+	}
+
+	user.Rut = rut
+
+	err = s.store.Create(ctx, user)
+
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.createToken(user)
+
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
