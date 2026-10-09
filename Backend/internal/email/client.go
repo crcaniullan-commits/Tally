@@ -8,6 +8,12 @@ import (
 	"github.com/resend/resend-go/v4"
 )
 
+/**
+* Resend necesita de un dominio para funcionar
+* una alternativa parece posbible usando gmail,
+* su implementación queda pendiente, se dejara
+* el codigo de resend en caso de
+ */
 type Client struct {
 	resend *resend.Client
 	from   string
