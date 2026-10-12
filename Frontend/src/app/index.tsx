@@ -1,17 +1,22 @@
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View } from 'react-native';
+import { colors } from '../constants/colors';
 
 export default function Index() {
   return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.fondo,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Text style={{ color: colors.primario, fontSize: 40, fontWeight: 'bold' }}>
+        Tally
+      </Text>
+      <Text style={{ color: colors.textoSecundario, marginTop: 8 }}>
+        Finanzas simples para emprendedores
+      </Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
