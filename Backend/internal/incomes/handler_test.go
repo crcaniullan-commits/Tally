@@ -87,13 +87,13 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"payment_method":"debito","descripcion":"Venta de almuerzo","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
+		body := `{"monto":1500,"payment_method":"debito","descripcion":"Venta de almuerzo","categoria":"Comida"}`
 
 		service.On("AddIncome", mock.Anything, IncomePayload{
 			Monto:         1500,
 			PaymentMethod: util.PaymentMethodDebito,
 			Descripcion:   ptr("Venta de almuerzo"),
-			CategoryID:    &testCategoryID,
+			Categoria:     ptr(testCategoryName),
 		}, testUserID).Return(newTestIncome(), nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
@@ -227,16 +227,16 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("acepta el alta sin categoría: category_id es opcional", func(t *testing.T) {
+	t.Run("acepta el alta sin categoría: categoria es opcional", func(t *testing.T) {
 		// incomes.category_id es nullable (migrations/000006), asi que el tag
-		// es omitempty y el payload sin category_id tiene que pasar.
+		// es omitempty y el payload sin categoria tiene que pasar.
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":1500,"payment_method":"debito"}`
 
 		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
-			return p.CategoryID == nil
+			return p.Categoria == nil
 		}), testUserID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
@@ -248,38 +248,62 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("responde 400 si category_id no es un UUID: falla el decode, no la validación", func(t *testing.T) {
-		// El tag uuid4 nunca llega a correr: util.ReadJSON no puede deserializar
-		// "comercia" a *uuid.UUID y corta antes. Los errores de decode son
-		// culpa del cliente, asi que van como 400.
+	t.Run("manda la categoria por nombre al servicio", func(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
+		body := `{"monto":100,"payment_method":"debito","categoria":"Comida"}`
+
+		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
+			return p.Categoria != nil && *p.Categoria == testCategoryName
+		}), testUserID).Return(model.Income{}, nil).Once()
+
+		r := requestWithUser(http.MethodPost, "/incomes", body)
+
+		w := httptest.NewRecorder()
+		handler.AddIncome(w, r)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si la categoria supera los 100 caracteres", func(t *testing.T) {
+		service := new(ServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		larga := strings.Repeat("a", 101)
+
 		r := requestWithUser(http.MethodPost, "/incomes",
-			`{"monto":100,"payment_method":"debito","category_id":"comercia"}`)
+			`{"monto":100,"payment_method":"debito","categoria":"`+larga+`"}`)
 
 		w := httptest.NewRecorder()
 		handler.AddIncome(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"invalid UUID length: 8"}`, w.Body.String())
+		assert.Contains(t, w.Body.String(), "Categoria")
 		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 400 si category_id no es un UUID v4", func(t *testing.T) {
-		// El tag es uuid4, no uuid: las categorías se crean con
-		// gen_random_uuid(), que es v4. Este UUID es v1.
+	t.Run("responde 400 si la categoria no existe", func(t *testing.T) {
+		// El service no encuentra el nombre entre las categorias y devuelve
+		// util.ErrNotFound. Es culpa del cliente, asi que el handler responde
+		// 400 y no un 500.
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodPost, "/incomes",
-			`{"monto":100,"payment_method":"debito","category_id":"6ba7b810-9dad-11d1-80b4-00c04fd430c8"}`)
+		body := `{"monto":100,"payment_method":"debito","categoria":"Inexistente"}`
+
+		service.On("AddIncome", mock.Anything, mock.Anything, testUserID).
+			Return(model.Income{}, util.ErrNotFound).Once()
+
+		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
 		handler.AddIncome(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		assert.JSONEq(t, `{"error":"resource not found"}`, w.Body.String())
+		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 400 y no llama al servicio si el body no es JSON valido", func(t *testing.T) {

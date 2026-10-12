@@ -31,7 +31,7 @@ type IncomePayload struct {
 	Monto         int64               `json:"monto" validate:"required,gt=0"`
 	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
 	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
-	CategoryID    *uuid.UUID          `json:"category_id" validate:"omitempty,uuid4"`
+	Categoria     *string             `json:"categoria" validate:"omitempty,max=100"`
 }
 
 /*
@@ -54,8 +54,14 @@ func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 	income, err := h.service.AddIncome(r.Context(), payload, user.ID)
 
 	if err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
+		switch err {
+		case util.ErrNotFound:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		default:
+			h.errors.InternalServerError(w, r, err)
+			return
+		}
 	}
 
 	if err := util.JsonResponse(w, http.StatusCreated, income); err != nil {

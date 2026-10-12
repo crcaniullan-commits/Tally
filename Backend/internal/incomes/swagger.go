@@ -3,7 +3,7 @@ package incomes
 // AddIncome
 //
 //	@Summary		Registrar ingreso
-//	@Description	Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y apunta a la tabla categories.
+//	@Description	Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria" es opcional (la columna es nullable) y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias del usuario). Si el nombre no existe responde 400.
 //	@Tags			Incomes
 //	@Accept			json
 //	@Produce		json

@@ -3,6 +3,7 @@ package incomes
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
@@ -48,6 +49,39 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 	}
 
 	return nil
+}
+
+// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
+// referencia en incomes. Acepta las categorías globales (user_id IS NULL) y las
+// propias del usuario; ante un nombre repetido prefiere la del usuario, por eso
+// el NULLS LAST. Sin fila devuelve util.ErrNotFound para que el handler lo
+// traduzca a 400 y no a un 500.
+func (s *StoreIncome) GetCategoryIDByName(ctx context.Context, nombre string, userID uuid.UUID) (uuid.UUID, error) {
+	query := `
+		SELECT id
+		FROM categories
+		WHERE nombre = $1
+			  AND (user_id IS NULL OR user_id = $2)
+		ORDER BY user_id NULLS LAST
+		LIMIT 1
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	defer cancel()
+
+	var categoryID uuid.UUID
+
+	err := s.db.QueryRowContext(ctx, query, nombre, userID).Scan(&categoryID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, util.ErrNotFound
+		}
+
+		return uuid.Nil, err
+	}
+
+	return categoryID, nil
 }
 
 func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {

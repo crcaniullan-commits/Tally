@@ -12,6 +12,7 @@ type StoreIncomes interface {
 	AddIncome(context.Context, *model.Income) error
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
 	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
+	GetCategoryIDByName(context.Context, string, uuid.UUID) (uuid.UUID, error)
 }
 type IncomeService struct {
 	store StoreIncomes
@@ -27,7 +28,17 @@ func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, us
 		Monto:         payload.Monto,
 		PaymentMethod: payload.PaymentMethod,
 		Descripcion:   payload.Descripcion,
-		CategoryID:    payload.CategoryID,
+	}
+
+	// La categoría llega por nombre porque el usuario no conoce su UUID. Si no
+	// la manda, el ingreso queda sin categoría (la columna es nullable).
+	if payload.Categoria != nil {
+		categoryID, err := s.store.GetCategoryIDByName(ctx, *payload.Categoria, userID)
+		if err != nil {
+			return model.Income{}, err
+		}
+
+		income.CategoryID = &categoryID
 	}
 
 	if err := s.store.AddIncome(ctx, income); err != nil {

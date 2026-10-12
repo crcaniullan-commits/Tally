@@ -475,3 +475,46 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 		require.ErrorIs(t, err, errDBBoom)
 	})
 }
+
+func TestStoreIncome_GetCategoryIDByName(t *testing.T) {
+	t.Run("busca la categoría por nombre y la acota al usuario", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoryName, testUserID).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testCategoryID))
+
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testUserID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testCategoryID, categoryID)
+		assert.Contains(t, ms.sql, "FROM categories")
+		assert.Contains(t, ms.sql, "nombre = $1")
+		assert.Contains(t, ms.sql, "user_id IS NULL OR user_id = $2",
+			"tiene que aceptar las globales y las propias del usuario")
+	})
+
+	t.Run("devuelve util.ErrNotFound si ninguna categoria matchea", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs("Inexistente", testUserID).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+		_, err := ms.store.GetCategoryIDByName(context.Background(), "Inexistente", testUserID)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
+	})
+
+	t.Run("propaga el error de la base", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoryName, testUserID).
+			WillReturnError(errDBBoom)
+
+		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testUserID)
+
+		require.ErrorIs(t, err, errDBBoom)
+	})
+}

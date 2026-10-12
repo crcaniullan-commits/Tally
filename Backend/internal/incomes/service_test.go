@@ -23,6 +23,9 @@ func TestIncomeService_AddIncome(t *testing.T) {
 
 		payload := newTestPayload()
 
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(testCategoryID, nil).Once()
+
 		store.On("AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
 				return i.UserID == testUserID &&
@@ -38,6 +41,25 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		require.NoError(t, err)
 		store.AssertExpectations(t)
 		store.AssertNumberOfCalls(t, "AddIncome", 1)
+	})
+
+	t.Run("resuelve el nombre de la categoria al id antes de persistir", func(t *testing.T) {
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(testCategoryID, nil).Once()
+		store.On("AddIncome", mock.Anything,
+			mock.MatchedBy(func(i *model.Income) bool {
+				return i.CategoryID != nil && *i.CategoryID == testCategoryID
+			}),
+		).Return(nil).Once()
+
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+
+		require.NoError(t, err)
+		store.AssertCalled(t, "GetCategoryIDByName", mock.Anything, testCategoryName, testUserID)
+		store.AssertExpectations(t)
 	})
 
 	t.Run("acepta descripcion nula", func(t *testing.T) {
@@ -56,7 +78,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("deja la categoria en null si el payload no trae category_id", func(t *testing.T) {
+	t.Run("deja la categoria en null si el payload no trae categoria", func(t *testing.T) {
 		// incomes.category_id es nullable (migrations/000006). El service no
 		// tiene que inventar una categoria por defecto: un nil tiene que
 		// seguir siendo nil para que el INSERT escriba NULL y no un UUID cero
@@ -72,6 +94,35 @@ func TestIncomeService_AddIncome(t *testing.T) {
 			IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}, testUserID)
 
 		require.NoError(t, err)
+		store.AssertNotCalled(t, "GetCategoryIDByName", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga util.ErrNotFound si la categoria no existe y no persiste el ingreso", func(t *testing.T) {
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(uuid.Nil, util.ErrNotFound).Once()
+
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
+		store.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga el error del store de categorias sin persistir", func(t *testing.T) {
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(uuid.Nil, errStoreBoom).Once()
+
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		store.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -79,6 +130,8 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(testCategoryID, nil).Once()
 		store.On("AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
 				return i.ID == uuid.Nil && i.Fecha.IsZero() && i.CreatedAt.IsZero()
@@ -95,6 +148,8 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
+		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
+			Return(testCategoryID, nil).Once()
 		store.On("AddIncome", mock.Anything, mock.Anything).
 			Return(errStoreBoom).Once()
 
