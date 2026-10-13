@@ -177,7 +177,7 @@ func newTestAccessKey() model.AccessKey {
 	return model.AccessKey{
 		ID:        testAccessKeyID,
 		Code:      testAccessKeyCod,
-		CreatedBy: testMunicipalID,
+		CreatedBy: &testMunicipalID,
 		ExpiresAt: &expire,
 		CreatedAt: time.Now(),
 	}

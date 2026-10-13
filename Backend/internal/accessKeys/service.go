@@ -40,7 +40,7 @@ func (s *AccessKeyService) IssueForUser(ctx context.Context, municipalID uuid.UU
 
 	accessKey := &model.AccessKey{
 		Code:      code,
-		CreatedBy: municipalID,
+		CreatedBy: &municipalID,
 		ExpiresAt: &expire,
 	}
 
