@@ -1,13 +1,15 @@
     import { useState } from 'react';
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../../../shared/theme/colors';
-    import { fonts } from '../../../shared/theme/fonts';
     import Boton from '../../../shared/components/Boton';
     import CampoTexto from '../../../shared/components/CampoTexto';
     import { datosPrueba } from '../../../shared/mocks/datosPrueba';
+    import { colors } from '../../../shared/theme/colors';
+    import { fonts } from '../../../shared/theme/fonts';
+    import * as authService from '../auth.service';
+    import { traducirError } from '../errores';
 
     type FormularioLoginProps = {
-    onExito: () => void;
+    onExito: (token: string) => void;
     onOlvido: () => void;
     onCrearCuenta: () => void;
     };
@@ -16,18 +18,27 @@
     const [correo, setCorreo] = useState(datosPrueba.correo);
     const [contrasena, setContrasena] = useState(datosPrueba.contrasena);
     const [errores, setErrores] = useState<{ correo?: string; contrasena?: string }>({});
+    const [errorGeneral, setErrorGeneral] = useState<string | undefined>();
+    const [cargando, setCargando] = useState(false);
 
     const formularioIncompleto = correo.trim() === '' || contrasena === '';
 
-    function iniciarSesion() {
+    async function iniciarSesion() {
         const nuevos: { correo?: string; contrasena?: string } = {};
         if (!/^\S+@\S+\.\S+$/.test(correo.trim())) nuevos.correo = 'Ingresa un correo válido';
         if (contrasena.length < 8) nuevos.contrasena = 'La contraseña debe tener al menos 8 caracteres';
         setErrores(nuevos);
+        if (Object.keys(nuevos).length > 0) return;
 
-        if (Object.keys(nuevos).length === 0) {
-        // Pendiente: conexión con el backend (POST /v1/auth/login)
-        onExito();
+        setCargando(true);
+        setErrorGeneral(undefined);
+        try {
+        const token = await authService.iniciarSesion(correo, contrasena);
+        onExito(token);
+        } catch (error) {
+        setErrorGeneral(traducirError(error));
+        } finally {
+        setCargando(false);
         }
     }
 
@@ -43,7 +54,12 @@
             <Text style={{ color: colors.lavanda, fontFamily: fonts.medio }}>¿Olvidaste tu contraseña?</Text>
         </Pressable>
 
-        <Boton titulo="Ingresar" onPress={iniciarSesion} deshabilitado={formularioIncompleto} />
+        {errorGeneral ? (
+            <Text style={{ color: colors.error, fontFamily: fonts.medio, textAlign: 'center' }}>{errorGeneral}</Text>
+        ) : null}
+
+        <Boton titulo={cargando ? 'Ingresando...' : 'Ingresar'} onPress={iniciarSesion}
+            deshabilitado={formularioIncompleto || cargando} />
 
         <Pressable onPress={onCrearCuenta} style={{ alignSelf: 'center' }}>
             <Text style={{ color: colors.texto, fontFamily: fonts.normal }}>

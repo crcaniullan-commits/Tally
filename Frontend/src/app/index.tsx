@@ -11,6 +11,7 @@ import FormularioActivacion from '../features/auth/components/FormularioActivaci
 import FondoOndas from '../shared/components/FondoOndas';
 import { Alert } from 'react-native';
 import FormularioRecuperar from '../features/auth/components/FormularioRecuperar';
+import * as authService from '../features/auth/auth.service';
 
 
 type ModalAbierto = 'login' | 'registro' | 'activacion' | 'recuperar' | null;
@@ -26,10 +27,28 @@ export default function Index() {
   const { width, height } = useWindowDimensions();
   const [modal, setModal] = useState<ModalAbierto>(null);
   const [datosRegistro, setDatosRegistro] = useState<DatosRegistro | undefined>();
+    const [tokenRegistro, setTokenRegistro] = useState<string | undefined>();
+
+  // Paso 2 del registro: crea la cuenta (solo la primera vez) y canjea la clave municipal
+  async function activarCuenta(clave: string) {
+    if (!datosRegistro) return;
+
+    let token = tokenRegistro;
+    if (!token) {
+      token = await authService.registrar(datosRegistro);
+      setTokenRegistro(token); // Si la clave falla, al reintentar no se vuelve a crear la cuenta
+    }
+
+    await authService.canjearClave(clave, token);
+    // Pendiente (siguiente paso): guardar la sesión en el celular
+    cerrarModal();
+    router.replace('/inicio');
+  }
 
   function cerrarModal() {
     setModal(null);
     setDatosRegistro(undefined);
+    setTokenRegistro(undefined);
   }
     return (
     <View style={{ flex: 1, backgroundColor: colors.fondo }}>
@@ -74,7 +93,7 @@ export default function Index() {
         )}
         {modal === 'activacion' && (
           <FormularioActivacion
-            onExito={() => { cerrarModal(); router.replace('/inicio'); }}
+            onActivar={activarCuenta}
             onVolver={() => setModal('registro')}
           />
         )}

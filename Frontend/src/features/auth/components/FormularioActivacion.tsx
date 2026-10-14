@@ -1,21 +1,24 @@
-import { useState } from 'react';
-import { Text, View } from 'react-native';
-import { colors } from '../../../shared/theme/colors';
-import { datosPrueba } from '../../../shared/mocks/datosPrueba';
-import { fonts } from '../../../shared/theme/fonts';
-import BarraPasos from '../../../shared/components/BarraPasos';
-import Boton from '../../../shared/components/Boton';
-import CampoTexto from '../../../shared/components/CampoTexto';
+    import { useState } from 'react';
+    import { Text, View } from 'react-native';
+    import BarraPasos from '../../../shared/components/BarraPasos';
+    import Boton from '../../../shared/components/Boton';
+    import CampoTexto from '../../../shared/components/CampoTexto';
+    import { datosPrueba } from '../../../shared/mocks/datosPrueba';
+    import { colors } from '../../../shared/theme/colors';
+    import { fonts } from '../../../shared/theme/fonts';
+    import { traducirError } from '../errores';
 
-const LARGO_CLAVE = 26;
+    const LARGO_CLAVE = 26;
 
-type FormularioActivacionProps = {
-    onExito: () => void;
+    type FormularioActivacionProps = {
+    onActivar: (clave: string) => Promise<void>;
     onVolver: () => void;
-};
+    };
 
-export default function FormularioActivacion({ onExito, onVolver }: FormularioActivacionProps) {    const [clave, setClave] = useState(datosPrueba.claveActivacion);
+    export default function FormularioActivacion({ onActivar, onVolver }: FormularioActivacionProps) {
+    const [clave, setClave] = useState(datosPrueba.claveActivacion);
     const [error, setError] = useState<string | undefined>();
+    const [cargando, setCargando] = useState(false);
 
     function cambiarClave(texto: string) {
         // Quita espacios (comunes al copiar desde un correo) y pasa todo a mayúsculas
@@ -23,13 +26,19 @@ export default function FormularioActivacion({ onExito, onVolver }: FormularioAc
         setError(undefined);
     }
 
-    function activar() {
+    async function activar() {
         if (!/^[A-Z2-7]+$/.test(clave) || clave.length !== LARGO_CLAVE) {
         setError(`La clave debe tener ${LARGO_CLAVE} caracteres. Revisa que la copiaste completa`);
         return;
         }
-        // Pendiente: conexión con el backend (POST /v1/app/users/exchange/{clave})
-        onExito();
+        setCargando(true);
+        try {
+        await onActivar(clave);
+        } catch (e) {
+        setError(traducirError(e));
+        } finally {
+        setCargando(false);
+        }
     }
 
     return (
@@ -43,22 +52,16 @@ export default function FormularioActivacion({ onExito, onVolver }: FormularioAc
             </Text>
         </View>
 
-        <CampoTexto
-            etiqueta="Clave de activación"
-            placeholder="Pega aquí tu clave"
-            value={clave}
-            onChangeText={cambiarClave}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={40}
-            error={error}
-        />
+        <CampoTexto etiqueta="Clave de activación" placeholder="Pega aquí tu clave"
+            value={clave} onChangeText={cambiarClave} autoCapitalize="characters"
+            autoCorrect={false} maxLength={40} error={error} />
         <Text style={{ color: colors.textoSecundario, fontFamily: fonts.normal, fontSize: 13, textAlign: 'right', marginTop: -6 }}>
             {clave.length}/{LARGO_CLAVE} caracteres
         </Text>
 
-        <Boton titulo="Activar cuenta" onPress={activar} deshabilitado={clave === ''} />
-        <Boton titulo="Volver al paso 1" variante="secundario" onPress={onVolver} />
+        <Boton titulo={cargando ? 'Activando...' : 'Activar cuenta'} onPress={activar}
+            deshabilitado={clave === '' || cargando} />
+        <Boton titulo="Volver al paso 1" variante="secundario" onPress={onVolver} deshabilitado={cargando} />
         </>
     );
-}
+    }
