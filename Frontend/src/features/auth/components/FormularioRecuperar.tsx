@@ -1,10 +1,10 @@
     import { useState } from 'react';
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../constants/colors';
-    import { datosPrueba } from '../constants/datosPrueba';
-    import { fonts } from '../constants/fonts';
-    import Boton from './Boton';
-    import CampoTexto from './CampoTexto';
+    import { colors } from '../../../shared/theme/colors';
+    import { datosPrueba } from '../../../shared/mocks/datosPrueba';
+    import { fonts } from '../../../shared/theme/fonts';
+    import Boton from '../../../shared/components/Boton';
+    import CampoTexto from '../../../shared/components/CampoTexto';
 
     type Errores = { correo?: string; codigo?: string; contrasena?: string; confirmacion?: string };
 

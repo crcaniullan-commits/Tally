@@ -1,10 +1,10 @@
     import { useState } from 'react';
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../constants/colors';
-    import { fonts } from '../constants/fonts';
-    import Boton from './Boton';
-    import CampoTexto from './CampoTexto';
-    import { datosPrueba } from '../constants/datosPrueba';
+    import { colors } from '../../../shared/theme/colors';
+    import { fonts } from '../../../shared/theme/fonts';
+    import Boton from '../../../shared/components/Boton';
+    import CampoTexto from '../../../shared/components/CampoTexto';
+    import { datosPrueba } from '../../../shared/mocks/datosPrueba';
 
     type FormularioLoginProps = {
     onExito: () => void;

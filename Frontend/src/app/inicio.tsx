@@ -1,10 +1,10 @@
     import { Ionicons } from '@expo/vector-icons';
     import { Pressable, ScrollView, Text, View } from 'react-native';
-    import TarjetaCategoria from '../components/TarjetaCategoria';
-    import { categoriasPredeterminadas } from '../constants/categorias';
-    import { colors } from '../constants/colors';
-    import { datosPrueba } from '../constants/datosPrueba';
-    import { fonts } from '../constants/fonts';
+    import TarjetaCategoria from '../features/categorias/components/TarjetaCategoria';
+    import { categoriasPredeterminadas } from '../features/categorias/categorias';
+    import { colors } from '../shared/theme/colors';
+    import { datosPrueba } from '../shared/mocks/datosPrueba';
+    import { fonts } from '../shared/theme/fonts';
 
     export default function Inicio() {
     // Pendiente: el nombre vendrá del usuario con sesión iniciada (backend)

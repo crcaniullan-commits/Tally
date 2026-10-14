@@ -1,7 +1,7 @@
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../constants/colors';
-    import { fonts } from '../constants/fonts';
-    import { sombras } from '../constants/sombras';
+    import { colors } from '../theme/colors';
+    import { fonts } from '../theme/fonts';
+    import { sombras } from '../theme/sombras';
 
     type BotonProps = {
     titulo: string;

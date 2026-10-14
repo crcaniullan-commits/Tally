@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
-import { colors } from '../constants/colors';
-import { fonts } from '../constants/fonts';
+import { colors } from '../theme/colors';
+import { fonts } from '../theme/fonts';
 
 type BarraPasosProps = {
     actual: number;

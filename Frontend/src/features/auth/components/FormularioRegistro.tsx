@@ -1,12 +1,12 @@
     import { useState } from 'react';
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../constants/colors';
-    import { fonts } from '../constants/fonts';
-    import { rutEsValido } from '../utils/rut';
-    import Boton from './Boton';
-    import CampoTexto from './CampoTexto';
-    import { datosPrueba } from '../constants/datosPrueba';
-    import BarraPasos from './BarraPasos';
+    import { colors } from '../../../shared/theme/colors';
+    import { fonts } from '../../../shared/theme/fonts';
+    import { rutEsValido } from '../../../shared/utils/rut';
+    import Boton from '../../../shared/components/Boton';
+    import CampoTexto from '../../../shared/components/CampoTexto';
+    import { datosPrueba } from '../../../shared/mocks/datosPrueba';
+    import BarraPasos from '../../../shared/components/BarraPasos';
 
     type Errores = {
     nombre?: string; rut?: string; emprendimiento?: string;

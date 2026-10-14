@@ -1,16 +1,16 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, useWindowDimensions, View } from 'react-native';
-import Boton from '../components/Boton';
-import FormularioLogin from '../components/FormularioLogin';
-import FormularioRegistro, { DatosRegistro } from '../components/FormularioRegistro';
-import ModalFlotante from '../components/ModalFlotante';
-import { colors } from '../constants/colors';
-import { fonts } from '../constants/fonts';
-import FormularioActivacion from '../components/FormularioActivacion';
-import FondoOndas from '../components/FondoOndas';
+import Boton from '../shared/components/Boton';
+import FormularioLogin from '../features/auth/components/FormularioLogin';
+import FormularioRegistro, { DatosRegistro } from '../features/auth/components/FormularioRegistro';
+import ModalFlotante from '../shared/components/ModalFlotante';
+import { colors } from '../shared/theme/colors';
+import { fonts } from '../shared/theme/fonts';
+import FormularioActivacion from '../features/auth/components/FormularioActivacion';
+import FondoOndas from '../shared/components/FondoOndas';
 import { Alert } from 'react-native';
-import FormularioRecuperar from '../components/FormularioRecuperar';
+import FormularioRecuperar from '../features/auth/components/FormularioRecuperar';
 
 
 type ModalAbierto = 'login' | 'registro' | 'activacion' | 'recuperar' | null;

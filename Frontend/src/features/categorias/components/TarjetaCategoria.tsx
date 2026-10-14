@@ -1,9 +1,9 @@
     import { MaterialCommunityIcons } from '@expo/vector-icons';
     import { Pressable, Text } from 'react-native';
-    import { colors } from '../constants/colors';
-    import { fonts } from '../constants/fonts';
-    import { sombras } from '../constants/sombras';
-    import { Categoria } from '../constants/categorias';
+    import { colors } from '../../../shared/theme/colors';
+    import { fonts } from '../../../shared/theme/fonts';
+    import { sombras } from '../../../shared/theme/sombras';
+    import { Categoria } from '../categorias';
 
     type TarjetaCategoriaProps = {
     categoria: Categoria;

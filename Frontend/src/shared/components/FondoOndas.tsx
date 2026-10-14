@@ -1,5 +1,5 @@
 import Svg, { Path } from 'react-native-svg';
-import { colors } from '../constants/colors';
+import { colors } from '../theme/colors';
 
 // Forma ondulada decorativa del fondo, según el mockup de la Bienvenida.
 // Se estira para ocupar toda la pantalla, sin importar su tamaño.
