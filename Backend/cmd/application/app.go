@@ -102,11 +102,11 @@ func (app *Application) Run() error {
 	r.Route("/v1", func(r chi.Router) {
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
-		auth.InitModule(r, app.db, app.logger,
+		auth.InitModule(r, app.db, app.logger, transactor,
 			app.config.JwtConfig.Secret, app.config.JwtConfig.Iss, app.config.JwtConfig.Exp)
 		r.Route("/app", func(r chi.Router) {
 			r.Use(middl.AuthTokenMiddleware)
-			users.InitModule(r, app.db, app.logger, transactor, middl)
+			users.InitModule(r, app.db, app.logger, middl)
 			incomes.InitModule(r, app.db, app.logger, middl)
 			accesskeys.InitModule(r, app.db, app.logger, middl, resend)
 		})

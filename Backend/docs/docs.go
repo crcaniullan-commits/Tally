@@ -706,7 +706,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.CreateUserPayload"
+                            "$ref": "#/definitions/auth.CreateMunicipalPayload"
                         }
                     }
                 ],
@@ -741,7 +741,7 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.CreateUserPayload": {
+        "auth.CreateMunicipalPayload": {
             "type": "object",
             "required": [
                 "email",
@@ -750,6 +750,38 @@ const docTemplate = `{
                 "rut"
             ],
             "properties": {
+                "email": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "minLength": 8
+                },
+                "rut": {
+                    "type": "string",
+                    "maxLength": 10
+                }
+            }
+        },
+        "auth.CreateUserPayload": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "nombre",
+                "password",
+                "rut"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string",
                     "maxLength": 100

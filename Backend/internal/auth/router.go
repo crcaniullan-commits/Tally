@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"time"
 
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -14,9 +16,10 @@ var (
 	cExp          time.Duration
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger,
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, tran *dbtx.Transactor,
 	secret, iss string, exp time.Duration) {
 	err := errorhandler.NewErrorResponse(logger)
+	rem := accesskeys.NewStorage(db)
 	jwt := NewJWTAuthenticator(
 		secret,
 		iss,
@@ -28,7 +31,7 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger,
 	cExp = exp
 
 	repo := NewStorage(db)
-	svc := NewAuthService(repo, jwt)
+	svc := NewAuthService(repo, jwt, tran, rem)
 	hdl := NewAuthHandler(svc, err)
 
 	r.Route("/auth", func(r chi.Router) {

@@ -2,10 +2,8 @@ package users
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
@@ -17,7 +15,6 @@ type ServiceUsers interface {
 	Update(context.Context, *model.User, *UpdateUserPayload) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, util.RUT) (*model.User, error)
-	ExchangeCode(context.Context, string, uuid.UUID) error
 }
 
 type UsersHandler struct {
@@ -121,43 +118,4 @@ func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-}
-
-func (h *UsersHandler) Exchange(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
-
-	if code == "" {
-		h.errors.BadRequestResponse(w, r, errors.New("Debe haber un codigo"))
-		return
-	}
-
-	users := util.GetUserFromContext(r)
-
-	if err := h.service.ExchangeCode(r.Context(), code, users.ID); err != nil {
-		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
-			return
-		case ErrCodeRedemed:
-			h.errors.BadRequestResponse(w, r, err)
-			return
-		case accesskeys.ErrNotRedeemable:
-			// El UPDATE de access_keys filtra las llaves canjeables (no canjeada,
-			// sin vencer y no revocada): si no matchea ninguna fila, el código
-			// está vencido, revocado o ya se usó.
-			h.errors.BadRequestResponse(w, r, err)
-			return
-		case ErrCodeVencido, ErrCodeRevocado:
-			h.errors.BadRequestResponse(w, r, err)
-			return
-		default:
-			h.errors.InternalServerError(w, r, err)
-			return
-		}
-	}
-
-	if err := util.JsonResponse(w, http.StatusAccepted, "Canjeado con exito, ¡Felicidades!"); err != nil {
-		h.errors.InternalServerError(w, r, err)
-		return
-	}
 }

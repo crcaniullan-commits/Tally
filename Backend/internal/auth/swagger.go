@@ -35,9 +35,9 @@ func Login() {}
 //	@Tags			Auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload			body		CreateUserPayload	true	"payload"
-//	@Success		200				{object}	string				"token de autenticacion"
-//	@Failure		400				{object}	error				"payload erroneo o datos duplicados"
-//	@Failure		500				{object}	error				"error interno del servidor"
+//	@Param			payload			body		CreateMunicipalPayload	true	"payload"
+//	@Success		200				{object}	string					"token de autenticacion"
+//	@Failure		400				{object}	error					"payload erroneo o datos duplicados"
+//	@Failure		500				{object}	error					"error interno del servidor"
 //	@Router			/auth/municipal	[post]
 func CrearMunicipal() {}

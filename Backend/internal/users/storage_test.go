@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,88 +288,6 @@ func TestUserStore_ContextCancelado(t *testing.T) {
 	})
 }
 
-// setExpire escribe plan_expires_at (migrations/000004), que es la unica
-// columna de users que el service de canje toca. No devuelve util.ErrNotFound
-// si no actualiza ninguna fila: el canje ya mostro que el usuario existe y la
-// transaction que envuelve la llamada ya revierte ante cualquier error.
-func TestUserStore_setExpire(t *testing.T) {
-	t.Run("fija plan_expires_at del usuario", func(t *testing.T) {
-		store, mock := newMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectExec(regexUpdate).
-			WithArgs(expire, testUserID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		err := store.setExpire(context.Background(), expire, testUserID)
-
-		require.NoError(t, err)
-	})
-
-	t.Run("no falla si el UPDATE no toca ninguna fila", func(t *testing.T) {
-		// El store ya no mira RowsAffected (antes devolvia util.ErrNotFound).
-		// Con un usuario inexistente el canje queda reportado como exitoso y el
-		// commit hace su trabajo sin extender ningun plan.
-		store, mock := newMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectExec(regexUpdate).
-			WithArgs(expire, testUserID).
-			WillReturnResult(sqlmock.NewResult(0, 0))
-
-		err := store.setExpire(context.Background(), expire, testUserID)
-
-		require.NoError(t, err)
-	})
-
-	t.Run("envuelve el error de la base con el nombre de la operacion", func(t *testing.T) {
-		store, mock := newMockStore(t)
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		mock.ExpectExec(regexUpdate).
-			WithArgs(expire, testUserID).
-			WillReturnError(errDBBoom)
-
-		err := store.setExpire(context.Background(), expire, testUserID)
-
-		require.ErrorIs(t, err, errDBBoom)
-		assert.Contains(t, err.Error(), "plan_expires_at")
-		assert.NotErrorIs(t, err, util.ErrNotFound)
-	})
-
-	t.Run("escribe por la transaccion del contexto si hay una abierta", func(t *testing.T) {
-		// dbtx.FromContext hace que el canje y la extension del plan sean
-		// atomicos: dentro de ExchangeCode la llamada tiene que salir por el
-		// *sql.Tx del contexto, no por la conexion suelta.
-		db, sqlm, err := sqlmock.New()
-		require.NoError(t, err)
-
-		t.Cleanup(func() {
-			if err := sqlm.ExpectationsWereMet(); err != nil {
-				t.Errorf("expectativas de sql sin cumplir: %v", err)
-			}
-			_ = db.Close()
-		})
-
-		expire := time.Now().Add(24 * time.Hour)
-
-		sqlm.ExpectBegin()
-		sqlm.ExpectExec(regexUpdate).
-			WithArgs(expire, testUserID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
-		sqlm.ExpectCommit()
-
-		tx, err := db.BeginTx(context.Background(), nil)
-		require.NoError(t, err)
-
-		require.NoError(t, NewStorage(db).setExpire(dbtx.WithTx(context.Background(), tx), expire, testUserID))
-		require.NoError(t, tx.Commit())
-	})
-}
-
 // newCapturingMockStore levanta el store con un matcher permisivo que guarda el
 // SQL realmente ejecutado. sqlmock no parsea SQL (solo compara strings), asi que
 // sin esto una coma de menos o una columna cambiada de lugar pasarian los tests
@@ -412,37 +329,6 @@ func columnasDe(query string) []string {
 	}
 
 	return proyeccion
-}
-
-func TestUserStore_setExpire_query(t *testing.T) {
-	t.Run("escribe en users.plan_expires_at, no en expires_at", func(t *testing.T) {
-		// plan_expires_at es de users (migrations/000004) y expires_at es de
-		// access_keys (migrations/000001): apuntar a la columna equivocada deja
-		// al usuario sin plan.
-		store, mock, sql := newCapturingMockStore(t)
-
-		mock.ExpectExec("").
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		expire := time.Now().Add(24 * time.Hour)
-		require.NoError(t, store.setExpire(context.Background(), expire, testUserID))
-
-		assert.Contains(t, *sql, "SET plan_expires_at = $1")
-		assert.NotRegexp(t, `\bexpires_at\b`, *sql, "la query no debe tocar expires_at")
-	})
-
-	t.Run("filtra por id, no por el codigo de una llave", func(t *testing.T) {
-		store, mock, sql := newCapturingMockStore(t)
-
-		mock.ExpectExec("").
-			WillReturnResult(sqlmock.NewResult(0, 1))
-
-		expire := time.Now().Add(24 * time.Hour)
-		require.NoError(t, store.setExpire(context.Background(), expire, testUserID))
-
-		assert.Contains(t, *sql, "WHERE id = $2")
-		assert.NotContains(t, *sql, "code")
-	})
 }
 
 func TestUserStore_lectura_query(t *testing.T) {
