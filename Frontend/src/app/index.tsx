@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+
 import { useState } from 'react';
-import { Image, useWindowDimensions, View } from 'react-native';
+import { Alert, Image, useWindowDimensions, View } from 'react-native';
 import Boton from '../shared/components/Boton';
 import FormularioLogin from '../features/auth/components/FormularioLogin';
 import FormularioRegistro, { DatosRegistro } from '../features/auth/components/FormularioRegistro';
@@ -9,9 +9,9 @@ import { colors } from '../shared/theme/colors';
 import { fonts } from '../shared/theme/fonts';
 import FormularioActivacion from '../features/auth/components/FormularioActivacion';
 import FondoOndas from '../shared/components/FondoOndas';
-import { Alert } from 'react-native';
 import FormularioRecuperar from '../features/auth/components/FormularioRecuperar';
 import * as authService from '../features/auth/auth.service';
+import { useSesion } from '../features/auth/SesionContext';
 
 
 type ModalAbierto = 'login' | 'registro' | 'activacion' | 'recuperar' | null;
@@ -26,6 +26,7 @@ const titulos = {
 export default function Index() {
   const { width, height } = useWindowDimensions();
   const [modal, setModal] = useState<ModalAbierto>(null);
+  const { iniciarSesion } = useSesion();
   const [datosRegistro, setDatosRegistro] = useState<DatosRegistro | undefined>();
     const [tokenRegistro, setTokenRegistro] = useState<string | undefined>();
 
@@ -40,10 +41,9 @@ export default function Index() {
     }
 
     await authService.canjearClave(clave, token);
-    // Pendiente (siguiente paso): guardar la sesión en el celular
     cerrarModal();
-    router.replace('/inicio');
-  }
+    await iniciarSesion(token);
+    }
 
   function cerrarModal() {
     setModal(null);
@@ -54,7 +54,7 @@ export default function Index() {
     <View style={{ flex: 1, backgroundColor: colors.fondo }}>
       <FondoOndas />
 
-      {/* Logo: empieza al 21% de la altura y ocupa el 67% del ancho, como en el mockup */}
+      {/* Logo: empieza al 21% de la altura y ocupa el 67% del ancho */}
       <View style={{ position: 'absolute', top: height * 0.30, width: '100%', alignItems: 'center' }}>
         <Image
           source={require('../../assets/images/logo-tally.png')}
@@ -79,7 +79,7 @@ export default function Index() {
       >
         {modal === 'login' && (
           <FormularioLogin
-            onExito={() => { cerrarModal(); router.replace('/inicio'); }}
+            onExito={(token) => { cerrarModal(); iniciarSesion(token); }}
             onOlvido={() => setModal('recuperar')}
             onCrearCuenta={() => setModal('registro')}
           />

@@ -52,7 +52,7 @@
         setErrores(nuevos);
 
         if (Object.keys(nuevos).length === 0) {
-        // Pendiente: conexión con el backend (POST /v1/auth)
+   // La cuenta se crea en el paso 2 (index.tsx → activarCuenta)
             onExito({ nombre, rut, emprendimiento, correo, contrasena });
         }
     }

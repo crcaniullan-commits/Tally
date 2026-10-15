@@ -19,6 +19,7 @@ export const colors = {
 
   // --- Usos en la app: así cada pantalla usa el color según su función ---
   fondo: '#eaedfa',        // Fondo general (lavanda suave)
+  fondoApp: '#faf9fd',     // Fondo dentro de la app
   superficie: '#ffffff',   // Tarjetas y campos de texto
   texto: '#545454',        // Texto principal
   textoSecundario: '#8a8a8a', // Etiquetas y textos de apoyo (complementario)
