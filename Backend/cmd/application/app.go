@@ -36,7 +36,7 @@ type Config struct {
 	Db          DbConfig
 	ApiURL      string
 	JwtConfig   JwtConfig
-	EmailResend EmailResend
+	EmailConfig EmailConfig
 }
 
 type JwtConfig struct {
@@ -52,9 +52,10 @@ type DbConfig struct {
 	MaxIdleTime  string
 }
 
-type EmailResend struct {
-	Apikey string
-	From   string
+type EmailConfig struct {
+	Username string
+	Password string
+	From     string
 }
 
 func NewApplication(cfg Config, db *sql.DB, logger *zap.SugaredLogger) *Application {
@@ -83,16 +84,24 @@ func (app *Application) Run() error {
 		users.NewStorage(app.db),
 	)
 
-	var resend accesskeys.SendEmail
+	var smtp accesskeys.SendEmail
 
-	if apikey := env.GetString("API_KEY", ""); apikey != "" {
-		resend = email.Newclient(
-			app.config.EmailResend.Apikey,
-			app.config.EmailResend.From,
+	if apikey := env.GetString("GMAIL_SMTP_PASSWORD", ""); apikey != "" {
+		NewSmtp, err := email.NewGmailClient(
+			app.config.EmailConfig.Username,
+			app.config.EmailConfig.Password,
+			app.config.EmailConfig.From,
 		)
+
+		if err != nil {
+			app.logger.Errorf("Error configurando SMTP", "error", err)
+		}
+
+		smtp = NewSmtp
+		app.logger.Infow("SMTP conectado con email", "email", app.config.EmailConfig.Username)
 	} else {
 		app.logger.Errorf("Api key no configurada - usando mock de envío de correos")
-		resend = NewMockSender()
+		smtp = NewMockSender()
 	}
 
 	transactor := dbtx.NewTransactor(app.db)
@@ -108,7 +117,7 @@ func (app *Application) Run() error {
 			r.Use(middl.AuthTokenMiddleware)
 			users.InitModule(r, app.db, app.logger, middl)
 			incomes.InitModule(r, app.db, app.logger, middl)
-			accesskeys.InitModule(r, app.db, app.logger, middl, resend)
+			accesskeys.InitModule(r, app.db, app.logger, middl, smtp)
 		})
 	})
 

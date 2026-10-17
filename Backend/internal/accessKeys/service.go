@@ -36,7 +36,7 @@ func NewAccessKeyService(store AccessKeyStore, email SendEmail) *AccessKeyServic
 
 func (s *AccessKeyService) IssueForUser(ctx context.Context, municipalID uuid.UUID, email string) (model.AccessKey, error) {
 	expire := time.Now().AddDate(1, 0, 0)
-	code := rand.Text()
+	code := rand.Text()[:6]
 
 	accessKey := &model.AccessKey{
 		Code:      code,
