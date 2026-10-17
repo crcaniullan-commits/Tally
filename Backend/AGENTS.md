@@ -43,6 +43,27 @@ GOPROXY=off go test ./internal/incomes/...   # cache de módulos ya está calien
 
 `.envrc` está en `.gitignore` (tiene credenciales reales) pero `makefile` lo incluye; `go tool task` lo lee vía `dotenv`. Sin él, `make test` igual corre.
 
+## Esquema de la base de datos
+
+Estado tras la última migración, `000007_add_empresas`. El número entre paréntesis es la migración que introdujo el elemento.
+
+ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`).
+
+Salvo que se indique, toda tabla tiene `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` y `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`.
+
+- `users` — `email` UNIQUE, `password_hash`, `nombre`, `role` (`user_role`, default `usuario`), `updated_at`, `rut` UNIQUE (`000002`), `plan_expires_at` nullable (`000004`).
+- `empresas` (`000007`) — `nombre_empresa`, `user_id NOT NULL → users`. Un usuario tiene N empresas; índice `idx_empresas_user_id`.
+- `access_keys` — `code` UNIQUE, `created_by NOT NULL → users`, `redeemed_by → users`, `redeemed_at`, `expires_at`, `revoked_at` (`000005`), `revoked_by → users` (`000005`).
+- `categories` — `nombre`; `empresa_id → empresas` **nullable** (`000007`), donde NULL = categoría global.
+- `incomes` — `empresa_id NOT NULL → empresas` (`000007`), `monto BIGINT NOT NULL` (`000003`), `payment_method`, `descripcion` nullable, `fecha DATE default CURRENT_DATE`, `category_id → categories` nullable (`000006`).
+- `expenses` — `empresa_id NOT NULL → empresas` (`000007`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories`, `descripcion` nullable, `fecha`.
+- `debtors` — `empresa_id NOT NULL → empresas` (`000007`), `nombre`, `monto BIGINT NOT NULL`, `descripcion` nullable, `pagado BOOLEAN NOT NULL default false`, `fecha_limite DATE` nullable.
+- `goals` — `empresa_id NOT NULL → empresas` (`000007`), `nombre`, `periodo` (`goal_period`), `monto_meta BIGINT NOT NULL`.
+
+`000007` sacó `user_id` de `incomes`, `expenses`, `debtors`, `goals` y `categories`: la tenencia pasa a ser `empresa_id → empresas → users`. También crea los índices `idx_incomes_empresa_id`, `idx_expenses_empresa_id`, `idx_debtors_empresa_id`, `idx_goals_empresa_id` y `idx_categories_empresa_id`.
+
+> El modelo `model.Empresa` y el paquete `internal/empresas` (store/service/handler, solo structs, interfaces e inicializadores) existen desde `000007` pero todavía no están cableados en `cmd/application/app.go`.
+
 ## Montos de dinero: `int64`, nunca `float64`
 
 CLP es una moneda de exponente 0 (no usa centavos), así que los montos son enteros de pesos: `int64` en Go, `BIGINT` en Postgres. Aplica a `incomes.monto`, `expenses.monto`, `debtors.monto`, `goals.monto_meta`.

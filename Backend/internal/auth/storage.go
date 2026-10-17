@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 
+	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/google/uuid"
 )
 
 type StoreAuth struct {
@@ -73,7 +77,7 @@ func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
 		role = "usuario"
 	}
 
-	err := s.db.QueryRowContext(ctx, query,
+	err := dbtx.FromContext(ctx, s.db).QueryRowContext(ctx, query,
 		user.Email,
 		user.PasswordHash.GetHash(),
 		user.Nombre,
@@ -91,5 +95,26 @@ func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
 		}
 		return err
 	}
+	return nil
+}
+
+func (s *StoreAuth) setExpire(ctx context.Context, expires_at time.Time, userID uuid.UUID) error {
+	query := `
+		UPDATE users
+		SET plan_expires_at = $1
+		WHERE id = $2
+	`
+
+	exec := dbtx.FromContext(ctx, s.db)
+
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	defer cancel()
+
+	_, err := exec.ExecContext(ctx, query, expires_at, userID)
+
+	if err != nil {
+		return fmt.Errorf("actualizando plan_expires_at: %w", err)
+	}
+
 	return nil
 }

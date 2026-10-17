@@ -2,9 +2,7 @@ package users
 
 import (
 	"context"
-	"time"
 
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/google/uuid"
@@ -14,21 +12,14 @@ type StoreUser interface {
 	Update(context.Context, *model.User) error
 	Delete(context.Context, uuid.UUID) error
 	GetByRut(context.Context, string) (*model.User, error)
-	setExpire(context.Context, time.Time, uuid.UUID) error
-}
-
-type Redeemer interface {
-	Redeem(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error)
 }
 
 type UserService struct {
-	store      StoreUser
-	redeemer   Redeemer
-	transactor *dbtx.Transactor
+	store StoreUser
 }
 
-func NewUserService(store StoreUser, redeemer Redeemer, transactor *dbtx.Transactor) *UserService {
-	return &UserService{store: store, redeemer: redeemer, transactor: transactor}
+func NewUserService(store StoreUser) *UserService {
+	return &UserService{store: store}
 }
 
 func (s *UserService) Update(ctx context.Context, user *model.User, payload *UpdateUserPayload) error {
@@ -64,16 +55,4 @@ func (s *UserService) GetByRut(ctx context.Context, rut util.RUT) (*model.User, 
 	}
 
 	return user, nil
-}
-
-func (s *UserService) ExchangeCode(ctx context.Context, code string, userID uuid.UUID) error {
-	return s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		accesskey, err := s.redeemer.Redeem(ctx, code, userID)
-
-		if err != nil {
-			return err
-		}
-
-		return s.store.setExpire(ctx, *accesskey.ExpiresAt, userID)
-	})
 }
