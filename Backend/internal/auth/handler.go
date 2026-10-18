@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/crcaniullan-commits/Tally/internal/util"
@@ -13,7 +14,7 @@ import (
 type ServiceAuth interface {
 	RegisterUser(context.Context, *CreateUserPayload) (string, error)
 	Login(context.Context, *LoginUserPayload) (string, error)
-	CreateMunicipal(context.Context, *CreateUserPayload) (string, error)
+	CreateMunicipal(context.Context, *CreateMunicipalPayload) (string, error)
 }
 
 type AuthHandler struct {
@@ -30,6 +31,16 @@ type CreateUserPayload struct {
 	Password string `json:"password" validate:"required,min=8,max=72"`
 	Name     string `json:"nombre" validate:"required,max=100"`
 	Rut      string `json:"rut" validate:"required,max=10"`
+	Code     string `json:"code" validate:"required"`
+}
+
+// CreateMunicipalPayload no incluye code: crear un municipal no implica canjear
+// una llave de acceso.
+type CreateMunicipalPayload struct {
+	Email    string `json:"email" validate:"required,max=100,email"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
+	Name     string `json:"nombre" validate:"required,max=100"`
+	Rut      string `json:"rut" validate:"required,min=9,max=12"`
 }
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +63,9 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			h.errors.BadRequestResponse(w, r, err)
 			return
 		case users.ErrDuplicateRut:
+			h.errors.BadRequestResponse(w, r, err)
+			return
+		case accesskeys.ErrNotRedeemable:
 			h.errors.BadRequestResponse(w, r, err)
 			return
 		default:
@@ -108,7 +122,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
-	var payload CreateUserPayload
+	var payload CreateMunicipalPayload
 	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return

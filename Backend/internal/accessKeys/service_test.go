@@ -38,7 +38,7 @@ func TestAccessKeyService_IssueForUser(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, guardado)
-		assert.Equal(t, testMunicipalID, accessKey.CreatedBy, "created_by es el municipal emisor")
+		assert.Equal(t, &testMunicipalID, accessKey.CreatedBy, "created_by es el municipal emisor")
 		assert.NotEmpty(t, accessKey.Code, "el código se genera en el service")
 		assert.Equal(t, *guardado, accessKey, "la llave devuelta es la que se intentó guardar")
 		store.AssertExpectations(t)

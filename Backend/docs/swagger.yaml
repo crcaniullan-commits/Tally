@@ -7,7 +7,7 @@ definitions:
     required:
     - email
     type: object
-  auth.CreateUserPayload:
+  auth.CreateMunicipalPayload:
     properties:
       email:
         maxLength: 100
@@ -23,6 +23,30 @@ definitions:
         maxLength: 10
         type: string
     required:
+    - email
+    - nombre
+    - password
+    - rut
+    type: object
+  auth.CreateUserPayload:
+    properties:
+      code:
+        type: string
+      email:
+        maxLength: 100
+        type: string
+      nombre:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+      rut:
+        maxLength: 10
+        type: string
+    required:
+    - code
     - email
     - nombre
     - password
@@ -636,7 +660,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/auth.CreateUserPayload'
+          $ref: '#/definitions/auth.CreateMunicipalPayload'
       produces:
       - application/json
       responses:

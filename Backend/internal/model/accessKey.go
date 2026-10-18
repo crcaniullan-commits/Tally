@@ -9,7 +9,7 @@ import (
 type AccessKey struct {
 	ID         uuid.UUID  `json:"id"`
 	Code       string     `json:"code"`
-	CreatedBy  uuid.UUID  `json:"created_by"`
+	CreatedBy  *uuid.UUID `json:"created_by"`
 	RedeemedBy *uuid.UUID `json:"redeemed_by"`
 	RedeemedAt *time.Time `json:"redeemed_at"`
 	ExpiresAt  *time.Time `json:"expires_at"`

@@ -149,7 +149,7 @@ func TestAccessKeyStore_GetByID(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testAccessKeyID, accessKey.ID)
 		assert.Equal(t, testAccessKeyCod, accessKey.Code)
-		assert.Equal(t, testMunicipalID, accessKey.CreatedBy)
+		assert.Equal(t, &testMunicipalID, accessKey.CreatedBy)
 		assert.Nil(t, accessKey.RedeemedBy)
 		assert.Nil(t, accessKey.RedeemedAt)
 		require.NotNil(t, accessKey.ExpiresAt)
@@ -256,7 +256,7 @@ func TestAccessKeyStore_Redeem(t *testing.T) {
 	})
 
 	t.Run("traduce sql.ErrNoRows a ErrNotRedeemable", func(t *testing.T) {
-		// El WHERE filtra redeemed_by IS NULL AND expires_at > now() AND
+		// El WHERE filtra redeemed_at IS NULL AND expires_at > now() AND
 		// revoked_at IS NULL, así que cero filas = canjeado, vencido o revocado.
 		store, mock := newMockStore(t)
 
@@ -559,7 +559,7 @@ func TestAccessKeyStore_Redeem_query(t *testing.T) {
 		_, err := store.Redeem(context.Background(), testAccessKeyCod, testEmprendedor)
 
 		require.NoError(t, err)
-		assert.Contains(t, *sql, "redeemed_by IS NULL")
+		assert.Contains(t, *sql, "redeemed_at IS NULL")
 		assert.Contains(t, *sql, "expires_at > now()")
 		assert.Contains(t, *sql, "revoked_at IS NULL")
 	})

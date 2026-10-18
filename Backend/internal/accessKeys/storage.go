@@ -88,7 +88,7 @@ func (s *StoreAccessKey) Redeem(ctx context.Context, code string, userID uuid.UU
 	query := `
 		UPDATE access_keys
 		SET redeemed_by = $1, redeemed_at = now()
-		WHERE code = $2 AND redeemed_by IS NULL 
+		WHERE code = $2 AND redeemed_at IS NULL
 			  AND expires_at > now() AND revoked_at IS NULL
 		RETURNING id, expires_at
 	`

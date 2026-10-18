@@ -43,9 +43,10 @@ func main() {
 			Exp:    time.Hour * 24 * 3,
 			Iss:    "Tally",
 		},
-		EmailResend: application.EmailResend{
-			Apikey: env.GetString("API_KEY", ",,,,"),
-			From:   env.GetString("TALLY_EMAIL", "tally@gmail.com"),
+		EmailConfig: application.EmailConfig{
+			Username: env.GetString("GMAIL_SMTP_USERNAME", ""),
+			Password: env.GetString("GMAIL_SMTP_PASSWORD", ""),
+			From:     env.GetString("GMAIL_SMTP_FROM", ""),
 		},
 	}
 
