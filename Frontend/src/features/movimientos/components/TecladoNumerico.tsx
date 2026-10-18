@@ -18,9 +18,9 @@
 
     export default function TecladoNumerico({ onDigito, onBorrar, onLimpiar }: TecladoNumericoProps) {
     return (
-        <View style={{ gap: 10 }}>
+        <View style={{ gap: 12 }}>
         {filas.map((fila, i) => (
-            <View key={i} style={{ flexDirection: 'row', gap: 10 }}>
+            <View key={i} style={{ flexDirection: 'row', gap: 12 }}>
             {fila.map((tecla) => {
                 const esAccion = tecla === 'borrar' || tecla === 'limpiar';
                 return (
@@ -29,8 +29,8 @@
                     onPress={() => (tecla === 'borrar' ? onBorrar() : tecla === 'limpiar' ? onLimpiar() : onDigito(tecla))}
                     style={({ pressed }) => ({
                     flex: 1,
-                    height: 48,
-                    borderRadius: 14,
+                    height: 60,
+                    borderRadius: 16,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: esAccion ? colors.rosadoSuave : colors.lavandaSuave,
@@ -39,9 +39,9 @@
                     })}
                 >
                     {tecla === 'borrar' ? (
-                    <Ionicons name="backspace-outline" size={22} color={colors.rosado} />
+                    <Ionicons name="backspace-outline" size={28} color={colors.rosado} />
                     ) : (
-                    <Text style={{ fontFamily: fonts.medio, fontSize: 20, color: esAccion ? colors.rosado : colors.lavanda }}>
+                    <Text style={{ fontFamily: fonts.medio, fontSize: 26, color: esAccion ? colors.rosado : colors.lavanda }}>
                         {tecla === 'limpiar' ? 'C' : tecla}
                     </Text>
                     )}

@@ -24,7 +24,7 @@ function Navegacion() {
 
       {/* Pantallas privadas: solo con sesión iniciada (DoD Historia 010) */}
       <Stack.Protected guard={!!token}>
-        <Stack.Screen name="inicio" />
+            <Stack.Screen name="(tabs)" />
       </Stack.Protected>
     </Stack>
   );
