@@ -378,6 +378,224 @@
                 }
             }
         },
+        "/app/empresas/{empresaID}/expenses": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve una página de los gastos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Listar gastos de la empresa",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "cantidad maxima de gastos a devolver (1-30, default 30)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "gastos a saltar, para pedir la pagina siguiente",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha minima del rango (AAAA-MM-DD)",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha maxima del rango (AAAA-MM-DD)",
+                        "name": "until",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID de la categoria por la que filtrar",
+                        "name": "category_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "pagina de gastos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Expense"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria\" es opcional y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias de la empresa). Si el nombre no existe responde 400.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Registrar gasto",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/expenses.ExpensePayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "gasto creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.Expense"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del gasto erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/expenses/{expenseID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un gasto por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Eliminar gasto",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID del gasto",
+                        "name": "expenseID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "gasto eliminado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "expenseID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "gasto no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/empresas/{empresaID}/incomes": {
             "get": {
                 "security": [
@@ -1280,6 +1498,31 @@
                 }
             }
         },
+        "expenses.ExpensePayload": {
+            "type": "object",
+            "required": [
+                "monto"
+            ],
+            "properties": {
+                "categoria": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "category_id": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "fecha": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                }
+            }
+        },
         "incomes.IncomePayload": {
             "type": "object",
             "required": [
@@ -1370,6 +1613,32 @@
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "model.Expense": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string"
+                },
+                "empresa_id": {
+                    "type": "string"
+                },
+                "fecha": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
                 }
             }
         },

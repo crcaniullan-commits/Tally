@@ -82,6 +82,23 @@ definitions:
     required:
     - nombre_empresa
     type: object
+  expenses.ExpensePayload:
+    properties:
+      categoria:
+        maxLength: 100
+        type: string
+      category_id:
+        type: string
+      descripcion:
+        maxLength: 100
+        type: string
+      fecha:
+        type: string
+      monto:
+        type: integer
+    required:
+    - monto
+    type: object
   incomes.IncomePayload:
     properties:
       categoria:
@@ -142,6 +159,23 @@ definitions:
         type: string
       user_id:
         type: string
+    type: object
+  model.Expense:
+    properties:
+      category_id:
+        type: string
+      created_at:
+        type: string
+      descripcion:
+        type: string
+      empresa_id:
+        type: string
+      fecha:
+        type: string
+      id:
+        type: string
+      monto:
+        type: integer
     type: object
   model.Income:
     properties:
@@ -517,6 +551,159 @@ paths:
       summary: Cambiar nombre de categoría
       tags:
       - Categories
+  /app/empresas/{empresaID}/expenses:
+    get:
+      description: 'Devuelve una página de los gastos de la empresa autenticada, ordenados
+        del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}.
+        Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota
+        con since y until en formato AAAA-MM-DD, y por categoría con category_id (el
+        UUID de la categoría, no su nombre). Un parámetro mal formado responde 400.
+        Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: cantidad maxima de gastos a devolver (1-30, default 30)
+        in: query
+        name: limit
+        type: integer
+      - description: gastos a saltar, para pedir la pagina siguiente
+        in: query
+        name: offset
+        type: integer
+      - description: fecha minima del rango (AAAA-MM-DD)
+        in: query
+        name: since
+        type: string
+      - description: fecha maxima del rango (AAAA-MM-DD)
+        in: query
+        name: until
+        type: string
+      - description: UUID de la categoria por la que filtrar
+        in: query
+        name: category_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pagina de gastos
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Expense'
+              type: array
+            type: object
+        "400":
+          description: parametros de paginacion erroneos
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar gastos de la empresa
+      tags:
+      - Expenses
+    post:
+      consumes:
+      - application/json
+      description: 'Registra un nuevo gasto asociado a la empresa autenticada. La
+        respuesta viene envuelta en {"data": ...} con el gasto creado, incluyendo
+        el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
+        (CLP, sin decimales). "categoria" es opcional y viaja por nombre, no por UUID:
+        el backend lo resuelve contra la tabla categories (globales o propias de la
+        empresa). Si el nombre no existe responde 400.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/expenses.ExpensePayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: gasto creado
+          schema:
+            $ref: '#/definitions/model.Expense'
+        "400":
+          description: payload del gasto erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar gasto
+      tags:
+      - Expenses
+  /app/empresas/{empresaID}/expenses/{expenseID}:
+    delete:
+      description: 'Elimina un gasto por su ID, siempre que pertenezca a la empresa
+        autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de
+        confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: expenseID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: gasto eliminado
+          schema:
+            type: string
+        "400":
+          description: expenseID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: gasto no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar gasto
+      tags:
+      - Expenses
   /app/empresas/{empresaID}/incomes:
     get:
       description: 'Devuelve una página de los ingresos de la empresa autenticada,

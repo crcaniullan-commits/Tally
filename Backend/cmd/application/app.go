@@ -16,6 +16,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/env"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/expenses"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/middleware"
 	"github.com/crcaniullan-commits/Tally/internal/users"
@@ -129,6 +130,7 @@ func (app *Application) Run() error {
 
 					empresaRoute.Item(r)
 					incomes.InitModule(r, app.db, app.logger, middl)
+					expenses.InitModule(r, app.db, app.logger, middl)
 
 				})
 			})
