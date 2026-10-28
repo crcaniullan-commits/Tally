@@ -11,7 +11,7 @@ import (
 type StoreIncomes interface {
 	AddIncome(context.Context, *model.Income) error
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
+	GetAllIncomesOfEmpresa(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
 	GetCategoryIDByName(context.Context, string, uuid.UUID) (uuid.UUID, error)
 }
 type IncomeService struct {
@@ -22,9 +22,9 @@ func NewIncomeService(store StoreIncomes) *IncomeService {
 	return &IncomeService{store}
 }
 
-func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, userID uuid.UUID) (model.Income, error) {
+func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, empresaID uuid.UUID) (model.Income, error) {
 	income := &model.Income{
-		UserID:        userID,
+		EmpresaID:     empresaID,
 		Monto:         payload.Monto,
 		PaymentMethod: payload.PaymentMethod,
 		Descripcion:   payload.Descripcion,
@@ -33,7 +33,7 @@ func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, us
 	// La categoría llega por nombre porque el usuario no conoce su UUID. Si no
 	// la manda, el ingreso queda sin categoría (la columna es nullable).
 	if payload.Categoria != nil {
-		categoryID, err := s.store.GetCategoryIDByName(ctx, *payload.Categoria, userID)
+		categoryID, err := s.store.GetCategoryIDByName(ctx, *payload.Categoria, empresaID)
 		if err != nil {
 			return model.Income{}, err
 		}
@@ -48,15 +48,15 @@ func (s *IncomeService) AddIncome(ctx context.Context, payload IncomePayload, us
 	return *income, nil
 }
 
-func (s *IncomeService) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {
-	if err := s.store.DeleteIncome(ctx, incomeID, userID); err != nil {
+func (s *IncomeService) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
+	if err := s.store.DeleteIncome(ctx, incomeID, empresaID); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *IncomeService) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
-	incomes, err := s.store.GetAllIncomesOfUser(ctx, userID, fq)
+func (s *IncomeService) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+	incomes, err := s.store.GetAllIncomesOfEmpresa(ctx, empresaID, fq)
 	if err != nil {
 		return nil, err
 	}

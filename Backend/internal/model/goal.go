@@ -8,7 +8,7 @@ import (
 
 type Goal struct {
 	ID        uuid.UUID  `json:"id"`
-	UserID    uuid.UUID  `json:"user_id"`
+	EmpresaID uuid.UUID  `json:"empresa_id"`
 	Nombre    string     `json:"nombre"`
 	Periodo   GoalPeriod `json:"periodo"`
 	MontoMeta int64      `json:"monto_meta"`

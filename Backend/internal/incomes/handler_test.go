@@ -24,7 +24,7 @@ import (
 const (
 	bodyIncomeCreated = `{"data":{
 		"id": "9c8b7a65-4d3c-4b2a-9f8e-7d6c5b4a3f2e",
-		"user_id": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b",
+		"empresa_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 		"monto": 1500,
 		"payment_method": "debito",
 		"descripcion": "Venta de almuerzo",
@@ -325,13 +325,13 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 		// util.ReadJSON usa DisallowUnknownFields
 		r := requestWithUser(http.MethodPost, "/incomes",
-			`{"monto":100,"payment_method":"debito","user_id":"6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b"}`)
+			`{"monto":100,"payment_method":"debito","empresa_id":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"}`)
 
 		w := httptest.NewRecorder()
 		handler.AddIncome(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "user_id")
+		assert.Contains(t, w.Body.String(), "empresa_id")
 		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
 	})
 
@@ -415,8 +415,8 @@ func TestIncomesHandler_Delete(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("pasa el userID del contexto para que el store acote el borrado", func(t *testing.T) {
-		// El handler tiene que adjuntar el userID del token. Si solo mandara el
+	t.Run("pasa el ID del contexto para que el store acote el borrado", func(t *testing.T) {
+		// El handler tiene que adjuntar el ID del token. Si solo mandara el
 		// incomeID de la URL, el store no podria distinguir de quien es el
 		// ingreso y responderia 200 al borrar algo ajeno.
 		service := new(ServiceIncomesMock)
@@ -436,7 +436,7 @@ func TestIncomesHandler_Delete(t *testing.T) {
 	})
 
 	t.Run("responde 404 cuando el ingreso es de otro usuario", func(t *testing.T) {
-		// El store acotó por user_id, no matcheó filas y devolvió ErrNotFound.
+		// El store acotó por empresa_id, no matcheó filas y devolvió ErrNotFound.
 		// El handler lo traduce a 404 en vez de 200.
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
@@ -461,7 +461,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		handler := newTestHandler(service)
 
 		esperados := []model.Income{newTestIncome()}
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
@@ -480,7 +480,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		ingreso := data[0].(map[string]any)
 
 		assert.Equal(t, testIncomeID.String(), ingreso["id"])
-		assert.Equal(t, testUserID.String(), ingreso["user_id"])
+		assert.Equal(t, testEmpresaID.String(), ingreso["empresa_id"])
 		assert.Equal(t, float64(1500), ingreso["monto"])
 		assert.Equal(t, "debito", ingreso["payment_method"])
 		assert.Equal(t, "Venta de almuerzo", ingreso["descripcion"])
@@ -490,7 +490,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID,
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID,
 			mock.MatchedBy(func(fq pagination.IncomePaginationQuery) bool {
 				return fq == pagination.NewIncomePaginationQuery()
 			}),
@@ -516,7 +516,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 			Until:  "2026-09-30",
 		}
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, esperada).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, esperada).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
@@ -527,7 +527,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
-		service.AssertCalled(t, "GetAllIncomesOfUser", mock.Anything, testUserID, esperada)
+		service.AssertCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, testUserID, esperada)
 	})
 
 	t.Run("filtra por categoría con category_id", func(t *testing.T) {
@@ -536,7 +536,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 
 		esperada := filterQueryWithCategory()
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, esperada).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, esperada).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
@@ -562,7 +562,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "limit")
-		service.AssertNotCalled(t, "GetAllIncomesOfUser", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si limit se pasa del máximo", func(t *testing.T) {
@@ -575,7 +575,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		handler.GetIncomesOfUser(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "GetAllIncomesOfUser", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si offset es negativo", func(t *testing.T) {
@@ -588,7 +588,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		handler.GetIncomesOfUser(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "GetAllIncomesOfUser", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si la fecha del rango no es AAAA-MM-DD", func(t *testing.T) {
@@ -602,7 +602,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "since")
-		service.AssertNotCalled(t, "GetAllIncomesOfUser", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 y no llama al servicio si category_id no es un UUID", func(t *testing.T) {
@@ -619,14 +619,14 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "category_id")
-		service.AssertNotCalled(t, "GetAllIncomesOfUser", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 200 con data null cuando el usuario no tiene ingresos", func(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, mock.Anything).
 			Return(nil, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
@@ -645,7 +645,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, mock.Anything).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
@@ -664,7 +664,7 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		service.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, mock.Anything).
 			Return(nil, errStoreBoom).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
@@ -687,7 +687,7 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 	t.Run("el handler construye un IncomeService real sobre un store mockeado", func(t *testing.T) {
 		store := new(StoreIncomesMock)
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, testUserID, newTestFilterQuery()).
 			Return([]model.Income{newTestIncome()}, nil).Once()
 
 		handler := newTestHandler(NewIncomeService(store))
@@ -701,7 +701,7 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("el alta llega al store con el userID del contexto", func(t *testing.T) {
+	t.Run("el alta llega al store con el ID del contexto", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		store.On("AddIncome", mock.Anything, mock.Anything).Return(nil).Once()
 
@@ -715,7 +715,7 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 		require.Equal(t, http.StatusCreated, w.Code)
 		store.AssertCalled(t, "AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
-				return i.UserID == testUserID &&
+				return i.EmpresaID == testUserID &&
 					i.Monto == 100 &&
 					i.PaymentMethod == util.PaymentMethodEfectivo &&
 					i.Descripcion == nil

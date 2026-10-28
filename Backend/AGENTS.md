@@ -12,6 +12,7 @@ Alcance:
 
 - Aplica a todo archivo del repo: `.go`, tests, migraciones, `docs/` generado, `AGENTS.md`, Taskfile/makefile, swagger.
 - Solo queda exceptuado lo que el usuario pidió explícitamente en el mensaje actual ("arreglalo", "agregá el test", "actualizá AGENTS.md"). Pedir algo no autoriza los cambios que yo crea necesarios alrededor.
+- **Límite de módulos:** solo podés modificar los módulos y archivos que el usuario nombre explícitamente en la conversación actual. No toques otros módulos aunque el build o los tests fallen por ellos. Si un cambio pedido rompe otro módulo, reportá el conflicto y esperá instrucciones.
 - **No** hace falta permiso para leer, buscar, correr `go tool task test`, `gofmt -l`, `git diff` ni para reportar un bug.
 - Si encontrás un bug que no te pidieron arreglar, **reportalo y preguntá**. No lo fixes de pasada, por obvio que parezca.
 - Si el arreglo que te pidieron contradice un test existente (o al revés), avisá el conflicto y preguntá cuál de los dos cambia. No elijas por tu cuenta.

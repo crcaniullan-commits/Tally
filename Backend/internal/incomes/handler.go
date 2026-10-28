@@ -15,7 +15,7 @@ import (
 type ServiceIncomes interface {
 	AddIncome(context.Context, IncomePayload, uuid.UUID) (model.Income, error)
 	DeleteIncome(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllIncomesOfUser(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
+	GetAllIncomesOfEmpresa(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Income, error)
 }
 
 type IncomesHandler struct {
@@ -25,6 +25,12 @@ type IncomesHandler struct {
 
 func NewIncomesHandler(s ServiceIncomes, e errorhandler.ErrorsResponse) *IncomesHandler {
 	return &IncomesHandler{s, e}
+}
+
+// empresaID devuelve la empresa activa del request. Hasta que exista el
+// middleware de empresas, se usa el ID del usuario autenticado.
+func empresaID(r *http.Request) uuid.UUID {
+	return util.GetUserFromContext(r).ID
 }
 
 type IncomePayload struct {
@@ -49,9 +55,7 @@ func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := util.GetUserFromContext(r)
-
-	income, err := h.service.AddIncome(r.Context(), payload, user.ID)
+	income, err := h.service.AddIncome(r.Context(), payload, empresaID(r))
 
 	if err != nil {
 		switch err {
@@ -82,9 +86,7 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := util.GetUserFromContext(r)
-
-	if err = h.service.DeleteIncome(r.Context(), incomeID, user.ID); err != nil {
+	if err = h.service.DeleteIncome(r.Context(), incomeID, empresaID(r)); err != nil {
 		switch err {
 		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
@@ -109,8 +111,6 @@ func (h *IncomesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 *	400, no se cae al default en silencio.
  */
 func (h *IncomesHandler) GetIncomesOfUser(w http.ResponseWriter, r *http.Request) {
-	user := util.GetUserFromContext(r)
-
 	fq, err := pagination.NewIncomePaginationQuery().Parse(r)
 
 	if err != nil {
@@ -118,7 +118,7 @@ func (h *IncomesHandler) GetIncomesOfUser(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	incomes, err := h.service.GetAllIncomesOfUser(r.Context(), user.ID, fq)
+	incomes, err := h.service.GetAllIncomesOfEmpresa(r.Context(), empresaID(r), fq)
 
 	if err != nil {
 		h.errors.InternalServerError(w, r, err)

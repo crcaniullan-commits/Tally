@@ -58,12 +58,12 @@ func newMockStore(t *testing.T) *mockStore {
 	return ms
 }
 
-// columnas reales de la tabla incomes segun migrations/000001, mas category_id
+// columnas reales de la tabla incomes segun migrations/000007, mas category_id
 // de migrations/000006. El orden importa: es el mismo que el SELECT y el Scan
 // del store, y el test de mapeo falla si se desalinean.
 func incomeColumns() []string {
 	return []string{
-		"id", "user_id", "monto", "payment_method",
+		"id", "empresa_id", "monto", "payment_method",
 		"descripcion", "fecha", "created_at", "category_id",
 	}
 }
@@ -73,7 +73,7 @@ func incomeRow() []driver.Value {
 
 	return []driver.Value{
 		testIncomeID,
-		testUserID,
+		testEmpresaID,
 		int64(1500),
 		string(util.PaymentMethodDebito),
 		descripcion,
@@ -84,29 +84,29 @@ func incomeRow() []driver.Value {
 }
 
 func TestStoreIncome_DeleteIncome(t *testing.T) {
-	t.Run("elimina el ingreso filtrando por id y user_id", func(t *testing.T) {
+	t.Run("elimina el ingreso filtrando por id y empresa_id", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
-			WithArgs(testIncomeID, testUserID).
+			WithArgs(testIncomeID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "DELETE FROM incomes")
-		assert.Contains(t, ms.sql, "WHERE id = $1 and user_id = $2",
-			"el delete debe acotar por usuario, si no es un IDOR")
+		assert.Contains(t, ms.sql, "WHERE id = $1 and empresa_id = $2",
+			"el delete debe acotar por empresa, si no es un IDOR")
 	})
 
 	t.Run("devuelve util.ErrNotFound si no se elimino ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
-			WithArgs(testIncomeID, testUserID).
+			WithArgs(testIncomeID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 	})
@@ -115,10 +115,10 @@ func TestStoreIncome_DeleteIncome(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
-			WithArgs(testIncomeID, testUserID).
+			WithArgs(testIncomeID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -127,16 +127,16 @@ func TestStoreIncome_DeleteIncome(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
-			WithArgs(testIncomeID, testUserID).
+			WithArgs(testIncomeID, testEmpresaID).
 			WillReturnResult(sqlmock.NewErrorResult(errDBBoom))
 
-		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := ms.store.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
 
-	t.Run("no puede borrar el ingreso de otro usuario", func(t *testing.T) {
-		// El WHERE lleva user_id, asi que borrar un incomeID ajeno no matchea
+	t.Run("no puede borrar el ingreso de otra empresa", func(t *testing.T) {
+		// El WHERE lleva empresa_id, asi que borrar un incomeID ajeno no matchea
 		// ninguna fila y el store responde ErrNotFound en vez de 200.
 		ms := newMockStore(t)
 
@@ -152,23 +152,23 @@ func TestStoreIncome_DeleteIncome(t *testing.T) {
 	})
 }
 
-func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
+func TestStoreIncome_GetAllIncomesOfEmpresa(t *testing.T) {
 	t.Run("mapea las 8 columnas a model.Income", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		fq := newTestFilterQuery()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 1)
 
 		assert.Equal(t, testIncomeID, incomes[0].ID)
-		assert.Equal(t, testUserID, incomes[0].UserID)
+		assert.Equal(t, testEmpresaID, incomes[0].EmpresaID)
 		assert.Equal(t, int64(1500), incomes[0].Monto)
 		assert.Equal(t, util.PaymentMethodDebito, incomes[0].PaymentMethod)
 		require.NotNil(t, incomes[0].Descripcion)
@@ -190,12 +190,12 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		segunda[2] = int64(99)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).
 				AddRow(incomeRow()...).
 				AddRow(segunda...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 2)
@@ -213,10 +213,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		fila[4] = nil
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(fila...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 1)
@@ -234,10 +234,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		fila[7] = nil
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(fila...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, incomes, 1)
@@ -250,10 +250,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		fq := filterQueryWithCategory()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		assert.Len(t, incomes, 1)
@@ -261,16 +261,16 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 			"sin el guard, un category_id vacio no filtraria nada")
 	})
 
-	t.Run("devuelve slice vacio y no nil cuando el usuario no tiene ingresos", func(t *testing.T) {
+	t.Run("devuelve slice vacio y no nil cuando la empresa no tiene ingresos", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		fq := newTestFilterQuery()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		assert.NotNil(t, incomes, "un slice nil se serializa como null, no como []")
@@ -283,29 +283,29 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		fq := newTestFilterQuery()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnError(errDBBoom)
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, incomes)
 	})
 
-	t.Run("filtra por la columna user_id del esquema", func(t *testing.T) {
+	t.Run("filtra por la columna empresa_id del esquema", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		fq := newTestFilterQuery()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		_, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 		require.NoError(t, err)
 
-		assert.Contains(t, ms.sql, "WHERE user_id = $1",
-			"migrations/000001 creo la columna como user_id")
+		assert.Contains(t, ms.sql, "WHERE empresa_id = $1",
+			"migrations/000007 movio la tenencia a empresa_id")
 	})
 
 	t.Run("pide LIMIT y OFFSET con los valores de la paginación", func(t *testing.T) {
@@ -319,10 +319,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		}
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, 5, 10, "2026-09-01", "2026-09-30", "").
+			WithArgs(testEmpresaID, 5, 10, "2026-09-01", "2026-09-30", "").
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		_, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 		require.NoError(t, err)
 
 		assert.Contains(t, ms.sql, "LIMIT $2 OFFSET $3",
@@ -341,10 +341,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		fq := newTestFilterQuery()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID, fq)
+		_, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, fq)
 		require.NoError(t, err)
 
 		assert.Contains(t, ms.sql, "ORDER BY fecha DESC, id DESC")
@@ -360,10 +360,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, pagination.DefaultLimit, 0, "", "", "").
+			WithArgs(testEmpresaID, pagination.DefaultLimit, 0, "", "", "").
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
 
-		incomes, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID,
+		incomes, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID,
 			pagination.IncomePaginationQuery{})
 
 		require.NoError(t, err)
@@ -376,10 +376,10 @@ func TestStoreIncome_GetAllIncomesOfUser(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testUserID, 10, 0, "", "", "").
+			WithArgs(testEmpresaID, 10, 0, "", "", "").
 			WillReturnRows(sqlmock.NewRows(incomeColumns()))
 
-		_, err := ms.store.GetAllIncomesOfUser(context.Background(), testUserID,
+		_, err := ms.store.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID,
 			pagination.IncomePaginationQuery{Limit: 10, Offset: -5})
 
 		require.NoError(t, err)
@@ -392,15 +392,15 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 
 		income := newTestIncome()
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testUserID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
+			WithArgs(testEmpresaID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).
 				AddRow(testIncomeID, testFecha, testFecha))
 
 		err := ms.store.AddIncome(context.Background(), &income)
 		require.NoError(t, err)
 
-		assert.Contains(t, ms.sql, "user_id, monto, payment_method, descripcion",
-			"migrations/000001 creo user_id y payment_method")
+		assert.Contains(t, ms.sql, "empresa_id, monto, payment_method, descripcion",
+			"migrations/000007 movio la tenencia a empresa_id y 000001 creo payment_method")
 		assert.Contains(t, ms.sql, "category_id",
 			"migrations/000006 agrego category_id al INSERT")
 		assert.NotContains(t, strings.ToLower(ms.sql), "patment")
@@ -416,7 +416,7 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 		income.CategoryID = nil
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testUserID, income.Monto, income.PaymentMethod, income.Descripcion, nil).
+			WithArgs(testEmpresaID, income.Monto, income.PaymentMethod, income.Descripcion, nil).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).
 				AddRow(testIncomeID, testFecha, testFecha))
 
@@ -428,7 +428,7 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 
 		income := newTestIncome()
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testUserID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
+			WithArgs(testEmpresaID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}))
 
 		err := ms.store.AddIncome(context.Background(), &income)
@@ -451,7 +451,7 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 		income.CreatedAt = time.Time{}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testUserID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
+			WithArgs(testEmpresaID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).
 				AddRow(testIncomeID, testFecha, testFecha))
 
@@ -467,7 +467,7 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 
 		income := newTestIncome()
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testUserID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
+			WithArgs(testEmpresaID, income.Monto, income.PaymentMethod, income.Descripcion, income.CategoryID).
 			WillReturnError(errDBBoom)
 
 		err := ms.store.AddIncome(context.Background(), &income)
@@ -477,31 +477,31 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 }
 
 func TestStoreIncome_GetCategoryIDByName(t *testing.T) {
-	t.Run("busca la categoría por nombre y la acota al usuario", func(t *testing.T) {
+	t.Run("busca la categoría por nombre y la acota a la empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testUserID).
+			WithArgs(testCategoryName, testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testCategoryID))
 
-		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testUserID)
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, testCategoryID, categoryID)
 		assert.Contains(t, ms.sql, "FROM categories")
 		assert.Contains(t, ms.sql, "nombre = $1")
-		assert.Contains(t, ms.sql, "user_id IS NULL OR user_id = $2",
-			"tiene que aceptar las globales y las propias del usuario")
+		assert.Contains(t, ms.sql, "empresa_id IS NULL OR empresa_id = $2",
+			"tiene que aceptar las globales y las propias de la empresa")
 	})
 
 	t.Run("devuelve util.ErrNotFound si ninguna categoria matchea", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs("Inexistente", testUserID).
+			WithArgs("Inexistente", testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
-		_, err := ms.store.GetCategoryIDByName(context.Background(), "Inexistente", testUserID)
+		_, err := ms.store.GetCategoryIDByName(context.Background(), "Inexistente", testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 	})
@@ -510,10 +510,10 @@ func TestStoreIncome_GetCategoryIDByName(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testUserID).
+			WithArgs(testCategoryName, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testUserID)
+		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})

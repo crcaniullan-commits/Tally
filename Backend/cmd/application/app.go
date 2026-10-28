@@ -13,6 +13,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/email"
+	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/env"
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
@@ -106,6 +107,9 @@ func (app *Application) Run() error {
 
 	transactor := dbtx.NewTransactor(app.db)
 
+	empresaRoute, finder := empresas.InitModule(app.db, app.logger, middl)
+	emMiddl := middleware.NewEmpresaMiddleware(app.logger, finder)
+
 	r.Use(middleware.GlobalMiddlewares()...)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -116,8 +120,18 @@ func (app *Application) Run() error {
 		r.Route("/app", func(r chi.Router) {
 			r.Use(middl.AuthTokenMiddleware)
 			users.InitModule(r, app.db, app.logger, middl)
-			incomes.InitModule(r, app.db, app.logger, middl)
 			accesskeys.InitModule(r, app.db, app.logger, middl, smtp)
+			r.Route("/empresas", func(r chi.Router) {
+				empresaRoute.Collection(r)
+
+				r.Route("/{empresaID}", func(r chi.Router) {
+					r.Use(emMiddl.EmpresaOfUser)
+
+					empresaRoute.Item(r)
+					incomes.InitModule(r, app.db, app.logger, middl)
+
+				})
+			})
 		})
 	})
 
