@@ -23,10 +23,10 @@ const (
 		"nombre": "Comida",
 		"empresa_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
 	}}`
-	bodyNombreCambiado = `{"data":"Nombre cambiado"}`
+	bodyNombreCambiado     = `{"data":"Nombre cambiado"}`
 	bodyCategoriaEliminada = `{"data":"Categoria b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d eliminada"}`
-	bodyNotFound       = `{"error":"not found"}`
-	bodyBadRequest     = `{"error":"La categoría ya existe"}`
+	bodyNotFound           = `{"error":"not found"}`
+	bodyBadRequest         = `{"error":"La categoría ya existe"}`
 )
 
 // newTestHandler arma un CategoriesHandler con un service mockeado y el logger de
@@ -217,6 +217,25 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el nombre ya existe en la empresa", func(t *testing.T) {
+		service := new(ServiceCategoriesMock)
+		handler := newTestHandler(service)
+
+		body := `{"nombre":"Bebidas"}`
+
+		service.On("CambiarNombre", mock.Anything, CategoriaPayload{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
+			Return(AlreadyExistError).Once()
+
+		r := requestWithCategoriaIDParam(http.MethodPatch, "/categories/"+testCategoriaID.String(), testCategoriaID.String(), body)
+
+		w := httptest.NewRecorder()
+		handler.CambiarNombre(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, bodyBadRequest, w.Body.String())
 		service.AssertExpectations(t)
 	})
 

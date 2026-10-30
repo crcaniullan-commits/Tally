@@ -10,6 +10,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,50 +64,89 @@ func categoriaRow() []driver.Value {
 	}
 }
 
-func TestStoreCategorie_GetCategoriaPorNombreYEmpresa(t *testing.T) {
-	t.Run("devuelve false si no existe la categoria", func(t *testing.T) {
+func TestStoreCategorie_GetCategoriasPorEmpresa(t *testing.T) {
+	t.Run("devuelve las categorias de la empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
-		categoria := model.Categorie{Nombre: "Comida", EmpresaID: &testEmpresaID}
-		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(&testEmpresaID, "Comida").
-			WillReturnError(sql.ErrNoRows)
+		bebidas := []driver.Value{
+			uuid.MustParse("b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5e"),
+			"Bebidas",
+			testEmpresaID,
+		}
 
-		exist, err := ms.store.GetCategoriaPorNombreYEmpresa(context.Background(), categoria)
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(categoriaRow()...).
+				AddRow(bebidas...))
+
+		categorias, err := ms.store.GetCategoriasPorEmpresa(context.Background(), testEmpresaID)
 
 		require.NoError(t, err)
-		assert.False(t, exist)
+		require.Len(t, categorias, 2)
+		assert.Equal(t, testCategoriaID, categorias[0].ID)
+		assert.Equal(t, "Comida", categorias[0].Nombre)
+		require.NotNil(t, categorias[0].EmpresaID)
+		assert.Equal(t, testEmpresaID, *categorias[0].EmpresaID)
+		assert.Equal(t, "Bebidas", categorias[1].Nombre)
 		assert.Contains(t, ms.sql, "SELECT id, nombre, empresa_id")
 		assert.Contains(t, ms.sql, "FROM categories")
-		assert.Contains(t, ms.sql, "WHERE empresa_id = $1 and nombre = $2")
+		assert.Contains(t, ms.sql, "WHERE empresa_id = $1")
 	})
 
-	t.Run("devuelve true y AlreadyExistError si existe la categoria", func(t *testing.T) {
+	t.Run("devuelve una lista vacia si la empresa no tiene categorias", func(t *testing.T) {
 		ms := newMockStore(t)
 
-		categoria := model.Categorie{Nombre: "Comida", EmpresaID: &testEmpresaID}
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(&testEmpresaID, "Comida").
-			WillReturnRows(sqlmock.NewRows(categoriaColumns()).AddRow(categoriaRow()...))
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()))
 
-		exist, err := ms.store.GetCategoriaPorNombreYEmpresa(context.Background(), categoria)
+		categorias, err := ms.store.GetCategoriasPorEmpresa(context.Background(), testEmpresaID)
 
-		require.ErrorIs(t, err, AlreadyExistError)
-		assert.True(t, exist)
+		require.NoError(t, err)
+		assert.Empty(t, categorias)
 	})
 
 	t.Run("propaga el error de la base de datos", func(t *testing.T) {
 		ms := newMockStore(t)
 
-		categoria := model.Categorie{Nombre: "Comida", EmpresaID: &testEmpresaID}
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(&testEmpresaID, "Comida").
+			WithArgs(testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		exist, err := ms.store.GetCategoriaPorNombreYEmpresa(context.Background(), categoria)
+		categorias, err := ms.store.GetCategoriasPorEmpresa(context.Background(), testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
-		assert.True(t, exist)
+		assert.Nil(t, categorias)
+	})
+
+	t.Run("propaga el error al escanear una fila", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(123, "Comida", testEmpresaID))
+
+		categorias, err := ms.store.GetCategoriasPorEmpresa(context.Background(), testEmpresaID)
+
+		require.Error(t, err)
+		assert.Nil(t, categorias)
+	})
+
+	t.Run("propaga el error de rows", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(categoriaRow()...).
+				RowError(0, errDBBoom))
+
+		categorias, err := ms.store.GetCategoriasPorEmpresa(context.Background(), testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
+		assert.Nil(t, categorias)
 	})
 }
 
@@ -181,7 +221,7 @@ func TestStoreCategorie_CambiarNombre(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "UPDATE categories")
 		assert.Contains(t, ms.sql, "SET nombre = $1")
-		assert.Contains(t, ms.sql, "WHERE id = $2 and $3")
+		assert.Contains(t, ms.sql, "WHERE id = $2 and empresa_id = $3")
 	})
 
 	t.Run("devuelve util.ErrNotFound si no se actualizo ninguna fila", func(t *testing.T) {
@@ -233,7 +273,7 @@ func TestStoreCategorie_BorrarCategoria(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "DELETE FROM categories")
-		assert.Contains(t, ms.sql, "WHERE id = $1 and $2")
+		assert.Contains(t, ms.sql, "WHERE id = $1 and empresa_id = $2")
 	})
 
 	t.Run("devuelve util.ErrNotFound si no se elimino ninguna fila", func(t *testing.T) {

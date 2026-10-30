@@ -33,7 +33,12 @@ type CategoriaPayload struct {
 
 func (h *CategoriesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var payload CategoriaPayload
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresa := util.GetEmpresaFromContext(r)
+
+	if empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
 
 	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
@@ -45,7 +50,7 @@ func (h *CategoriesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	categoria, err := h.service.Create(r.Context(), payload, &empresaID)
+	categoria, err := h.service.Create(r.Context(), payload, &empresa.ID)
 
 	if err != nil {
 		switch err {
@@ -73,7 +78,12 @@ func (h *CategoriesHandler) CambiarNombre(w http.ResponseWriter, r *http.Request
 	}
 
 	var payload CategoriaPayload
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresa := util.GetEmpresaFromContext(r)
+
+	if empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
 
 	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
@@ -85,8 +95,11 @@ func (h *CategoriesHandler) CambiarNombre(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.service.CambiarNombre(r.Context(), payload, categoriaID, empresaID); err != nil {
+	if err := h.service.CambiarNombre(r.Context(), payload, categoriaID, empresa.ID); err != nil {
 		switch err {
+		case AlreadyExistError:
+			h.errors.BadRequestResponse(w, r, err)
+			return
 		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
 			return
@@ -111,9 +124,14 @@ func (h *CategoriesHandler) BorrarCategoria(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresa := util.GetEmpresaFromContext(r)
 
-	if err := h.service.BorrarCategoria(r.Context(), categoriaID, empresaID); err != nil {
+	if empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	if err := h.service.BorrarCategoria(r.Context(), categoriaID, empresa.ID); err != nil {
 		switch err {
 		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)

@@ -477,29 +477,64 @@ func TestStoreIncome_AddIncome(t *testing.T) {
 }
 
 func TestStoreIncome_GetCategoryIDByName(t *testing.T) {
+	columnas := []string{"id", "nombre"}
+
 	t.Run("busca la categoría por nombre y la acota a la empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testEmpresaID).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testCategoryID))
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, testCategoryName))
 
 		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, testCategoryID, categoryID)
 		assert.Contains(t, ms.sql, "FROM categories")
-		assert.Contains(t, ms.sql, "nombre = $1")
-		assert.Contains(t, ms.sql, "empresa_id IS NULL OR empresa_id = $2",
+		assert.Contains(t, ms.sql, "(empresa_id IS NULL OR empresa_id = $1)",
 			"tiene que aceptar las globales y las propias de la empresa")
+		assert.Contains(t, ms.sql, "ORDER BY empresa_id NULLS LAST",
+			"tiene que preferir la categoría de la empresa sobre la global")
+	})
+
+	t.Run("ignora mayúsculas y acentos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, "Àmígô"))
+
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "amigo", testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testCategoryID, categoryID)
+	})
+
+	t.Run("prefiere la categoría de la empresa sobre la global", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		globalID := uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f")
+
+		// El ORDER BY del SQL devuelve primero las de la empresa y después las
+		// globales; el store se queda con la primera coincidencia.
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).
+				AddRow(testCategoryID, "Comida").
+				AddRow(globalID, "comida"))
+
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "COMIDA", testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testCategoryID, categoryID)
 	})
 
 	t.Run("devuelve util.ErrNotFound si ninguna categoria matchea", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs("Inexistente", testEmpresaID).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(uuid.New(), "Bebidas"))
 
 		_, err := ms.store.GetCategoryIDByName(context.Background(), "Inexistente", testEmpresaID)
 
@@ -510,7 +545,7 @@ func TestStoreIncome_GetCategoryIDByName(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testEmpresaID).
+			WithArgs(testEmpresaID).
 			WillReturnError(errDBBoom)
 
 		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)

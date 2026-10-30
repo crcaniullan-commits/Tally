@@ -27,10 +27,8 @@ func NewIncomesHandler(s ServiceIncomes, e errorhandler.ErrorsResponse) *Incomes
 	return &IncomesHandler{s, e}
 }
 
-// empresaID devuelve la empresa activa del request. Hasta que exista el
-// middleware de empresas, se usa el ID del usuario autenticado.
 func empresaID(r *http.Request) uuid.UUID {
-	return util.GetUserFromContext(r).ID
+	return util.GetEmpresaFromContext(r).ID
 }
 
 type IncomePayload struct {

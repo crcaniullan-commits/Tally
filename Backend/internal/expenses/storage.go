@@ -3,7 +3,6 @@ package expenses
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
@@ -85,10 +84,10 @@ func (s *StoreExpense) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uu
 		SELECT id, empresa_id, monto, category_id, descripcion, fecha, created_at
 		FROM expenses
 		WHERE empresa_id = $1
-		  AND ($4::date IS NULL OR fecha >= $4::date)
-		  AND ($5::date IS NULL OR fecha <= $5::date)
-		  AND ($6::uuid IS NULL OR category_id = $6::uuid)
-		ORDER BY fecha DESC, created_at DESC
+		  AND (NULLIF($4, '')::date IS NULL OR fecha >= NULLIF($4, '')::date)
+		  AND (NULLIF($5, '')::date IS NULL OR fecha <= NULLIF($5, '')::date)
+		  AND (NULLIF($6, '')::uuid IS NULL OR category_id = NULLIF($6, '')::uuid)
+		ORDER BY fecha DESC, created_at DESC, id DESC
 		LIMIT $2 OFFSET $3
 	`
 
@@ -130,27 +129,49 @@ func (s *StoreExpense) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uu
 	return expenses, nil
 }
 
+// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
+// referencia en expenses. Acepta las categorías globales (empresa_id IS NULL) y
+// las propias de la empresa; ante un nombre repetido prefiere la de la empresa,
+// por eso el NULLS LAST. La comparación usa util.NormalizarNombre, así que
+// "Comida", "comida" y "COMIDA" matchean la misma categoría. Sin fila devuelve
+// util.ErrNotFound para que el handler lo traduzca a 400 y no a un 500.
 func (s *StoreExpense) GetCategoryIDByName(ctx context.Context, nombre string, empresaID uuid.UUID) (uuid.UUID, error) {
 	query := `
-		SELECT id FROM categories
-		WHERE nombre = $1 AND (empresa_id = $2 OR empresa_id IS NULL)
-		ORDER BY CASE WHEN empresa_id = $2 THEN 0 ELSE 1 END
-		LIMIT 1
+		SELECT id, nombre
+		FROM categories
+		WHERE (empresa_id IS NULL OR empresa_id = $1)
+		ORDER BY empresa_id NULLS LAST
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	var categoryID uuid.UUID
-
-	err := s.db.QueryRowContext(ctx, query, nombre, empresaID).Scan(&categoryID)
-
+	rows, err := s.db.QueryContext(ctx, query, empresaID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil, util.ErrNotFound
+		return uuid.Nil, err
+	}
+	defer rows.Close()
+
+	buscado := util.NormalizarNombre(nombre)
+
+	for rows.Next() {
+		var (
+			categoryID uuid.UUID
+			categoria  string
+		)
+
+		if err := rows.Scan(&categoryID, &categoria); err != nil {
+			return uuid.Nil, err
 		}
+
+		if util.NormalizarNombre(categoria) == buscado {
+			return categoryID, nil
+		}
+	}
+
+	if err := rows.Err(); err != nil {
 		return uuid.Nil, err
 	}
 
-	return categoryID, nil
+	return uuid.Nil, util.ErrNotFound
 }

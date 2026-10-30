@@ -11,6 +11,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/docs"
 	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	"github.com/crcaniullan-commits/Tally/internal/categories"
 	"github.com/crcaniullan-commits/Tally/internal/dbtx"
 	"github.com/crcaniullan-commits/Tally/internal/email"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
@@ -131,6 +132,7 @@ func (app *Application) Run() error {
 					empresaRoute.Item(r)
 					incomes.InitModule(r, app.db, app.logger, middl)
 					expenses.InitModule(r, app.db, app.logger, middl)
+					categories.InitModule(r, app.db, app.logger, middl)
 
 				})
 			})

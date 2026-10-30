@@ -23,6 +23,7 @@ const (
 	bodyUpdateOK      = `{"data":"Usuario actualizado con exito"}`
 	bodyDeleteOK      = `{"data":"Usuario eliminado"}`
 	bodyNotFound      = `{"error":"not found"}`
+	bodyUnauthorized  = `{"error":"unauthorized"}`
 	bodyInternalError = `{"error":"the server encountered a problem"}`
 )
 
@@ -262,17 +263,17 @@ func TestUsersHandler_Delete(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("BUG: entra en panic si la request no trae usuario en el contexto", func(t *testing.T) {
-		// handler.go:72 no valida que util.GetUserFromContext devuelva != nil,
-		// por lo que user.ID (handler.go:74) explota con un nil pointer.
-		// Este test fija el comportamiento ACTUAL para hacerlo visible.
+	t.Run("responde 401 si la request no trae usuario en el contexto", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
 
 		r := httptest.NewRequest(http.MethodDelete, "/users", nil)
 		w := httptest.NewRecorder()
 
-		assert.Panics(t, func() { handler.Delete(w, r) })
+		handler.Delete(w, r)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.JSONEq(t, bodyUnauthorized, w.Body.String())
 		service.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 	})
 }
@@ -355,14 +356,9 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("BUG: con RUT inválido responde 400 pero igual consulta el servicio", func(t *testing.T) {
-		// handler.go:98-100 escribe la respuesta 400 pero NO hace return,
-		// así que sigue ejecutando la búsqueda con un RUT cero.
-		// Este test fija el comportamiento ACTUAL para hacerlo visible.
+	t.Run("responde 400 y no consulta el servicio si el RUT es inválido", func(t *testing.T) {
 		service := new(ServiceUsersMock)
 		handler := newTestHandler(service)
-
-		service.On("GetByRut", mock.Anything, util.RUT{}).Return(nil, util.ErrNotFound).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/no-es-un-rut", "no-es-un-rut")
 
@@ -371,8 +367,7 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), util.ErrFormatoInvalido.Error())
-		service.AssertCalled(t, "GetByRut", mock.Anything, util.RUT{})
-		service.AssertExpectations(t)
+		service.AssertNotCalled(t, "GetByRut", mock.Anything, mock.Anything)
 	})
 }
 

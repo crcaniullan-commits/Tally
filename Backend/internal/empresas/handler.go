@@ -35,9 +35,14 @@ type empresaPayload struct {
 
 func (h *EmpresasHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var payload empresaPayload
-	userID := util.GetUserFromContext(r)
+	user := util.GetUserFromContext(r)
 
-	payload.user_id = userID.ID
+	if user == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	payload.user_id = user.ID
 
 	if err := util.ReadJSON(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
@@ -63,9 +68,14 @@ func (h *EmpresasHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EmpresasHandler) GetEmpresas(w http.ResponseWriter, r *http.Request) {
-	userID := util.GetUserFromContext(r).ID
+	user := util.GetUserFromContext(r)
 
-	empresas, err := h.service.GetEmpresas(r.Context(), userID)
+	if user == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	empresas, err := h.service.GetEmpresas(r.Context(), user.ID)
 
 	if err != nil {
 		switch err {
@@ -92,10 +102,15 @@ func (h *EmpresasHandler) CambiarNombre(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userID := util.GetUserFromContext(r).ID
-	empresaID := util.GetEmpresaFromContext(r).ID
+	user := util.GetUserFromContext(r)
+	empresa := util.GetEmpresaFromContext(r)
 
-	if err := h.service.CambiarNombre(r.Context(), nombre, empresaID, userID); err != nil {
+	if user == nil || empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	if err := h.service.CambiarNombre(r.Context(), nombre, empresa.ID, user.ID); err != nil {
 		switch err {
 		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)
@@ -113,10 +128,15 @@ func (h *EmpresasHandler) CambiarNombre(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *EmpresasHandler) BorrarEmpresa(w http.ResponseWriter, r *http.Request) {
-	userID := util.GetUserFromContext(r).ID
-	empresaID := util.GetEmpresaFromContext(r).ID
+	user := util.GetUserFromContext(r)
+	empresa := util.GetEmpresaFromContext(r)
 
-	if err := h.service.BorrarEmpresa(r.Context(), empresaID, userID); err != nil {
+	if user == nil || empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	if err := h.service.BorrarEmpresa(r.Context(), empresa.ID, user.ID); err != nil {
 		switch err {
 		case util.ErrNotFound:
 			h.errors.NotFoundResponse(w, r, err)

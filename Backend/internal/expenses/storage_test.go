@@ -2,7 +2,6 @@ package expenses
 
 import (
 	"context"
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"testing"
@@ -170,18 +169,58 @@ func TestStoreExpense_GetAllExpensesOfEmpresa(t *testing.T) {
 		assert.Equal(t, testEmpresaID, expenses[0].EmpresaID)
 		assert.Equal(t, int64(1500), expenses[0].Monto)
 		assert.Equal(t, testCategoryID, expenses[0].CategoryID)
+		assert.Contains(t, ms.sql, "NULLIF($4, '')::date",
+			"un since vacío no se puede castear a date")
+		assert.Contains(t, ms.sql, "NULLIF($6, '')::uuid",
+			"un category_id vacío no se puede castear a uuid")
+		assert.Contains(t, ms.sql, "ORDER BY fecha DESC, created_at DESC, id DESC",
+			"el id desempata para que la paginación no repita ni saltee filas")
 	})
 }
 
 func TestStoreExpense_GetCategoryIDByName(t *testing.T) {
+	columnas := []string{"id", "nombre"}
+
 	t.Run("resuelve categoria por nombre incluyendo globales", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testEmpresaID).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testCategoryID))
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, testCategoryName))
 
 		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testCategoryID, categoryID)
+		assert.Contains(t, ms.sql, "(empresa_id IS NULL OR empresa_id = $1)",
+			"tiene que aceptar las globales y las propias de la empresa")
+	})
+
+	t.Run("ignora mayúsculas y acentos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, "Àmígô"))
+
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "amigo", testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testCategoryID, categoryID)
+	})
+
+	t.Run("prefiere la categoría de la empresa sobre la global", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		globalID := uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f")
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).
+				AddRow(testCategoryID, "Comida").
+				AddRow(globalID, "comida"))
+
+		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "COMIDA", testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, testCategoryID, categoryID)
@@ -191,12 +230,24 @@ func TestStoreExpense_GetCategoryIDByName(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryName, testEmpresaID).
-			WillReturnError(sql.ErrNoRows)
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(columnas).AddRow(uuid.New(), "Bebidas"))
 
 		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 		assert.Equal(t, uuid.Nil, categoryID)
+	})
+
+	t.Run("propaga el error de la base", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnError(errDBBoom)
+
+		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
 	})
 }

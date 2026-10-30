@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"net/http"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
@@ -32,22 +30,23 @@ func (m *EmpresaMiddleware) EmpresaOfUser(next http.Handler) http.Handler {
 		empresaID, err := uuid.Parse(chi.URLParam(r, "empresaID"))
 
 		if err != nil {
-			m.error.NotFoundResponse(w, r, err)
+			m.error.BadRequestResponse(w, r, err)
 			return
 		}
 
 		userID := util.GetUserFromContext(r).ID
 
-		empresa, err := m.find.GetByID(r.Context(), userID, empresaID)
+		empresa, err := m.find.GetByID(r.Context(), empresaID, userID)
 
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			switch err {
+			case util.ErrNotFound:
 				m.error.NotFoundResponse(w, r, err)
 				return
+			default:
+				m.error.UnauthorizedErrorResponse(w, r, err)
+				return
 			}
-
-			m.error.InternalServerError(w, r, err)
-			return
 		}
 
 		ctx := context.WithValue(r.Context(), util.EmpresaCtx, empresa)

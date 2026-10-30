@@ -18,33 +18,40 @@ func NewStoreCategorie(db *sql.DB) *StoreCategorie {
 	return &StoreCategorie{db}
 }
 
-func (s *StoreCategorie) GetCategoriaPorNombreYEmpresa(ctx context.Context, categoria model.Categorie) (bool, error) {
+func (s *StoreCategorie) GetCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	query := `
 		SELECT id, nombre, empresa_id
 		FROM categories
-		WHERE empresa_id = $1 and nombre = $2;
+		WHERE empresa_id = $1
+		ORDER BY nombre;
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	var exist model.Categorie
-
-	err := s.db.QueryRowContext(ctx, query, categoria.EmpresaID, categoria.Nombre).Scan(
-		&exist.ID,
-		&exist.Nombre,
-		&exist.EmpresaID,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-
+	rows, err := s.db.QueryContext(ctx, query, empresaID)
 	if err != nil {
-		return true, err
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categorias []model.Categorie
+
+	for rows.Next() {
+		var categoria model.Categorie
+
+		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID); err != nil {
+			return nil, err
+		}
+
+		categorias = append(categorias, categoria)
 	}
 
-	return true, AlreadyExistError
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return categorias, nil
 }
 
 func (s *StoreCategorie) Create(ctx context.Context, categoria *model.Categorie) error {
@@ -74,7 +81,7 @@ func (s *StoreCategorie) CambiarNombre(ctx context.Context, nombre string, categ
 	query := `
 		UPDATE categories
 		SET nombre = $1
-		WHERE id = $2 and $3
+		WHERE id = $2 and empresa_id = $3
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
@@ -102,7 +109,7 @@ func (s *StoreCategorie) CambiarNombre(ctx context.Context, nombre string, categ
 func (s *StoreCategorie) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM categories
-		WHERE id = $1 and $2
+		WHERE id = $1 and empresa_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)

@@ -3,7 +3,6 @@ package incomes
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
@@ -54,34 +53,48 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 // GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
 // referencia en incomes. Acepta las categorías globales (empresa_id IS NULL) y
 // las propias de la empresa; ante un nombre repetido prefiere la de la empresa,
-// por eso el NULLS LAST. Sin fila devuelve util.ErrNotFound para que el handler
-// lo traduzca a 400 y no a un 500.
+// por eso el NULLS LAST. La comparación usa util.NormalizarNombre, así que
+// "Comida", "comida" y "COMIDA" matchean la misma categoría. Sin fila devuelve
+// util.ErrNotFound para que el handler lo traduzca a 400 y no a un 500.
 func (s *StoreIncome) GetCategoryIDByName(ctx context.Context, nombre string, empresaID uuid.UUID) (uuid.UUID, error) {
 	query := `
-		SELECT id
+		SELECT id, nombre
 		FROM categories
-		WHERE nombre = $1
-			  AND (empresa_id IS NULL OR empresa_id = $2)
+		WHERE (empresa_id IS NULL OR empresa_id = $1)
 		ORDER BY empresa_id NULLS LAST
-		LIMIT 1
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	var categoryID uuid.UUID
-
-	err := s.db.QueryRowContext(ctx, query, nombre, empresaID).Scan(&categoryID)
-
+	rows, err := s.db.QueryContext(ctx, query, empresaID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil, util.ErrNotFound
+		return uuid.Nil, err
+	}
+	defer rows.Close()
+
+	buscado := util.NormalizarNombre(nombre)
+
+	for rows.Next() {
+		var (
+			categoryID uuid.UUID
+			categoria  string
+		)
+
+		if err := rows.Scan(&categoryID, &categoria); err != nil {
+			return uuid.Nil, err
 		}
 
+		if util.NormalizarNombre(categoria) == buscado {
+			return categoryID, nil
+		}
+	}
+
+	if err := rows.Err(); err != nil {
 		return uuid.Nil, err
 	}
 
-	return categoryID, nil
+	return uuid.Nil, util.ErrNotFound
 }
 
 func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {

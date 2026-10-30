@@ -24,8 +24,8 @@ const (
 		"nombre_empresa": "Mi Empresa",
 		"user_id": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b"
 	}}`
-	bodyEmpresasList  = `{"data":[{"id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d","nombre_empresa": "Mi Empresa","user_id": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b"}]}`
-	bodyNombreUpdated = `{"data":"Nombre acualizado"}`
+	bodyEmpresasList   = `{"data":[{"id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d","nombre_empresa": "Mi Empresa","user_id": "6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b"}]}`
+	bodyNombreUpdated  = `{"data":"Nombre acualizado"}`
 	bodyEmpresaDeleted = `{"data":"empresa borrada"}`
 	bodyNotFound       = `{"error":"not found"}`
 	bodyInternalError  = `{"error":"the server encountered a problem"}`
@@ -88,7 +88,7 @@ func requestWithNombreParam(method, target, nombre string) *http.Request {
 }
 
 func TestEmpresasHandler_Create(t *testing.T) {
-	t.Run("responde 200 con la empresa creada", func(t *testing.T) {
+	t.Run("responde 201 con la empresa creada", func(t *testing.T) {
 		service := new(ServiceEmpresasMock)
 		handler := newTestHandler(service)
 
@@ -103,7 +103,7 @@ func TestEmpresasHandler_Create(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Create(w, r)
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyEmpresaCreated, w.Body.String())
 		service.AssertExpectations(t)
 	})
@@ -151,7 +151,7 @@ func TestEmpresasHandler_Create(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.Create(w, r)
 
-		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, http.StatusCreated, w.Code)
 		service.AssertCalled(t, "Create", mock.Anything, mock.MatchedBy(func(p empresaPayload) bool {
 			return p.user_id == testUserID
 		}))

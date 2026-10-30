@@ -29,10 +29,10 @@ func (m *CategoriaStoreMock) BorrarCategoria(ctx context.Context, categoriaID uu
 	return args.Error(0)
 }
 
-func (m *CategoriaStoreMock) GetCategoriaPorNombreYEmpresa(ctx context.Context, categoria model.Categorie) (bool, error) {
-	args := m.Called(ctx, categoria)
-	exist, _ := args.Get(0).(bool)
-	return exist, args.Error(1)
+func (m *CategoriaStoreMock) GetCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	args := m.Called(ctx, empresaID)
+	categorias, _ := args.Get(0).([]model.Categorie)
+	return categorias, args.Error(1)
 }
 
 // ServiceCategoriesMock es un mock de la capa de servicio (ServiceCategories) usado
@@ -58,8 +58,8 @@ func (m *ServiceCategoriesMock) BorrarCategoria(ctx context.Context, categoriaID
 }
 
 var (
-	testUserID     = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
-	testEmpresaID  = uuid.MustParse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
+	testUserID      = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
+	testEmpresaID   = uuid.MustParse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
 	testCategoriaID = uuid.MustParse("b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d")
 )
 
