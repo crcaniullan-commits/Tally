@@ -22,29 +22,29 @@ func (m *StoreIncomesMock) AddIncome(ctx context.Context, income *model.Income) 
 	return args.Error(0)
 }
 
-func (m *StoreIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {
-	args := m.Called(ctx, incomeID, userID)
+func (m *StoreIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, incomeID, empresaID)
 	return args.Error(0)
 }
 
-// GetAllIncomesOfUser pasa la paginación a m.Called como tercer argumento para
+// GetAllIncomesOfEmpresa pasa la paginación a m.Called como tercer argumento para
 // que los tests puedan assertear los query params que llegaron al store.
-func (m *StoreIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
-	args := m.Called(ctx, userID, fq)
+func (m *StoreIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+	args := m.Called(ctx, empresaID, fq)
 
 	incomes, _ := args.Get(0).([]model.Income)
 
 	return incomes, args.Error(1)
 }
 
-// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
-// referencia en incomes. El mock devuelve lo que le configure el test.
-func (m *StoreIncomesMock) GetCategoryIDByName(ctx context.Context, nombre string, userID uuid.UUID) (uuid.UUID, error) {
-	args := m.Called(ctx, nombre, userID)
+// CategoryExists indica si la categoría es visible para la empresa. El mock
+// devuelve lo que le configure el test.
+func (m *StoreIncomesMock) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, categoryID, empresaID)
 
-	categoryID, _ := args.Get(0).(uuid.UUID)
+	existe, _ := args.Get(0).(bool)
 
-	return categoryID, args.Error(1)
+	return existe, args.Error(1)
 }
 
 // ServiceIncomesMock es un mock de la capa de servicio (ServiceIncomes) usado
@@ -53,21 +53,21 @@ type ServiceIncomesMock struct {
 	mock.Mock
 }
 
-func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayload, userID uuid.UUID) (model.Income, error) {
-	args := m.Called(ctx, payload, userID)
+func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayload, empresaID uuid.UUID) (model.Income, error) {
+	args := m.Called(ctx, payload, empresaID)
 
 	income, _ := args.Get(0).(model.Income)
 
 	return income, args.Error(1)
 }
 
-func (m *ServiceIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {
-	args := m.Called(ctx, incomeID, userID)
+func (m *ServiceIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, incomeID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
-	args := m.Called(ctx, userID, fq)
+func (m *ServiceIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+	args := m.Called(ctx, empresaID, fq)
 
 	incomes, _ := args.Get(0).([]model.Income)
 
@@ -76,6 +76,7 @@ func (m *ServiceIncomesMock) GetAllIncomesOfUser(ctx context.Context, userID uui
 
 var (
 	testUserID       = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
+	testEmpresaID    = uuid.MustParse("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d")
 	testIncomeID     = uuid.MustParse("9c8b7a65-4d3c-4b2a-9f8e-7d6c5b4a3f2e")
 	testCategoryID   = uuid.MustParse("b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d")
 	testCategoryName = "Comida"
@@ -88,7 +89,7 @@ func newTestIncome() model.Income {
 
 	return model.Income{
 		ID:            testIncomeID,
-		UserID:        testUserID,
+		EmpresaID:     testEmpresaID,
 		Monto:         1500,
 		PaymentMethod: util.PaymentMethodDebito,
 		Descripcion:   &descripcion,
@@ -106,7 +107,7 @@ func newTestPayload() IncomePayload {
 		Monto:         1500,
 		PaymentMethod: util.PaymentMethodDebito,
 		Descripcion:   &descripcion,
-		Categoria:     ptr(testCategoryName),
+		CategoryID:    &testCategoryID,
 	}
 }
 

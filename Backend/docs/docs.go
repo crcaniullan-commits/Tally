@@ -24,22 +24,653 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/app/incomes": {
+        "/app/empresas": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "description": "Devuelve todas las empresas asociadas al usuario autenticado. La respuesta viene envuelta en {\"data\": ...}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Empresas"
+                ],
+                "summary": "Listar empresas",
+                "responses": {
+                    "200": {
+                        "description": "lista de empresas",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Empresa"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresas no encontradas",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea una nueva empresa asociada al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con la empresa creada.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Empresas"
+                ],
+                "summary": "Crear empresa",
+                "parameters": [
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/empresas.empresaPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "empresa creada",
+                        "schema": {
+                            "$ref": "#/definitions/model.Empresa"
+                        }
+                    },
+                    "400": {
+                        "description": "payload de la empresa erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Empresas"
+                ],
+                "summary": "Eliminar empresa",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "empresa borrada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/categories": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque \"empresa_id\" viene null. La respuesta viene envuelta en {\"data\": [...]} con las categorías propias primero, ordenadas por nombre.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Listar categorías",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "categorías de la empresa y globales",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Categorie"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con la categoría creada.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Crear categoría",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/categories.CategoriaPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "categoría creada",
+                        "schema": {
+                            "$ref": "#/definitions/model.Categorie"
+                        }
+                    },
+                    "400": {
+                        "description": "payload de la categoría erroneo o la categoría ya existe",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/categories/{categoriaID}": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Cambiar nombre de categoría",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la categoría",
+                        "name": "categoriaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/categories.CategoriaPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "nombre cambiado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "categoriaID invalido o payload erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "categoría no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/categories/{categoria}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Eliminar categoría",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la categoría",
+                        "name": "categoria",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "categoría eliminada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "categoria invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "categoría no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/expenses": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve una página de los gastos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Listar gastos de la empresa",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "cantidad maxima de gastos a devolver (1-30, default 30)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "gastos a saltar, para pedir la pagina siguiente",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha minima del rango (AAAA-MM-DD)",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "fecha maxima del rango (AAAA-MM-DD)",
+                        "name": "until",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UUID de la categoria por la que filtrar",
+                        "name": "category_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "pagina de gastos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Expense"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Registrar gasto",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/expenses.ExpensePayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "gasto creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.Expense"
+                        }
+                    },
+                    "400": {
+                        "description": "payload del gasto erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/expenses/{expenseID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un gasto por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Eliminar gasto",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID del gasto",
+                        "name": "expenseID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "gasto eliminado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "expenseID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "gasto no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/incomes": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Incomes"
                 ],
-                "summary": "Listar ingresos del usuario",
+                "summary": "Listar ingresos de la empresa",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "integer",
                         "description": "cantidad maxima de ingresos a devolver (1-30, default 30)",
@@ -110,7 +741,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria\" es opcional (la columna es nullable) y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias del usuario). Si el nombre no existe responde 400.",
+                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
                 "consumes": [
                     "application/json"
                 ],
@@ -122,6 +753,13 @@ const docTemplate = `{
                 ],
                 "summary": "Registrar ingreso",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "description": "payload",
                         "name": "payload",
@@ -160,14 +798,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/incomes/{incomeID}": {
+        "/app/empresas/{empresaID}/incomes/{incomeID}": {
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina un ingreso por su ID, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -176,6 +814,13 @@ const docTemplate = `{
                 ],
                 "summary": "Eliminar ingreso",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "string",
                         "description": "ID del ingreso",
@@ -202,6 +847,74 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "ingreso no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/{nombre}": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cambia el nombre de una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Empresas"
+                ],
+                "summary": "Cambiar nombre de empresa",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nuevo nombre de la empresa",
+                        "name": "nombre",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "nombre actualizado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "ruta debe incluir el nombre de la empresa",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -765,7 +1478,8 @@ const docTemplate = `{
                 },
                 "rut": {
                     "type": "string",
-                    "maxLength": 10
+                    "maxLength": 12,
+                    "minLength": 9
                 }
             }
         },
@@ -819,6 +1533,49 @@ const docTemplate = `{
                 }
             }
         },
+        "categories.CategoriaPayload": {
+            "type": "object",
+            "required": [
+                "nombre"
+            ],
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
+        "empresas.empresaPayload": {
+            "type": "object",
+            "required": [
+                "nombre_empresa"
+            ],
+            "properties": {
+                "nombre_empresa": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
+        "expenses.ExpensePayload": {
+            "type": "object",
+            "required": [
+                "category_id",
+                "monto"
+            ],
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "monto": {
+                    "type": "integer"
+                }
+            }
+        },
         "incomes.IncomePayload": {
             "type": "object",
             "required": [
@@ -826,9 +1583,8 @@ const docTemplate = `{
                 "payment_method"
             ],
             "properties": {
-                "categoria": {
-                    "type": "string",
-                    "maxLength": 100
+                "category_id": {
+                    "type": "string"
                 },
                 "descripcion": {
                     "type": "string",
@@ -884,6 +1640,60 @@ const docTemplate = `{
                 }
             }
         },
+        "model.Categorie": {
+            "type": "object",
+            "properties": {
+                "empresa_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "nombre": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Empresa": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "nombre_empresa": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.Expense": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string"
+                },
+                "empresa_id": {
+                    "type": "string"
+                },
+                "fecha": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                }
+            }
+        },
         "model.Income": {
             "type": "object",
             "properties": {
@@ -894,6 +1704,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "descripcion": {
+                    "type": "string"
+                },
+                "empresa_id": {
                     "type": "string"
                 },
                 "fecha": {
@@ -907,9 +1720,6 @@ const docTemplate = `{
                 },
                 "payment_method": {
                     "$ref": "#/definitions/model.PaymentMethod"
-                },
-                "user_id": {
-                    "type": "string"
                 }
             }
         },

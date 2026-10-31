@@ -72,6 +72,11 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	user := util.GetUserFromContext(r)
 
+	if user == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
 	if err := h.service.Delete(r.Context(), user.ID); err != nil {
 		switch err {
 		case util.ErrNotFound:
@@ -98,6 +103,7 @@ func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		h.errors.BadRequestResponse(w, r, err)
+		return
 	}
 
 	user, err := h.service.GetByRut(r.Context(), rut)

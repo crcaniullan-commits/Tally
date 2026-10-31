@@ -8,7 +8,7 @@ import (
 
 type Debtor struct {
 	ID          uuid.UUID  `json:"id"`
-	UserID      uuid.UUID  `json:"user_id"`
+	EmpresaID   uuid.UUID  `json:"empresa_id"`
 	Nombre      string     `json:"nombre"`
 	Monto       int64      `json:"monto"`
 	Descripcion *string    `json:"descripcion"`

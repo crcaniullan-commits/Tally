@@ -34,7 +34,7 @@ func request(method, target, body string) *http.Request {
 }
 
 func TestAuthHandler_Register(t *testing.T) {
-	t.Run("responde 200 con el token y llama al service con el payload", func(t *testing.T) {
+	t.Run("responde 201 con el token y llama al service con el payload", func(t *testing.T) {
 		service := new(ServiceAuthMock)
 		handler := newTestHandler(service)
 
@@ -51,7 +51,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyTokenOK, w.Body.String())
 		service.AssertExpectations(t)
 	})
