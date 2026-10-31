@@ -54,6 +54,42 @@ func (s *StoreCategorie) GetCategoriasPorEmpresa(ctx context.Context, empresaID 
 	return categorias, nil
 }
 
+func (s *StoreCategorie) GetCategoriasVisibles(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	query := `
+		SELECT id, nombre, empresa_id
+		FROM categories
+		WHERE empresa_id IS NULL OR empresa_id = $1
+		ORDER BY empresa_id NULLS LAST, nombre;
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, empresaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categorias []model.Categorie
+
+	for rows.Next() {
+		var categoria model.Categorie
+
+		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID); err != nil {
+			return nil, err
+		}
+
+		categorias = append(categorias, categoria)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return categorias, nil
+}
+
 func (s *StoreCategorie) Create(ctx context.Context, categoria *model.Categorie) error {
 	query := `
 		INSERT INTO categories (nombre, empresa_id)

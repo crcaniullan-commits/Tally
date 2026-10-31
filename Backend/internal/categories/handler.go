@@ -16,6 +16,7 @@ type ServiceCategories interface {
 	Create(context.Context, CategoriaPayload, *uuid.UUID) (model.Categorie, error)
 	CambiarNombre(context.Context, CategoriaPayload, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
+	GetCategorias(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
 
 type CategoriesHandler struct {
@@ -64,6 +65,26 @@ func (h *CategoriesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := util.JsonResponse(w, http.StatusCreated, categoria); err != nil {
+		h.errors.InternalServerError(w, r, err)
+		return
+	}
+}
+
+func (h *CategoriesHandler) GetCategorias(w http.ResponseWriter, r *http.Request) {
+	empresa := util.GetEmpresaFromContext(r)
+
+	if empresa == nil {
+		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		return
+	}
+
+	categorias, err := h.service.GetCategorias(r.Context(), empresa.ID)
+	if err != nil {
+		h.errors.InternalServerError(w, r, err)
+		return
+	}
+
+	if err := util.JsonResponse(w, http.StatusOK, categorias); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}

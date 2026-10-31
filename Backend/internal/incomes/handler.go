@@ -35,7 +35,7 @@ type IncomePayload struct {
 	Monto         int64               `json:"monto" validate:"required,gt=0"`
 	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
 	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
-	Categoria     *string             `json:"categoria" validate:"omitempty,max=100"`
+	CategoryID    *uuid.UUID          `json:"category_id" validate:"omitempty"`
 }
 
 /*

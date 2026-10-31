@@ -3,14 +3,15 @@ package incomes
 // AddIncome
 //
 //	@Summary		Registrar ingreso
-//	@Description	Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria" es opcional (la columna es nullable) y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias del usuario). Si el nombre no existe responde 400.
+//	@Description	Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.
 //	@Tags			Incomes
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body		IncomePayload		true	"payload"
-//	@Success		201		{object}	model.Income		"ingreso creado"
-//	@Failure		400		{object}	map[string]string	"payload del ingreso erroneo"
-//	@Failure		500		{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string				true	"ID de la empresa"
+//	@Param			payload		body		IncomePayload		true	"payload"
+//	@Success		201			{object}	model.Income		"ingreso creado"
+//	@Failure		400			{object}	map[string]string	"payload del ingreso erroneo"
+//	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/app/empresas/{empresaID}/incomes	[post]
 func AddIncome() {}

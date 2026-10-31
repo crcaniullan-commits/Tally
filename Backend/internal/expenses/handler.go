@@ -3,7 +3,6 @@ package expenses
 import (
 	"context"
 	"net/http"
-	"time"
 
 	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
 	"github.com/crcaniullan-commits/Tally/internal/model"
@@ -34,10 +33,8 @@ func empresaID(r *http.Request) uuid.UUID {
 
 type ExpensePayload struct {
 	Monto       int64      `json:"monto" validate:"required,gt=0"`
-	CategoryID  *uuid.UUID `json:"category_id" validate:"omitempty"`
-	Categoria   *string    `json:"categoria" validate:"omitempty,max=100"`
+	CategoryID  *uuid.UUID `json:"category_id" validate:"required"`
 	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
-	Fecha       time.Time  `json:"fecha"`
 }
 
 func (h *ExpensesHandler) Create(w http.ResponseWriter, r *http.Request) {

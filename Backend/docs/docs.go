@@ -178,6 +178,50 @@ const docTemplate = `{
             }
         },
         "/app/empresas/{empresaID}/categories": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque \"empresa_id\" viene null. La respuesta viene envuelta en {\"data\": [...]} con las categorías propias primero, ordenadas por nombre.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Listar categorías",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "categorías de la empresa y globales",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Categorie"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -479,7 +523,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria\" es opcional y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias de la empresa). Si el nombre no existe responde 400.",
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
                 "consumes": [
                     "application/json"
                 ],
@@ -697,7 +741,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria\" es opcional (la columna es nullable) y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias del usuario). Si el nombre no existe responde 400.",
+                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
                 "consumes": [
                     "application/json"
                 ],
@@ -709,6 +753,13 @@ const docTemplate = `{
                 ],
                 "summary": "Registrar ingreso",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "description": "payload",
                         "name": "payload",
@@ -1509,22 +1560,16 @@ const docTemplate = `{
         "expenses.ExpensePayload": {
             "type": "object",
             "required": [
+                "category_id",
                 "monto"
             ],
             "properties": {
-                "categoria": {
-                    "type": "string",
-                    "maxLength": 100
-                },
                 "category_id": {
                     "type": "string"
                 },
                 "descripcion": {
                     "type": "string",
                     "maxLength": 100
-                },
-                "fecha": {
-                    "type": "string"
                 },
                 "monto": {
                     "type": "integer"
@@ -1538,9 +1583,8 @@ const docTemplate = `{
                 "payment_method"
             ],
             "properties": {
-                "categoria": {
-                    "type": "string",
-                    "maxLength": 100
+                "category_id": {
+                    "type": "string"
                 },
                 "descripcion": {
                     "type": "string",

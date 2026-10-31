@@ -50,51 +50,28 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 	return nil
 }
 
-// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
-// referencia en incomes. Acepta las categorías globales (empresa_id IS NULL) y
-// las propias de la empresa; ante un nombre repetido prefiere la de la empresa,
-// por eso el NULLS LAST. La comparación usa util.NormalizarNombre, así que
-// "Comida", "comida" y "COMIDA" matchean la misma categoría. Sin fila devuelve
-// util.ErrNotFound para que el handler lo traduzca a 400 y no a un 500.
-func (s *StoreIncome) GetCategoryIDByName(ctx context.Context, nombre string, empresaID uuid.UUID) (uuid.UUID, error) {
+// CategoryExists verifica que la categoría exista y sea visible para la
+// empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
+// no pasa el filtro y el service la trata como inexistente.
+func (s *StoreIncome) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	query := `
-		SELECT id, nombre
-		FROM categories
-		WHERE (empresa_id IS NULL OR empresa_id = $1)
-		ORDER BY empresa_id NULLS LAST
+		SELECT EXISTS (
+			SELECT 1
+			FROM categories
+			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2)
+		)
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, empresaID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	defer rows.Close()
+	var existe bool
 
-	buscado := util.NormalizarNombre(nombre)
-
-	for rows.Next() {
-		var (
-			categoryID uuid.UUID
-			categoria  string
-		)
-
-		if err := rows.Scan(&categoryID, &categoria); err != nil {
-			return uuid.Nil, err
-		}
-
-		if util.NormalizarNombre(categoria) == buscado {
-			return categoryID, nil
-		}
+	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID).Scan(&existe); err != nil {
+		return false, err
 	}
 
-	if err := rows.Err(); err != nil {
-		return uuid.Nil, err
-	}
-
-	return uuid.Nil, util.ErrNotFound
+	return existe, nil
 }
 
 func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {

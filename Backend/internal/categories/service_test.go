@@ -238,6 +238,42 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 	})
 }
 
+func TestCategorieService_GetCategorias(t *testing.T) {
+	t.Run("devuelve las categorias visibles para la empresa", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		global := model.Categorie{
+			ID:     uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
+			Nombre: "Ventas",
+		}
+		esperadas := []model.Categorie{newTestCategoria(), global}
+
+		store.On("GetCategoriasVisibles", mock.Anything, testEmpresaID).
+			Return(esperadas, nil).Once()
+
+		categorias, err := service.GetCategorias(context.Background(), testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, esperadas, categorias)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga el error del store", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		store.On("GetCategoriasVisibles", mock.Anything, testEmpresaID).
+			Return(nil, errStoreBoom).Once()
+
+		categorias, err := service.GetCategorias(context.Background(), testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		assert.Nil(t, categorias)
+		store.AssertExpectations(t)
+	})
+}
+
 func TestCategorieService_BorrarCategoria(t *testing.T) {
 	t.Run("borra la categoria correctamente", func(t *testing.T) {
 		store := new(CategoriaStoreMock)

@@ -20,16 +20,16 @@ func newService(store StoreExpenses) *ExpenseService {
 }
 
 func TestExpenseService_AddExpense(t *testing.T) {
-	t.Run("crea el gasto con categoria por nombre", func(t *testing.T) {
+	t.Run("crea el gasto con el category_id validado", func(t *testing.T) {
 		store := new(StoreExpensesMock)
 		service := newService(store)
 
 		payload := newTestPayloadExpense()
 		expense := newTestExpense()
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testEmpresaID).Return(testCategoryID, nil).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).Return(true, nil).Once()
 		store.On("AddExpense", mock.Anything, mock.MatchedBy(func(e *model.Expense) bool {
-			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID
+			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID && e.Fecha.IsZero()
 		})).Return(nil).Run(func(args mock.Arguments) {
 			e := args.Get(1).(*model.Expense)
 			e.ID = expense.ID
@@ -45,43 +45,35 @@ func TestExpenseService_AddExpense(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("crea el gasto con category_id directo", func(t *testing.T) {
-		store := new(StoreExpensesMock)
-		service := newService(store)
-
-		payload := ExpensePayload{
-			Monto:      1500,
-			CategoryID: &testCategoryID,
-		}
-		expense := newTestExpense()
-
-		store.On("AddExpense", mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-			e := args.Get(1).(*model.Expense)
-			e.ID = expense.ID
-			e.Fecha = expense.Fecha
-			e.CreatedAt = expense.CreatedAt
-		}).Once()
-
-		result, err := service.AddExpense(context.Background(), payload, testEmpresaID)
-
-		require.NoError(t, err)
-		assert.Equal(t, testCategoryID, result.CategoryID)
-		store.AssertNotCalled(t, "GetCategoryIDByName", mock.Anything, mock.Anything, mock.Anything)
-		store.AssertExpectations(t)
-	})
-
 	t.Run("devuelve ErrNotFound si la categoria no existe", func(t *testing.T) {
 		store := new(StoreExpensesMock)
 		service := newService(store)
 
 		payload := newTestPayloadExpense()
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testEmpresaID).Return(uuid.Nil, util.ErrNotFound).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).Return(false, nil).Once()
 
 		result, err := service.AddExpense(context.Background(), payload, testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 		assert.Equal(t, uuid.Nil, result.ID)
+		store.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("rechaza una categoria de otra empresa", func(t *testing.T) {
+		store := new(StoreExpensesMock)
+		service := newService(store)
+
+		payload := newTestPayloadExpense()
+
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).Return(false, nil).Once()
+
+		result, err := service.AddExpense(context.Background(), payload, testEmpresaID)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
+		assert.Equal(t, uuid.Nil, result.ID)
+		store.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -95,7 +87,24 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 		assert.Equal(t, uuid.Nil, result.ID)
+		store.AssertNotCalled(t, "CategoryExists", mock.Anything, mock.Anything, mock.Anything)
 		store.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything)
+	})
+
+	t.Run("propaga el error del store de categorias", func(t *testing.T) {
+		store := new(StoreExpensesMock)
+		service := newService(store)
+
+		payload := newTestPayloadExpense()
+
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).Return(false, errStoreBoom).Once()
+
+		result, err := service.AddExpense(context.Background(), payload, testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		assert.Equal(t, uuid.Nil, result.ID)
+		store.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
 	})
 
 	t.Run("propaga el error del store", func(t *testing.T) {
@@ -104,6 +113,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		payload := ExpensePayload{Monto: 1500, CategoryID: &testCategoryID}
 
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).Return(true, nil).Once()
 		store.On("AddExpense", mock.Anything, mock.Anything).Return(errStoreBoom).Once()
 
 		result, err := service.AddExpense(context.Background(), payload, testEmpresaID)

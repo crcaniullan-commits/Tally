@@ -15,6 +15,7 @@ type CategoriaStore interface {
 	CambiarNombre(context.Context, string, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
 	GetCategoriasPorEmpresa(context.Context, uuid.UUID) ([]model.Categorie, error)
+	GetCategoriasVisibles(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
 type CategorieService struct {
 	store CategoriaStore
@@ -60,6 +61,10 @@ func (s *CategorieService) BorrarCategoria(ctx context.Context, categoriaID uuid
 		return err
 	}
 	return nil
+}
+
+func (s *CategorieService) GetCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	return s.store.GetCategoriasVisibles(ctx, empresaID)
 }
 
 // normalizarNombre deja el nombre comparable: sin espacios en los extremos, en

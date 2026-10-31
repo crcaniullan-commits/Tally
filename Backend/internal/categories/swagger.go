@@ -1,5 +1,18 @@
 package categories
 
+// GetCategorias
+//
+//	@Summary		Listar categorías
+//	@Description	Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque "empresa_id" viene null. La respuesta viene envuelta en {"data": [...]} con las categorías propias primero, ordenadas por nombre.
+//	@Tags			Categories
+//	@Produce		json
+//	@Param			empresaID	path		string				true	"ID de la empresa"
+//	@Success		200			{array}		model.Categorie		"categorías de la empresa y globales"
+//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/app/empresas/{empresaID}/categories	[get]
+func GetCategorias() {}
+
 // Create
 //
 //	@Summary		Crear categoría

@@ -17,6 +17,7 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.
 	hdl := NewCategoriesHandler(svc, err)
 
 	r.Route("/categories", func(r chi.Router) {
+		r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetCategorias))
 		r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
 		r.Patch("/{categoriaID}", middl.CheckOwnership(util.UserRoleUsuario, hdl.CambiarNombre))
 		r.Delete("/{categoria}", middl.CheckOwnership(util.UserRoleUsuario, hdl.BorrarCategoria))

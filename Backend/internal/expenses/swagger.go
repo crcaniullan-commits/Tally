@@ -3,7 +3,7 @@ package expenses
 // Create
 //
 //	@Summary		Registrar gasto
-//	@Description	Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria" es opcional y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias de la empresa). Si el nombre no existe responde 400.
+//	@Description	Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "category_id" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta "fecha": la asigna la base de datos con CURRENT_DATE.
 //	@Tags			Expenses
 //	@Accept			json
 //	@Produce		json

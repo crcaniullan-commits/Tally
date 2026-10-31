@@ -95,13 +95,13 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"payment_method":"debito","descripcion":"Venta de almuerzo","categoria":"Comida"}`
+		body := `{"monto":1500,"payment_method":"debito","descripcion":"Venta de almuerzo","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AddIncome", mock.Anything, IncomePayload{
 			Monto:         1500,
 			PaymentMethod: util.PaymentMethodDebito,
 			Descripcion:   ptr("Venta de almuerzo"),
-			Categoria:     ptr(testCategoryName),
+			CategoryID:    &testCategoryID,
 		}, testEmpresaID).Return(newTestIncome(), nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
@@ -244,7 +244,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		body := `{"monto":1500,"payment_method":"debito"}`
 
 		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
-			return p.Categoria == nil
+			return p.CategoryID == nil
 		}), testEmpresaID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
@@ -256,14 +256,14 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("manda la categoria por nombre al servicio", func(t *testing.T) {
+	t.Run("manda la categoria por id al servicio", func(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":100,"payment_method":"debito","categoria":"Comida"}`
+		body := `{"monto":100,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
-			return p.Categoria != nil && *p.Categoria == testCategoryName
+			return p.CategoryID != nil && *p.CategoryID == testCategoryID
 		}), testEmpresaID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
@@ -275,31 +275,45 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
-	t.Run("responde 400 si la categoria supera los 100 caracteres", func(t *testing.T) {
+	t.Run("responde 400 si category_id no es un UUID", func(t *testing.T) {
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		larga := strings.Repeat("a", 101)
-
 		r := requestWithUser(http.MethodPost, "/incomes",
-			`{"monto":100,"payment_method":"debito","categoria":"`+larga+`"}`)
+			`{"monto":100,"payment_method":"debito","category_id":"Comida"}`)
 
 		w := httptest.NewRecorder()
 		handler.AddIncome(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "Categoria")
+		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si mandan la categoria por nombre", func(t *testing.T) {
+		// El contrato ya no acepta "categoria": util.ReadJSON usa
+		// DisallowUnknownFields, así que el campo viejo es un 400 y no se
+		// ignora en silencio.
+		service := new(ServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithUser(http.MethodPost, "/incomes",
+			`{"monto":100,"payment_method":"debito","categoria":"Comida"}`)
+
+		w := httptest.NewRecorder()
+		handler.AddIncome(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "categoria")
 		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si la categoria no existe", func(t *testing.T) {
-		// El service no encuentra el nombre entre las categorias y devuelve
-		// util.ErrNotFound. Es culpa del cliente, asi que el handler responde
-		// 400 y no un 500.
+		// El service valida el id y devuelve util.ErrNotFound. Es culpa del
+		// cliente, asi que el handler responde 400 y no un 500.
 		service := new(ServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":100,"payment_method":"debito","categoria":"Inexistente"}`
+		body := `{"monto":100,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AddIncome", mock.Anything, mock.Anything, testEmpresaID).
 			Return(model.Income{}, util.ErrNotFound).Once()

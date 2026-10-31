@@ -150,6 +150,90 @@ func TestStoreCategorie_GetCategoriasPorEmpresa(t *testing.T) {
 	})
 }
 
+func TestStoreCategorie_GetCategoriasVisibles(t *testing.T) {
+	t.Run("devuelve las categorias de la empresa y las globales", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		global := []driver.Value{
+			uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
+			"Ventas",
+			nil,
+		}
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(categoriaRow()...).
+				AddRow(global...))
+
+		categorias, err := ms.store.GetCategoriasVisibles(context.Background(), testEmpresaID)
+
+		require.NoError(t, err)
+		require.Len(t, categorias, 2)
+		require.NotNil(t, categorias[0].EmpresaID)
+		assert.Equal(t, testEmpresaID, *categorias[0].EmpresaID)
+		assert.Equal(t, "Ventas", categorias[1].Nombre)
+		assert.Nil(t, categorias[1].EmpresaID, "las globales tienen empresa_id NULL")
+		assert.Contains(t, ms.sql, "WHERE empresa_id IS NULL OR empresa_id = $1")
+		assert.Contains(t, ms.sql, "ORDER BY empresa_id NULLS LAST, nombre")
+	})
+
+	t.Run("devuelve una lista vacia si no hay categorias visibles", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()))
+
+		categorias, err := ms.store.GetCategoriasVisibles(context.Background(), testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Empty(t, categorias)
+	})
+
+	t.Run("propaga el error de la base de datos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnError(errDBBoom)
+
+		categorias, err := ms.store.GetCategoriasVisibles(context.Background(), testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
+		assert.Nil(t, categorias)
+	})
+
+	t.Run("propaga el error al escanear una fila", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(123, "Comida", testEmpresaID))
+
+		categorias, err := ms.store.GetCategoriasVisibles(context.Background(), testEmpresaID)
+
+		require.Error(t, err)
+		assert.Nil(t, categorias)
+	})
+
+	t.Run("propaga el error de rows", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testEmpresaID).
+			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
+				AddRow(categoriaRow()...).
+				RowError(0, errDBBoom))
+
+		categorias, err := ms.store.GetCategoriasVisibles(context.Background(), testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
+		assert.Nil(t, categorias)
+	})
+}
+
 func TestStoreCategorie_Create(t *testing.T) {
 	t.Run("crea la categoria y devuelve el id", func(t *testing.T) {
 		ms := newMockStore(t)

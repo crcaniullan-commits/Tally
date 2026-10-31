@@ -37,14 +37,14 @@ func (m *StoreIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID
 	return incomes, args.Error(1)
 }
 
-// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
-// referencia en incomes. El mock devuelve lo que le configure el test.
-func (m *StoreIncomesMock) GetCategoryIDByName(ctx context.Context, nombre string, empresaID uuid.UUID) (uuid.UUID, error) {
-	args := m.Called(ctx, nombre, empresaID)
+// CategoryExists indica si la categoría es visible para la empresa. El mock
+// devuelve lo que le configure el test.
+func (m *StoreIncomesMock) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, categoryID, empresaID)
 
-	categoryID, _ := args.Get(0).(uuid.UUID)
+	existe, _ := args.Get(0).(bool)
 
-	return categoryID, args.Error(1)
+	return existe, args.Error(1)
 }
 
 // ServiceIncomesMock es un mock de la capa de servicio (ServiceIncomes) usado
@@ -107,7 +107,7 @@ func newTestPayload() IncomePayload {
 		Monto:         1500,
 		PaymentMethod: util.PaymentMethodDebito,
 		Descripcion:   &descripcion,
-		Categoria:     ptr(testCategoryName),
+		CategoryID:    &testCategoryID,
 	}
 }
 

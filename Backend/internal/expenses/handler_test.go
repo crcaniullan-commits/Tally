@@ -76,10 +76,10 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(ServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"categoria":"Comida","descripcion":"Compra insumos","fecha":"2026-09-30T00:00:00Z"}`
+		body := `{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","descripcion":"Compra insumos"}`
 
 		service.On("AddExpense", mock.Anything, mock.MatchedBy(func(p ExpensePayload) bool {
-			return p.Monto == 1500 && p.Categoria != nil && *p.Categoria == testCategoryName
+			return p.Monto == 1500 && p.CategoryID != nil && *p.CategoryID == testCategoryID
 		}), testEmpresaID).Return(newTestExpense(), nil).Once()
 
 		r := requestWithEmpresaContext(http.MethodPost, "/expenses", body)
@@ -139,7 +139,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(ServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"categoria":"Inexistente"}`
+		body := `{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AddExpense", mock.Anything, mock.Anything, testEmpresaID).Return(model.Expense{}, util.ErrNotFound).Once()
 
@@ -150,6 +150,64 @@ func TestExpensesHandler_Create(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si falta category_id", func(t *testing.T) {
+		service := new(ServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":1500}`)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "CategoryID")
+		service.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si category_id no es un UUID", func(t *testing.T) {
+		service := new(ServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
+			`{"monto":1500,"category_id":"Comida"}`)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si mandan fecha en el payload", func(t *testing.T) {
+		service := new(ServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
+			`{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","fecha":"2026-09-30T00:00:00Z"}`)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "fecha")
+		service.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si mandan la categoria por nombre", func(t *testing.T) {
+		service := new(ServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
+			`{"monto":1500,"categoria":"Comida"}`)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "categoria")
+		service.AssertNotCalled(t, "AddExpense", mock.Anything, mock.Anything, mock.Anything)
 	})
 }
 

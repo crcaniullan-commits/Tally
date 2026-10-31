@@ -10,6 +10,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/util"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -175,6 +176,49 @@ func TestCategoriesHandler_Create(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		handler.Create(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		service.AssertExpectations(t)
+	})
+}
+
+func TestCategoriesHandler_GetCategorias(t *testing.T) {
+	t.Run("responde 200 con las categorias de la empresa y las globales", func(t *testing.T) {
+		service := new(ServiceCategoriesMock)
+		handler := newTestHandler(service)
+
+		global := model.Categorie{
+			ID:     uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
+			Nombre: "Ventas",
+		}
+
+		service.On("GetCategorias", mock.Anything, testEmpresaID).
+			Return([]model.Categorie{newTestCategoria(), global}, nil).Once()
+
+		r := requestWithEmpresaContext(http.MethodGet, "/categories", "")
+
+		w := httptest.NewRecorder()
+		handler.GetCategorias(w, r)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, `{"data":[
+			{"id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","nombre":"Comida","empresa_id":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"},
+			{"id":"c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f","nombre":"Ventas","empresa_id":null}
+		]}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 500 en caso de error interno", func(t *testing.T) {
+		service := new(ServiceCategoriesMock)
+		handler := newTestHandler(service)
+
+		service.On("GetCategorias", mock.Anything, testEmpresaID).
+			Return(nil, assert.AnError).Once()
+
+		r := requestWithEmpresaContext(http.MethodGet, "/categories", "")
+
+		w := httptest.NewRecorder()
+		handler.GetCategorias(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		service.AssertExpectations(t)

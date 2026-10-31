@@ -34,12 +34,12 @@ func (m *StoreExpensesMock) GetAllExpensesOfEmpresa(ctx context.Context, empresa
 	return expenses, args.Error(1)
 }
 
-func (m *StoreExpensesMock) GetCategoryIDByName(ctx context.Context, nombre string, empresaID uuid.UUID) (uuid.UUID, error) {
-	args := m.Called(ctx, nombre, empresaID)
+func (m *StoreExpensesMock) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, categoryID, empresaID)
 
-	categoryID, _ := args.Get(0).(uuid.UUID)
+	existe, _ := args.Get(0).(bool)
 
-	return categoryID, args.Error(1)
+	return existe, args.Error(1)
 }
 
 // ServiceExpensesMock es un mock de la capa de servicio (ServiceExpenses) usado
@@ -97,9 +97,8 @@ func newTestPayloadExpense() ExpensePayload {
 	descripcion := "Compra insumos"
 	return ExpensePayload{
 		Monto:       1500,
-		Categoria:   &testCategoryName,
+		CategoryID:  &testCategoryID,
 		Descripcion: &descripcion,
-		Fecha:       testFecha,
 	}
 }
 

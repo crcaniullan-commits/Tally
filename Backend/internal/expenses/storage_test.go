@@ -11,7 +11,6 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
 	"github.com/crcaniullan-commits/Tally/internal/util"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -119,17 +118,19 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 			Monto:       1500,
 			CategoryID:  testCategoryID,
 			Descripcion: &descripcion,
-			Fecha:       testFecha,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testEmpresaID, int64(1500), testCategoryID, &descripcion, testFecha).
+			WithArgs(testEmpresaID, int64(1500), testCategoryID, &descripcion).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).AddRow(testExpenseID, testFecha, testFecha.Add(2*time.Hour)))
 
 		err := ms.store.AddExpense(context.Background(), expense)
 
 		require.NoError(t, err)
 		assert.Equal(t, testExpenseID, expense.ID)
+		assert.Equal(t, testFecha, expense.Fecha)
+		assert.Contains(t, ms.sql, "INSERT INTO expenses (empresa_id, monto, category_id, descripcion)",
+			"la base asigna fecha con DEFAULT CURRENT_DATE")
 	})
 
 	t.Run("propaga el error de la base", func(t *testing.T) {
@@ -142,7 +143,7 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testEmpresaID, int64(1500), testCategoryID, (*string)(nil), time.Time{}).
+			WithArgs(testEmpresaID, int64(1500), testCategoryID, (*string)(nil)).
 			WillReturnError(errDBBoom)
 
 		err := ms.store.AddExpense(context.Background(), expense)
@@ -178,76 +179,46 @@ func TestStoreExpense_GetAllExpensesOfEmpresa(t *testing.T) {
 	})
 }
 
-func TestStoreExpense_GetCategoryIDByName(t *testing.T) {
-	columnas := []string{"id", "nombre"}
-
-	t.Run("resuelve categoria por nombre incluyendo globales", func(t *testing.T) {
+func TestStoreExpense_CategoryExists(t *testing.T) {
+	t.Run("acepta una categoria global o de la empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID).
-			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, testCategoryName))
+			WithArgs(testCategoryID, testEmpresaID).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
-		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
+		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
 
 		require.NoError(t, err)
-		assert.Equal(t, testCategoryID, categoryID)
-		assert.Contains(t, ms.sql, "(empresa_id IS NULL OR empresa_id = $1)",
+		assert.True(t, existe)
+		assert.Contains(t, ms.sql, "FROM categories")
+		assert.Contains(t, ms.sql, "id = $1 AND (empresa_id IS NULL OR empresa_id = $2)",
 			"tiene que aceptar las globales y las propias de la empresa")
 	})
 
-	t.Run("ignora mayúsculas y acentos", func(t *testing.T) {
+	t.Run("devuelve false si la categoria no existe o es de otra empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID).
-			WillReturnRows(sqlmock.NewRows(columnas).AddRow(testCategoryID, "Àmígô"))
+			WithArgs(testCategoryID, testEmpresaID).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
-		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "amigo", testEmpresaID)
+		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
 
 		require.NoError(t, err)
-		assert.Equal(t, testCategoryID, categoryID)
-	})
-
-	t.Run("prefiere la categoría de la empresa sobre la global", func(t *testing.T) {
-		ms := newMockStore(t)
-
-		globalID := uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f")
-
-		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID).
-			WillReturnRows(sqlmock.NewRows(columnas).
-				AddRow(testCategoryID, "Comida").
-				AddRow(globalID, "comida"))
-
-		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), "COMIDA", testEmpresaID)
-
-		require.NoError(t, err)
-		assert.Equal(t, testCategoryID, categoryID)
-	})
-
-	t.Run("devuelve ErrNotFound si no existe", func(t *testing.T) {
-		ms := newMockStore(t)
-
-		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID).
-			WillReturnRows(sqlmock.NewRows(columnas).AddRow(uuid.New(), "Bebidas"))
-
-		categoryID, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
-
-		require.ErrorIs(t, err, util.ErrNotFound)
-		assert.Equal(t, uuid.Nil, categoryID)
+		assert.False(t, existe)
 	})
 
 	t.Run("propaga el error de la base", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID).
+			WithArgs(testCategoryID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		_, err := ms.store.GetCategoryIDByName(context.Background(), testCategoryName, testEmpresaID)
+		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
+		assert.False(t, existe)
 	})
 }

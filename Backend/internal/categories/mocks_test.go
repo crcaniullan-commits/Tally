@@ -35,6 +35,12 @@ func (m *CategoriaStoreMock) GetCategoriasPorEmpresa(ctx context.Context, empres
 	return categorias, args.Error(1)
 }
 
+func (m *CategoriaStoreMock) GetCategoriasVisibles(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	args := m.Called(ctx, empresaID)
+	categorias, _ := args.Get(0).([]model.Categorie)
+	return categorias, args.Error(1)
+}
+
 // ServiceCategoriesMock es un mock de la capa de servicio (ServiceCategories) usado
 // para probar CategoriesHandler de forma aislada.
 type ServiceCategoriesMock struct {
@@ -55,6 +61,12 @@ func (m *ServiceCategoriesMock) CambiarNombre(ctx context.Context, payload Categ
 func (m *ServiceCategoriesMock) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, categoriaID, empresaID)
 	return args.Error(0)
+}
+
+func (m *ServiceCategoriesMock) GetCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	args := m.Called(ctx, empresaID)
+	categorias, _ := args.Get(0).([]model.Categorie)
+	return categorias, args.Error(1)
 }
 
 var (

@@ -58,7 +58,7 @@ ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debit
 - `access_keys` — `code VARCHAR(50) UNIQUE NOT NULL`, `created_by → users` **nullable** con `ON DELETE SET NULL` (`000007`), `redeemed_by → users` (`SET NULL`), `redeemed_at`, `expires_at`, `revoked_at` y `revoked_by → users` (`000005`, `SET NULL`), `created_at`.
 - `categories` — `nombre VARCHAR(100) NOT NULL`; `empresa_id → empresas` **nullable** (`000007`, `ON DELETE CASCADE`), donde NULL = categoría global; índice `idx_categories_empresa_id`. `000008` siembra las globales `Ventas`, `Servicios` y `Pedidos`.
 - `incomes` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL` (`000003`), `payment_method`, `descripcion TEXT` nullable, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`, `category_id → categories` nullable (`000006`, `ON DELETE SET NULL`).
-- `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha`, `created_at`.
+- `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
 - `debtors` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `monto BIGINT NOT NULL`, `descripcion`, `pagado BOOLEAN NOT NULL DEFAULT false`, `fecha_limite DATE` nullable, `created_at`.
 - `goals` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `periodo` (`goal_period`), `monto_meta BIGINT NOT NULL`, `created_at`.
 
@@ -107,7 +107,7 @@ Convención, un archivo por capa dentro del paquete (tests en `package categorie
 
 **sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`incomes`, `expenses`, `categories`, `empresas`, `accessKeys`, `auth`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. No hay tests de integración contra Postgres real.
 
-`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Create` y en `CambiarNombre`, y `GetCategoriasPorEmpresa` en el store.
+`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Create` y en `CambiarNombre`, y `GetCategoriasPorEmpresa` / `GetCategoriasVisibles` en el store.
 
 ## Arquitectura
 
@@ -121,7 +121,7 @@ Cableado actual en `cmd/application/app.go`:
   - `/users` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
   - `/key` — `POST /` (emitir), `POST /AccessID/{keyID}` (reenviar), `POST /revoke/{code}` (revocar). Solo rol municipal.
   - `/empresas` — `POST /` y `GET /`.
-  - `/empresas/{empresaID}` — detrás de `EmpresaMiddleware.EmpresaOfUser`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `incomes`, `expenses` y `categories` (`POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`).
+  - `/empresas/{empresaID}` — detrás de `EmpresaMiddleware.EmpresaOfUser`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `incomes`, `expenses` y `categories` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`).
 
 **No montados:** `debtors` y `goals` (handlers vacíos, sin lógica). El resto de los módulos con lógica (`accessKeys`, `auth`, `categories`, `empresas`, `expenses`, `incomes`, `users`) está montado.
 
@@ -139,7 +139,7 @@ Respuestas siempre envueltas en `{"data": ...}` vía `util.JsonResponse`; errore
 
 Paginación: `pagination.IncomePaginationQuery` (compartida por `incomes` y `expenses`): `limit` default y máximo 30, `offset`, `since`/`until` en `AAAA-MM-DD` y `category_id` UUID. Un parámetro inválido devuelve error → 400.
 
-Categorías al crear ingresos/gastos: llegan por **nombre** (el usuario no conoce el UUID) y el store busca en categorías de la empresa o globales (`empresa_id IS NULL`), prefiriendo la de la empresa. La comparación usa `util.NormalizarNombre` (la misma regla que `CategorieService`): ignora mayúsculas, acentos y espacios.
+Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoryExists` que la categoría sea global (`empresa_id IS NULL`) o de la empresa; si no existe o es de otra empresa, el handler responde **400**. En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
 
 ## Swagger
 
