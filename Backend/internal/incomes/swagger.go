@@ -3,39 +3,42 @@ package incomes
 // AddIncome
 //
 //	@Summary		Registrar ingreso
-//	@Description	Registra un nuevo ingreso asociado al usuario autenticado. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria" es opcional (la columna es nullable) y viaja por nombre, no por UUID: el backend lo resuelve contra la tabla categories (globales o propias del usuario). Si el nombre no existe responde 400.
+//	@Description	Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.
 //	@Tags			Incomes
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body		IncomePayload		true	"payload"
-//	@Success		201		{object}	model.Income		"ingreso creado"
-//	@Failure		400		{object}	map[string]string	"payload del ingreso erroneo"
-//	@Failure		500		{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string				true	"ID de la empresa"
+//	@Param			payload		body		IncomePayload		true	"payload"
+//	@Success		201			{object}	model.Income		"ingreso creado"
+//	@Failure		400			{object}	map[string]string	"payload del ingreso erroneo"
+//	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/incomes	[post]
+//	@Router			/app/empresas/{empresaID}/incomes	[post]
 func AddIncome() {}
 
 // DeleteIncome
 //
 //	@Summary		Eliminar ingreso
-//	@Description	Elimina un ingreso por su ID, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.
+//	@Description	Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.
 //	@Tags			Incomes
 //	@Produce		json
+//	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			incomeID	path		string				true	"ID del ingreso"
 //	@Success		200			{object}	string				"ingreso eliminado"
 //	@Failure		400			{object}	map[string]string	"incomeID invalido"
 //	@Failure		404			{object}	map[string]string	"ingreso no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/incomes/{incomeID}	[delete]
+//	@Router			/app/empresas/{empresaID}/incomes/{incomeID}	[delete]
 func Delete() {}
 
 // GetIncomesOfUser
 //
-//	@Summary		Listar ingresos del usuario
-//	@Description	Devuelve una página de los ingresos del usuario autenticado, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).
+//	@Summary		Listar ingresos de la empresa
+//	@Description	Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).
 //	@Tags			Incomes
 //	@Produce		json
+//	@Param			empresaID	path		string						true	"ID de la empresa"
 //	@Param			limit		query		int							false	"cantidad maxima de ingresos a devolver (1-30, default 30)"
 //	@Param			offset		query		int							false	"ingresos a saltar, para pedir la pagina siguiente"
 //	@Param			since		query		string						false	"fecha minima del rango (AAAA-MM-DD)"
@@ -45,5 +48,5 @@ func Delete() {}
 //	@Failure		400			{object}	map[string]string			"parametros de paginacion erroneos"
 //	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/incomes	[get]
+//	@Router			/app/empresas/{empresaID}/incomes	[get]
 func GetIncomesOfUser() {}

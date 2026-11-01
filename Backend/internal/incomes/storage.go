@@ -3,7 +3,6 @@ package incomes
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/pagination"
@@ -21,7 +20,7 @@ func NewStorage(db *sql.DB) *StoreIncome {
 
 func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error {
 	query := `
-		INSERT INTO incomes (user_id, monto, payment_method, descripcion, category_id)
+		INSERT INTO incomes (empresa_id, monto, payment_method, descripcion, category_id)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, fecha, created_at
 	`
@@ -33,7 +32,7 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 	// viaja a la base como NULL, no como un UUID cero que no matchearía ninguna
 	// categoría.
 	err := s.db.QueryRowContext(ctx, query,
-		income.UserID,
+		income.EmpresaID,
 		income.Monto,
 		income.PaymentMethod,
 		income.Descripcion,
@@ -51,49 +50,40 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 	return nil
 }
 
-// GetCategoryIDByName resuelve el nombre de una categoría al id con el que se
-// referencia en incomes. Acepta las categorías globales (user_id IS NULL) y las
-// propias del usuario; ante un nombre repetido prefiere la del usuario, por eso
-// el NULLS LAST. Sin fila devuelve util.ErrNotFound para que el handler lo
-// traduzca a 400 y no a un 500.
-func (s *StoreIncome) GetCategoryIDByName(ctx context.Context, nombre string, userID uuid.UUID) (uuid.UUID, error) {
+// CategoryExists verifica que la categoría exista y sea visible para la
+// empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
+// no pasa el filtro y el service la trata como inexistente.
+func (s *StoreIncome) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	query := `
-		SELECT id
-		FROM categories
-		WHERE nombre = $1
-			  AND (user_id IS NULL OR user_id = $2)
-		ORDER BY user_id NULLS LAST
-		LIMIT 1
+		SELECT EXISTS (
+			SELECT 1
+			FROM categories
+			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2)
+		)
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	var categoryID uuid.UUID
+	var existe bool
 
-	err := s.db.QueryRowContext(ctx, query, nombre, userID).Scan(&categoryID)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil, util.ErrNotFound
-		}
-
-		return uuid.Nil, err
+	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID).Scan(&existe); err != nil {
+		return false, err
 	}
 
-	return categoryID, nil
+	return existe, nil
 }
 
-func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, userID uuid.UUID) error {
+func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM incomes
-		WHERE id = $1 and user_id = $2
+		WHERE id = $1 and empresa_id = $2
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, incomeID, userID)
+	res, err := s.db.ExecContext(ctx, query, incomeID, empresaID)
 
 	if err != nil {
 		return err
@@ -112,7 +102,7 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, user
 	return nil
 }
 
-func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+func (s *StoreIncome) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
 	// El store es la última línea de defensa de la paginación: un
 	// IncomePaginationQuery{} (valor cero) pondría LIMIT 0 y devolvería siempre
 	// lista vacía, y un offset negativo hace fallar la query en Postgres.
@@ -130,9 +120,9 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 	// category_id va último en la lista y en el Scan a propósito: mantenerlo al
 	// final deja intactas las posiciones de las otras 7 columnas.
 	query := `
-		SELECT id, user_id, monto, payment_method, descripcion, fecha, created_at, category_id
+		SELECT id, empresa_id, monto, payment_method, descripcion, fecha, created_at, category_id
 		FROM incomes
-		WHERE user_id = $1
+		WHERE empresa_id = $1
 			  AND ($4 = '' OR fecha >= $4::date)
 			  AND ($5 = '' OR fecha <= $5::date)
 			  AND ($6 = '' OR category_id = $6::uuid)
@@ -144,7 +134,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 	defer cancel()
 
 	rows, err := s.db.QueryContext(ctx, query,
-		userID,
+		empresaID,
 		fq.Limit,
 		fq.Offset,
 		fq.Since,
@@ -164,7 +154,7 @@ func (s *StoreIncome) GetAllIncomesOfUser(ctx context.Context, userID uuid.UUID,
 		var income model.Income
 		err := rows.Scan(
 			&income.ID,
-			&income.UserID,
+			&income.EmpresaID,
 			&income.Monto,
 			&income.PaymentMethod,
 			&income.Descripcion,
