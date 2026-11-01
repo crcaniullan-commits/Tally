@@ -28,27 +28,19 @@ export default function Index() {
   const [modal, setModal] = useState<ModalAbierto>(null);
   const { iniciarSesion } = useSesion();
   const [datosRegistro, setDatosRegistro] = useState<DatosRegistro | undefined>();
-    const [tokenRegistro, setTokenRegistro] = useState<string | undefined>();
 
-  // Paso 2 del registro: crea la cuenta (solo la primera vez) y canjea la clave municipal
+  // Paso 2 del registro: crea la cuenta y canjea la clave municipal en una sola llamada
   async function activarCuenta(clave: string) {
     if (!datosRegistro) return;
-
-    let token = tokenRegistro;
-    if (!token) {
-      token = await authService.registrar(datosRegistro);
-      setTokenRegistro(token); // Si la clave falla, al reintentar no se vuelve a crear la cuenta
-    }
-
-    await authService.canjearClave(clave, token);
+    // Una sola llamada: si la clave no es válida, el backend no crea la cuenta
+    const token = await authService.registrar(datosRegistro, clave);
     cerrarModal();
     await iniciarSesion(token);
-    }
+  }
 
   function cerrarModal() {
     setModal(null);
     setDatosRegistro(undefined);
-    setTokenRegistro(undefined);
   }
     return (
     <View style={{ flex: 1, backgroundColor: colors.fondo }}>

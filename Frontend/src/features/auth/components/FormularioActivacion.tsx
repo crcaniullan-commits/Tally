@@ -8,7 +8,7 @@
     import { fonts } from '../../../shared/theme/fonts';
     import { traducirError } from '../errores';
 
-    const LARGO_CLAVE = 26;
+    const LARGO_CLAVE = 6;
 
     type FormularioActivacionProps = {
     onActivar: (clave: string) => Promise<void>;

@@ -1,8 +1,8 @@
     import { peticion } from '../../shared/api/cliente';
     import { DatosRegistro } from './components/FormularioRegistro';
 
-    // POST /v1/auth → crea la cuenta y devuelve el token de sesión
-    export function registrar(datos: DatosRegistro): Promise<string> {
+    // POST /v1/auth → crea la cuenta, canjea la clave municipal y devuelve el token de sesión (todo en uno)
+    export function registrar(datos: DatosRegistro, clave: string): Promise<string> {
     return peticion<string>('/auth', {
         metodo: 'POST',
         cuerpo: {
@@ -10,6 +10,7 @@
         password: datos.contrasena,
         nombre: datos.nombre.trim(),
         rut: datos.rut.replace(/\./g, '').trim().toUpperCase(), // Sin puntos: el backend acepta máximo 10 caracteres
+        code: clave,
         // Pendiente backend: "nombre del emprendimiento" (el backend rechaza campos que no conoce)
         },
     });

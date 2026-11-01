@@ -3,11 +3,11 @@
 
 const datos = {
     nombre: 'Juan Pérez',
-    rut: '11.111.111-1',
+    rut: '12.345.678-5',
     emprendimiento: 'Dulces Juanita',
-    correo: 'juan.perez@ejemplo.cl',
+    correo: 'thiare@prueba.cl',
     contrasena: 'Tally2026',
-    claveActivacion: 'JBSWY3DPEHPK3PXPJBSWY3DPEH',
+    claveActivacion: 'RE77IU', // Cada clave sirve una sola vez: se genera en Swagger y se pega a mano
 };
 
 const vacios = {
