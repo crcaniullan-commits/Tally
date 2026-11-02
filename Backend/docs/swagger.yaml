@@ -20,7 +20,8 @@ definitions:
         minLength: 8
         type: string
       rut:
-        maxLength: 10
+        maxLength: 12
+        minLength: 9
         type: string
     required:
     - email
@@ -65,10 +66,38 @@ definitions:
     - email
     - password
     type: object
+  categories.CategoriaPayload:
+    properties:
+      nombre:
+        maxLength: 30
+        type: string
+    required:
+    - nombre
+    type: object
+  empresas.empresaPayload:
+    properties:
+      nombre_empresa:
+        maxLength: 30
+        type: string
+    required:
+    - nombre_empresa
+    type: object
+  expenses.ExpensePayload:
+    properties:
+      category_id:
+        type: string
+      descripcion:
+        maxLength: 100
+        type: string
+      monto:
+        type: integer
+    required:
+    - category_id
+    - monto
+    type: object
   incomes.IncomePayload:
     properties:
-      categoria:
-        maxLength: 100
+      category_id:
         type: string
       descripcion:
         maxLength: 100
@@ -108,6 +137,41 @@ definitions:
       revoked_by:
         type: string
     type: object
+  model.Categorie:
+    properties:
+      empresa_id:
+        type: string
+      id:
+        type: string
+      nombre:
+        type: string
+    type: object
+  model.Empresa:
+    properties:
+      id:
+        type: string
+      nombre_empresa:
+        type: string
+      user_id:
+        type: string
+    type: object
+  model.Expense:
+    properties:
+      category_id:
+        type: string
+      created_at:
+        type: string
+      descripcion:
+        type: string
+      empresa_id:
+        type: string
+      fecha:
+        type: string
+      id:
+        type: string
+      monto:
+        type: integer
+    type: object
   model.Income:
     properties:
       category_id:
@@ -115,6 +179,8 @@ definitions:
       created_at:
         type: string
       descripcion:
+        type: string
+      empresa_id:
         type: string
       fecha:
         type: string
@@ -124,8 +190,6 @@ definitions:
         type: integer
       payment_method:
         $ref: '#/definitions/model.PaymentMethod'
-      user_id:
-        type: string
     type: object
   model.PaymentMethod:
     enum:
@@ -197,15 +261,490 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Tally
 paths:
-  /app/incomes:
+  /app/empresas:
     get:
-      description: 'Devuelve una página de los ingresos del usuario autenticado, ordenados
+      description: 'Devuelve todas las empresas asociadas al usuario autenticado.
+        La respuesta viene envuelta en {"data": ...}.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lista de empresas
+          schema:
+            items:
+              $ref: '#/definitions/model.Empresa'
+            type: array
+        "404":
+          description: empresas no encontradas
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar empresas
+      tags:
+      - Empresas
+    post:
+      consumes:
+      - application/json
+      description: 'Crea una nueva empresa asociada al usuario autenticado. La respuesta
+        viene envuelta en {"data": ...} con la empresa creada.'
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/empresas.empresaPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: empresa creada
+          schema:
+            $ref: '#/definitions/model.Empresa'
+        "400":
+          description: payload de la empresa erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Crear empresa
+      tags:
+      - Empresas
+  /app/empresas/{empresaID}:
+    delete:
+      description: 'Elimina una empresa, siempre que pertenezca al usuario autenticado.
+        La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: empresa borrada
+          schema:
+            type: string
+        "404":
+          description: empresa no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar empresa
+      tags:
+      - Empresas
+  /app/empresas/{empresaID}/{nombre}:
+    patch:
+      description: 'Cambia el nombre de una empresa, siempre que pertenezca al usuario
+        autenticado. La respuesta viene envuelta en {"data": ...} con el mensaje de
+        confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: Nuevo nombre de la empresa
+        in: path
+        name: nombre
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: nombre actualizado
+          schema:
+            type: string
+        "400":
+          description: ruta debe incluir el nombre de la empresa
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Cambiar nombre de empresa
+      tags:
+      - Empresas
+  /app/empresas/{empresaID}/categories:
+    get:
+      description: 'Devuelve las categorías de la empresa autenticada y las globales.
+        Las globales se distinguen porque "empresa_id" viene null. La respuesta viene
+        envuelta en {"data": [...]} con las categorías propias primero, ordenadas
+        por nombre.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: categorías de la empresa y globales
+          schema:
+            items:
+              $ref: '#/definitions/model.Categorie'
+            type: array
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar categorías
+      tags:
+      - Categories
+    post:
+      consumes:
+      - application/json
+      description: 'Crea una nueva categoría asociada a la empresa autenticada. La
+        respuesta viene envuelta en {"data": ...} con la categoría creada.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/categories.CategoriaPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: categoría creada
+          schema:
+            $ref: '#/definitions/model.Categorie'
+        "400":
+          description: payload de la categoría erroneo o la categoría ya existe
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Crear categoría
+      tags:
+      - Categories
+  /app/empresas/{empresaID}/categories/{categoria}:
+    delete:
+      description: 'Elimina una categoría, siempre que pertenezca a la empresa autenticada.
+        La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la categoría
+        in: path
+        name: categoria
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: categoría eliminada
+          schema:
+            type: string
+        "400":
+          description: categoria invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: categoría no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar categoría
+      tags:
+      - Categories
+  /app/empresas/{empresaID}/categories/{categoriaID}:
+    patch:
+      description: 'Cambia el nombre de una categoría, siempre que pertenezca a la
+        empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje
+        de confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la categoría
+        in: path
+        name: categoriaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/categories.CategoriaPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: nombre cambiado
+          schema:
+            type: string
+        "400":
+          description: categoriaID invalido o payload erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: categoría no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Cambiar nombre de categoría
+      tags:
+      - Categories
+  /app/empresas/{empresaID}/expenses:
+    get:
+      description: 'Devuelve una página de los gastos de la empresa autenticada, ordenados
         del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}.
         Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota
         con since y until en formato AAAA-MM-DD, y por categoría con category_id (el
         UUID de la categoría, no su nombre). Un parámetro mal formado responde 400.
         Los montos son enteros en pesos chilenos (CLP, sin decimales).'
       parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: cantidad maxima de gastos a devolver (1-30, default 30)
+        in: query
+        name: limit
+        type: integer
+      - description: gastos a saltar, para pedir la pagina siguiente
+        in: query
+        name: offset
+        type: integer
+      - description: fecha minima del rango (AAAA-MM-DD)
+        in: query
+        name: since
+        type: string
+      - description: fecha maxima del rango (AAAA-MM-DD)
+        in: query
+        name: until
+        type: string
+      - description: UUID de la categoria por la que filtrar
+        in: query
+        name: category_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pagina de gastos
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Expense'
+              type: array
+            type: object
+        "400":
+          description: parametros de paginacion erroneos
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar gastos de la empresa
+      tags:
+      - Expenses
+    post:
+      consumes:
+      - application/json
+      description: 'Registra un nuevo gasto asociado a la empresa autenticada. La
+        respuesta viene envuelta en {"data": ...} con el gasto creado, incluyendo
+        el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
+        (CLP, sin decimales). "category_id" es obligatorio y debe ser el UUID de una
+        categoría global o de la empresa; si no existe o pertenece a otra empresa
+        responde 400. El payload no acepta "fecha": la asigna la base de datos con
+        CURRENT_DATE.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/expenses.ExpensePayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: gasto creado
+          schema:
+            $ref: '#/definitions/model.Expense'
+        "400":
+          description: payload del gasto erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar gasto
+      tags:
+      - Expenses
+  /app/empresas/{empresaID}/expenses/{expenseID}:
+    delete:
+      description: 'Elimina un gasto por su ID, siempre que pertenezca a la empresa
+        autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de
+        confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: expenseID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: gasto eliminado
+          schema:
+            type: string
+        "400":
+          description: expenseID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: gasto no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar gasto
+      tags:
+      - Expenses
+  /app/empresas/{empresaID}/incomes:
+    get:
+      description: 'Devuelve una página de los ingresos de la empresa autenticada,
+        ordenados del más reciente al más antiguo. La respuesta viene envuelta en
+        {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset;
+        el rango se acota con since y until en formato AAAA-MM-DD, y por categoría
+        con category_id (el UUID de la categoría, no su nombre). Un parámetro mal
+        formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
       - description: cantidad maxima de ingresos a devolver (1-30, default 30)
         in: query
         name: limit
@@ -251,19 +790,24 @@ paths:
             type: object
       security:
       - ApiKeyAuth: []
-      summary: Listar ingresos del usuario
+      summary: Listar ingresos de la empresa
       tags:
       - Incomes
     post:
       consumes:
       - application/json
-      description: 'Registra un nuevo ingreso asociado al usuario autenticado. La
+      description: 'Registra un nuevo ingreso asociado a la empresa autenticada. La
         respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales). "categoria" es opcional (la columna es nullable) y viaja
-        por nombre, no por UUID: el backend lo resuelve contra la tabla categories
-        (globales o propias del usuario). Si el nombre no existe responde 400.'
+        (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y
+        debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece
+        a otra empresa responde 400.'
       parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
       - description: payload
         in: body
         name: payload
@@ -294,12 +838,17 @@ paths:
       summary: Registrar ingreso
       tags:
       - Incomes
-  /app/incomes/{incomeID}:
+  /app/empresas/{empresaID}/incomes/{incomeID}:
     delete:
-      description: 'Elimina un ingreso por su ID, siempre que pertenezca al usuario
-        autenticado. La respuesta viene envuelta en {"data": ...} con el mensaje de
+      description: 'Elimina un ingreso por su ID, siempre que pertenezca a la empresa
+        autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de
         confirmación.'
       parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
       - description: ID del ingreso
         in: path
         name: incomeID

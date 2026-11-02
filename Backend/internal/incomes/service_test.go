@@ -17,18 +17,18 @@ import (
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
 func TestIncomeService_AddIncome(t *testing.T) {
-	t.Run("mapea el payload a model.Income con el userID del usuario", func(t *testing.T) {
+	t.Run("mapea el payload a model.Income con el ID de la empresa", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
 		payload := newTestPayload()
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(testCategoryID, nil).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(true, nil).Once()
 
 		store.On("AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
-				return i.UserID == testUserID &&
+				return i.EmpresaID == testEmpresaID &&
 					i.Monto == payload.Monto &&
 					i.PaymentMethod == util.PaymentMethodDebito &&
 					i.Descripcion != nil && *i.Descripcion == "Venta de almuerzo" &&
@@ -36,29 +36,29 @@ func TestIncomeService_AddIncome(t *testing.T) {
 			}),
 		).Return(nil).Once()
 
-		_, err := service.AddIncome(context.Background(), payload, testUserID)
+		_, err := service.AddIncome(context.Background(), payload, testEmpresaID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
 		store.AssertNumberOfCalls(t, "AddIncome", 1)
 	})
 
-	t.Run("resuelve el nombre de la categoria al id antes de persistir", func(t *testing.T) {
+	t.Run("valida la categoria antes de persistir", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(testCategoryID, nil).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(true, nil).Once()
 		store.On("AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
 				return i.CategoryID != nil && *i.CategoryID == testCategoryID
 			}),
 		).Return(nil).Once()
 
-		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.NoError(t, err)
-		store.AssertCalled(t, "GetCategoryIDByName", mock.Anything, testCategoryName, testUserID)
+		store.AssertCalled(t, "CategoryExists", mock.Anything, testCategoryID, testEmpresaID)
 		store.AssertExpectations(t)
 	})
 
@@ -72,7 +72,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 			mock.MatchedBy(func(i *model.Income) bool { return i.Descripcion == nil }),
 		).Return(nil).Once()
 
-		_, err := service.AddIncome(context.Background(), payload, testUserID)
+		_, err := service.AddIncome(context.Background(), payload, testEmpresaID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
@@ -91,10 +91,10 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		).Return(nil).Once()
 
 		_, err := service.AddIncome(context.Background(),
-			IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}, testUserID)
+			IncomePayload{Monto: 300, PaymentMethod: util.PaymentMethodEfectivo}, testEmpresaID)
 
 		require.NoError(t, err)
-		store.AssertNotCalled(t, "GetCategoryIDByName", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "CategoryExists", mock.Anything, mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -102,10 +102,27 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(uuid.Nil, util.ErrNotFound).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(false, nil).Once()
 
-		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
+
+		require.ErrorIs(t, err, util.ErrNotFound)
+		store.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("rechaza una categoria de otra empresa", func(t *testing.T) {
+		// El store responde false porque la categoría existe pero su
+		// empresa_id no coincide. El service no debe distinguirla de una
+		// inexistente: ambas son 400.
+		store := new(StoreIncomesMock)
+		service := NewIncomeService(store)
+
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(false, nil).Once()
+
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 		store.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything)
@@ -116,10 +133,10 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(uuid.Nil, errStoreBoom).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(false, errStoreBoom).Once()
 
-		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything)
@@ -130,15 +147,15 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(testCategoryID, nil).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(true, nil).Once()
 		store.On("AddIncome", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
 				return i.ID == uuid.Nil && i.Fecha.IsZero() && i.CreatedAt.IsZero()
 			}),
 		).Return(nil).Once()
 
-		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
@@ -148,12 +165,12 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetCategoryIDByName", mock.Anything, testCategoryName, testUserID).
-			Return(testCategoryID, nil).Once()
+		store.On("CategoryExists", mock.Anything, testCategoryID, testEmpresaID).
+			Return(true, nil).Once()
 		store.On("AddIncome", mock.Anything, mock.Anything).
 			Return(errStoreBoom).Once()
 
-		_, err := service.AddIncome(context.Background(), newTestPayload(), testUserID)
+		_, err := service.AddIncome(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
@@ -165,22 +182,22 @@ func TestIncomeService_DeleteIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("DeleteIncome", mock.Anything, testIncomeID, testUserID).Return(nil).Once()
+		store.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(nil).Once()
 
-		err := service.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := service.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
-		store.AssertCalled(t, "DeleteIncome", mock.Anything, testIncomeID, testUserID)
+		store.AssertCalled(t, "DeleteIncome", mock.Anything, testIncomeID, testEmpresaID)
 	})
 
 	t.Run("propaga util.ErrNotFound cuando el ingreso no existe", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("DeleteIncome", mock.Anything, testIncomeID, testUserID).Return(util.ErrNotFound).Once()
+		store.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(util.ErrNotFound).Once()
 
-		err := service.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := service.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.ErrorIs(t, err, util.ErrNotFound)
 		store.AssertExpectations(t)
@@ -190,25 +207,25 @@ func TestIncomeService_DeleteIncome(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("DeleteIncome", mock.Anything, testIncomeID, testUserID).Return(errStoreBoom).Once()
+		store.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(errStoreBoom).Once()
 
-		err := service.DeleteIncome(context.Background(), testIncomeID, testUserID)
+		err := service.DeleteIncome(context.Background(), testIncomeID, testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
 	})
 }
 
-func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
-	t.Run("devuelve la lista de ingresos del usuario", func(t *testing.T) {
+func TestIncomeService_GetAllIncomesOfEmpresa(t *testing.T) {
+	t.Run("devuelve la lista de ingresos de la empresa", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
 		esperados := []model.Income{newTestIncome()}
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, newTestFilterQuery()).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
+		incomes, err := service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, newTestFilterQuery())
 
 		require.NoError(t, err)
 		assert.Equal(t, esperados, incomes)
@@ -217,7 +234,7 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 
 	t.Run("reenvía la paginación al store sin tocarla", func(t *testing.T) {
 		// El service es un pasamanos: si normalizara o reinterpretara la
-		// paginación, el usuario vería páginas distintas de las que pidió.
+		// paginación, la empresa vería páginas distintas de las que pidió.
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
@@ -225,27 +242,27 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 			filterQueryWithRango(),
 			filterQueryWithCategory(),
 		} {
-			store.On("GetAllIncomesOfUser", mock.Anything, testUserID, fq).
+			store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, fq).
 				Return([]model.Income{}, nil).Once()
 		}
 
-		_, err := service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithRango())
+		_, err := service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, filterQueryWithRango())
 		require.NoError(t, err)
 
-		_, err = service.GetAllIncomesOfUser(context.Background(), testUserID, filterQueryWithCategory())
+		_, err = service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, filterQueryWithCategory())
 		require.NoError(t, err)
 
 		store.AssertExpectations(t)
 	})
 
-	t.Run("devuelve slice nil sin error cuando el usuario no tiene ingresos", func(t *testing.T) {
+	t.Run("devuelve slice nil sin error cuando la empresa no tiene ingresos", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return(nil, nil).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
+		incomes, err := service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, newTestFilterQuery())
 
 		require.NoError(t, err)
 		assert.Nil(t, incomes, "sin ingresos debe quedar nil para que el JSON sea null")
@@ -256,10 +273,10 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return(nil, errStoreBoom).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
+		incomes, err := service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, newTestFilterQuery())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, incomes)
@@ -270,28 +287,28 @@ func TestIncomeService_GetAllIncomesOfUser(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
-		store.On("GetAllIncomesOfUser", mock.Anything, testUserID, mock.Anything).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return([]model.Income{newTestIncome()}, errStoreBoom).Once()
 
-		incomes, err := service.GetAllIncomesOfUser(context.Background(), testUserID, newTestFilterQuery())
+		incomes, err := service.GetAllIncomesOfEmpresa(context.Background(), testEmpresaID, newTestFilterQuery())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, incomes, "si hay error el servicio debe devolver nil")
 		store.AssertExpectations(t)
 	})
 
-	t.Run("no filtra ingresos de otro usuario: consulta por el userID recibido", func(t *testing.T) {
+	t.Run("no filtra ingresos de otra empresa: consulta por el ID recibido", func(t *testing.T) {
 		store := new(StoreIncomesMock)
 		service := NewIncomeService(store)
 
 		otroUsuario := uuid.New()
-		store.On("GetAllIncomesOfUser", mock.Anything, otroUsuario, mock.Anything).
+		store.On("GetAllIncomesOfEmpresa", mock.Anything, otroUsuario, mock.Anything).
 			Return(nil, nil).Once()
 
-		_, err := service.GetAllIncomesOfUser(context.Background(), otroUsuario, newTestFilterQuery())
+		_, err := service.GetAllIncomesOfEmpresa(context.Background(), otroUsuario, newTestFilterQuery())
 
 		require.NoError(t, err)
-		store.AssertCalled(t, "GetAllIncomesOfUser", mock.Anything, otroUsuario, mock.Anything)
-		store.AssertNumberOfCalls(t, "GetAllIncomesOfUser", 1)
+		store.AssertCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, otroUsuario, mock.Anything)
+		store.AssertNumberOfCalls(t, "GetAllIncomesOfEmpresa", 1)
 	})
 }
