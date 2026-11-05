@@ -43,12 +43,7 @@ type IncomePayload struct {
  */
 func (h *IncomesHandler) AddIncome(w http.ResponseWriter, r *http.Request) {
 	var payload IncomePayload
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}

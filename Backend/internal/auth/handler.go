@@ -45,12 +45,7 @@ type CreateMunicipalPayload struct {
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var payload CreateUserPayload
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
@@ -88,12 +83,7 @@ type LoginUserPayload struct {
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var payload LoginUserPayload
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
@@ -123,12 +113,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
 	var payload CreateMunicipalPayload
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}

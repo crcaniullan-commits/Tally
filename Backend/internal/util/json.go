@@ -29,6 +29,17 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, data any) error {
 	return decoder.Decode(data)
 }
 
+// ReadJSONAndValidate lee el body JSON en dst y valida sus tags `validate`.
+// Devuelve el error de decodificación (incluido un campo desconocido, por
+// DisallowUnknownFields) o el de validación; el handler lo traduce a 400.
+func ReadJSONAndValidate(w http.ResponseWriter, r *http.Request, dst any) error {
+	if err := ReadJSON(w, r, dst); err != nil {
+		return err
+	}
+
+	return Validate.Struct(dst)
+}
+
 func WriteJSONError(w http.ResponseWriter, status int, message string) error {
 	type envelope struct {
 		Error string `json:"error"`

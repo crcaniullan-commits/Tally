@@ -648,6 +648,319 @@ const docTemplate = `{
                 }
             }
         },
+        "/app/empresas/{empresaID}/goal": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve todos los objetivos de la empresa autenticada. La respuesta viene envuelta en {\"data\": [...]}. Un objetivo no tiene estado: su progreso se calcula contra los ingresos del periodo actual y se reinicia con cada dia, semana o mes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Goals"
+                ],
+                "summary": "Listar objetivos",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "objetivos de la empresa",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Goal"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea un objetivo asociado a la empresa autenticada. \"periodo\" acepta dia, semana o mes. \"monto_meta\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"data\": ...} con el objetivo creado.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Goals"
+                ],
+                "summary": "Crear objetivo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/goals.CreateGoalPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "objetivo creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.Goal"
+                        }
+                    },
+                    "400": {
+                        "description": "payload invalido o falta la empresa en el contexto",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/goal/{goalID}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve un objetivo de la empresa autenticada por su ID. La respuesta viene envuelta en {\"data\": ...}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Goals"
+                ],
+                "summary": "Obtener objetivo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID del objetivo",
+                        "name": "goalID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "objetivo encontrado",
+                        "schema": {
+                            "$ref": "#/definitions/model.Goal"
+                        }
+                    },
+                    "400": {
+                        "description": "goalID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "objetivo no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina un objetivo de la empresa autenticada por su ID. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmacion.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Goals"
+                ],
+                "summary": "Eliminar objetivo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID del objetivo",
+                        "name": "goalID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "objetivo eliminado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "goalID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "objetivo no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/goal/{goalID}/state": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Suma los ingresos de la empresa en el periodo actual (dia, semana desde el lunes, o mes) y calcula el avance contra \"monto_meta\". La respuesta viene envuelta en {\"data\": ...} con monto_actual, porcentaje_actual, monto_pendiente y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Goals"
+                ],
+                "summary": "Estado del objetivo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID del objetivo",
+                        "name": "goalID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "estado del objetivo",
+                        "schema": {
+                            "$ref": "#/definitions/goals.GoalState"
+                        }
+                    },
+                    "400": {
+                        "description": "goalID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "objetivo no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/empresas/{empresaID}/incomes": {
             "get": {
                 "security": [
@@ -1576,6 +1889,52 @@ const docTemplate = `{
                 }
             }
         },
+        "goals.CreateGoalPayload": {
+            "type": "object",
+            "required": [
+                "monto_meta",
+                "nombre",
+                "periodo"
+            ],
+            "properties": {
+                "monto_meta": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "periodo": {
+                    "enum": [
+                        "dia",
+                        "semana",
+                        "mes"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/util.GoalPeriod"
+                        }
+                    ]
+                }
+            }
+        },
+        "goals.GoalState": {
+            "type": "object",
+            "properties": {
+                "monto_actual": {
+                    "type": "integer"
+                },
+                "monto_pendiente": {
+                    "type": "integer"
+                },
+                "porcentaje_actual": {
+                    "type": "number"
+                },
+                "porcentaje_faltante": {
+                    "type": "number"
+                }
+            }
+        },
         "incomes.IncomePayload": {
             "type": "object",
             "required": [
@@ -1694,6 +2053,42 @@ const docTemplate = `{
                 }
             }
         },
+        "model.Goal": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "empresa_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto_meta": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string"
+                },
+                "periodo": {
+                    "$ref": "#/definitions/model.GoalPeriod"
+                }
+            }
+        },
+        "model.GoalPeriod": {
+            "type": "string",
+            "enum": [
+                "dia",
+                "semana",
+                "mes"
+            ],
+            "x-enum-varnames": [
+                "GoalPeriodDia",
+                "GoalPeriodSemana",
+                "GoalPeriodMes"
+            ]
+        },
         "model.Income": {
             "type": "object",
             "properties": {
@@ -1804,6 +2199,19 @@ const docTemplate = `{
                     "minLength": 8
                 }
             }
+        },
+        "util.GoalPeriod": {
+            "type": "string",
+            "enum": [
+                "dia",
+                "semana",
+                "mes"
+            ],
+            "x-enum-varnames": [
+                "GoalPeriodDia",
+                "GoalPeriodSemana",
+                "GoalPeriodMes"
+            ]
         }
     },
     "securityDefinitions": {

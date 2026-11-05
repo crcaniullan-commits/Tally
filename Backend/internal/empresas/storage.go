@@ -63,6 +63,8 @@ func (s *StoreEmpresa) GetEmpresas(ctx context.Context, userID uuid.UUID) ([]mod
 		return nil, err
 	}
 
+	defer row.Close()
+
 	var empresas []model.Empresa
 
 	for row.Next() {
@@ -74,8 +76,8 @@ func (s *StoreEmpresa) GetEmpresas(ctx context.Context, userID uuid.UUID) ([]mod
 		empresas = append(empresas, empresa)
 	}
 
-	if errors.Is(row.Err(), sql.ErrNoRows) {
-		return nil, util.ErrNotFound
+	if err := row.Err(); err != nil {
+		return nil, err
 	}
 
 	return empresas, nil

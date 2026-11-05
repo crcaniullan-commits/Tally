@@ -95,6 +95,36 @@ definitions:
     - category_id
     - monto
     type: object
+  goals.CreateGoalPayload:
+    properties:
+      monto_meta:
+        type: integer
+      nombre:
+        maxLength: 30
+        type: string
+      periodo:
+        allOf:
+        - $ref: '#/definitions/util.GoalPeriod'
+        enum:
+        - dia
+        - semana
+        - mes
+    required:
+    - monto_meta
+    - nombre
+    - periodo
+    type: object
+  goals.GoalState:
+    properties:
+      monto_actual:
+        type: integer
+      monto_pendiente:
+        type: integer
+      porcentaje_actual:
+        type: number
+      porcentaje_faltante:
+        type: number
+    type: object
   incomes.IncomePayload:
     properties:
       category_id:
@@ -172,6 +202,31 @@ definitions:
       monto:
         type: integer
     type: object
+  model.Goal:
+    properties:
+      created_at:
+        type: string
+      empresa_id:
+        type: string
+      id:
+        type: string
+      monto_meta:
+        type: integer
+      nombre:
+        type: string
+      periodo:
+        $ref: '#/definitions/model.GoalPeriod'
+    type: object
+  model.GoalPeriod:
+    enum:
+    - dia
+    - semana
+    - mes
+    type: string
+    x-enum-varnames:
+    - GoalPeriodDia
+    - GoalPeriodSemana
+    - GoalPeriodMes
   model.Income:
     properties:
       category_id:
@@ -249,6 +304,16 @@ definitions:
         minLength: 8
         type: string
     type: object
+  util.GoalPeriod:
+    enum:
+    - dia
+    - semana
+    - mes
+    type: string
+    x-enum-varnames:
+    - GoalPeriodDia
+    - GoalPeriodSemana
+    - GoalPeriodMes
 info:
   contact:
     email: support@swagger.io
@@ -731,6 +796,220 @@ paths:
       summary: Eliminar gasto
       tags:
       - Expenses
+  /app/empresas/{empresaID}/goal:
+    get:
+      description: 'Devuelve todos los objetivos de la empresa autenticada. La respuesta
+        viene envuelta en {"data": [...]}. Un objetivo no tiene estado: su progreso
+        se calcula contra los ingresos del periodo actual y se reinicia con cada dia,
+        semana o mes.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: objetivos de la empresa
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Goal'
+              type: array
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar objetivos
+      tags:
+      - Goals
+    post:
+      consumes:
+      - application/json
+      description: 'Crea un objetivo asociado a la empresa autenticada. "periodo"
+        acepta dia, semana o mes. "monto_meta" es un entero en pesos chilenos (CLP,
+        sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"data":
+        ...} con el objetivo creado.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/goals.CreateGoalPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: objetivo creado
+          schema:
+            $ref: '#/definitions/model.Goal'
+        "400":
+          description: payload invalido o falta la empresa en el contexto
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Crear objetivo
+      tags:
+      - Goals
+  /app/empresas/{empresaID}/goal/{goalID}:
+    delete:
+      description: 'Elimina un objetivo de la empresa autenticada por su ID. La respuesta
+        viene envuelta en {"data": ...} con el mensaje de confirmacion.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del objetivo
+        in: path
+        name: goalID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: objetivo eliminado
+          schema:
+            type: string
+        "400":
+          description: goalID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: objetivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar objetivo
+      tags:
+      - Goals
+    get:
+      description: 'Devuelve un objetivo de la empresa autenticada por su ID. La respuesta
+        viene envuelta en {"data": ...}.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del objetivo
+        in: path
+        name: goalID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: objetivo encontrado
+          schema:
+            $ref: '#/definitions/model.Goal'
+        "400":
+          description: goalID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: objetivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Obtener objetivo
+      tags:
+      - Goals
+  /app/empresas/{empresaID}/goal/{goalID}/state:
+    get:
+      description: 'Suma los ingresos de la empresa en el periodo actual (dia, semana
+        desde el lunes, o mes) y calcula el avance contra "monto_meta". La respuesta
+        viene envuelta en {"data": ...} con monto_actual, porcentaje_actual, monto_pendiente
+        y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin
+        decimales).'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del objetivo
+        in: path
+        name: goalID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: estado del objetivo
+          schema:
+            $ref: '#/definitions/goals.GoalState'
+        "400":
+          description: goalID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: objetivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Estado del objetivo
+      tags:
+      - Goals
   /app/empresas/{empresaID}/incomes:
     get:
       description: 'Devuelve una página de los ingresos de la empresa autenticada,

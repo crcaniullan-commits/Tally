@@ -34,12 +34,7 @@ type EmailPayload struct {
 func (h *AccessKeysHandler) IssueForUser(w http.ResponseWriter, r *http.Request) {
 	var payload EmailPayload
 
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
@@ -69,12 +64,7 @@ func (h *AccessKeysHandler) Resend(w http.ResponseWriter, r *http.Request) {
 
 	var payload EmailPayload
 
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
