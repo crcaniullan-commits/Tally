@@ -13,6 +13,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	"github.com/crcaniullan-commits/Tally/internal/categories"
 	"github.com/crcaniullan-commits/Tally/internal/dbtx"
+	"github.com/crcaniullan-commits/Tally/internal/debtors"
 	"github.com/crcaniullan-commits/Tally/internal/email"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/env"
@@ -135,6 +136,7 @@ func (app *Application) Run() error {
 					expenses.InitModule(r, app.db, app.logger, middl)
 					categories.InitModule(r, app.db, app.logger, middl)
 					goals.InitModule(r, app.db, app.logger, middl)
+					debtors.InitModule(r, app.db, app.logger, middl)
 
 				})
 			})

@@ -422,6 +422,265 @@
                 }
             }
         },
+        "/app/empresas/{empresaID}/debtors": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve todas las deudas de la empresa autenticada, ordenadas de la más nueva a la más antigua. La respuesta viene envuelta en {\"data\": [...]}. Si no hay deudas devuelve una lista vacía.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debtors"
+                ],
+                "summary": "Listar deudas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "deudas de la empresa",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Debtor"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea una deuda asociada a la empresa autenticada. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. \"fecha_limite\" se envía como fecha-hora RFC3339. La respuesta viene envuelta en {\"data\": ...} con la deuda creada.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debtors"
+                ],
+                "summary": "Crear deuda",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/debtors.DebtorPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "deuda creada",
+                        "schema": {
+                            "$ref": "#/definitions/model.Debtor"
+                        }
+                    },
+                    "400": {
+                        "description": "payload invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/debtors/{debtorID}": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Actualiza \"nombre\", \"monto\" y \"fecha_limite\" de una deuda de la empresa autenticada. La descripción no se modifica. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"data\": ...}.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debtors"
+                ],
+                "summary": "Actualizar deuda",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la deuda",
+                        "name": "debtorID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/debtors.UpdatePayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "deuda actualizada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "debtorID o payload invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "deuda no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/app/empresas/{empresaID}/debtors/{debtorID}/paid": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Marca como pagada una deuda de la empresa autenticada. La operación es idempotente. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Debtors"
+                ],
+                "summary": "Marcar deuda como pagada",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la deuda",
+                        "name": "debtorID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "deuda pagada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "debtorID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "deuda no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/app/empresas/{empresaID}/expenses": {
             "get": {
                 "security": [
@@ -1850,6 +2109,51 @@
                 }
             }
         },
+        "debtors.DebtorPayload": {
+            "type": "object",
+            "required": [
+                "descripcion",
+                "fecha_limite",
+                "monto",
+                "nombre"
+            ],
+            "properties": {
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "fecha_limite": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
+        "debtors.UpdatePayload": {
+            "type": "object",
+            "required": [
+                "fecha_limite",
+                "monto",
+                "nombre"
+            ],
+            "properties": {
+                "fecha_limite": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
         "empresas.empresaPayload": {
             "type": "object",
             "required": [
@@ -2002,6 +2306,35 @@
                 },
                 "nombre": {
                     "type": "string"
+                }
+            }
+        },
+        "model.Debtor": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "descripcion": {
+                    "type": "string"
+                },
+                "empresa_id": {
+                    "type": "string"
+                },
+                "fecha_limite": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string"
+                },
+                "pagado": {
+                    "type": "boolean"
                 }
             }
         },

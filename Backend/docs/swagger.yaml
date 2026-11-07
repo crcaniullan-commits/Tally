@@ -74,6 +74,38 @@ definitions:
     required:
     - nombre
     type: object
+  debtors.DebtorPayload:
+    properties:
+      descripcion:
+        maxLength: 100
+        type: string
+      fecha_limite:
+        type: string
+      monto:
+        type: integer
+      nombre:
+        maxLength: 30
+        type: string
+    required:
+    - descripcion
+    - fecha_limite
+    - monto
+    - nombre
+    type: object
+  debtors.UpdatePayload:
+    properties:
+      fecha_limite:
+        type: string
+      monto:
+        type: integer
+      nombre:
+        maxLength: 30
+        type: string
+    required:
+    - fecha_limite
+    - monto
+    - nombre
+    type: object
   empresas.empresaPayload:
     properties:
       nombre_empresa:
@@ -175,6 +207,25 @@ definitions:
         type: string
       nombre:
         type: string
+    type: object
+  model.Debtor:
+    properties:
+      created_at:
+        type: string
+      descripcion:
+        type: string
+      empresa_id:
+        type: string
+      fecha_limite:
+        type: string
+      id:
+        type: string
+      monto:
+        type: integer
+      nombre:
+        type: string
+      pagado:
+        type: boolean
     type: object
   model.Empresa:
     properties:
@@ -642,6 +693,183 @@ paths:
       summary: Cambiar nombre de categoría
       tags:
       - Categories
+  /app/empresas/{empresaID}/debtors:
+    get:
+      description: 'Devuelve todas las deudas de la empresa autenticada, ordenadas
+        de la más nueva a la más antigua. La respuesta viene envuelta en {"data":
+        [...]}. Si no hay deudas devuelve una lista vacía.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deudas de la empresa
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Debtor'
+              type: array
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar deudas
+      tags:
+      - Debtors
+    post:
+      consumes:
+      - application/json
+      description: 'Crea una deuda asociada a la empresa autenticada. "monto" es un
+        entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. "fecha_limite"
+        se envía como fecha-hora RFC3339. La respuesta viene envuelta en {"data":
+        ...} con la deuda creada.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/debtors.DebtorPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: deuda creada
+          schema:
+            $ref: '#/definitions/model.Debtor'
+        "400":
+          description: payload invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Crear deuda
+      tags:
+      - Debtors
+  /app/empresas/{empresaID}/debtors/{debtorID}:
+    patch:
+      consumes:
+      - application/json
+      description: 'Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la
+        empresa autenticada. La descripción no se modifica. "monto" es un entero en
+        pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta
+        viene envuelta en {"data": ...}.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la deuda
+        in: path
+        name: debtorID
+        required: true
+        type: string
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/debtors.UpdatePayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deuda actualizada
+          schema:
+            type: string
+        "400":
+          description: debtorID o payload invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: deuda no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Actualizar deuda
+      tags:
+      - Debtors
+  /app/empresas/{empresaID}/debtors/{debtorID}/paid:
+    patch:
+      description: 'Marca como pagada una deuda de la empresa autenticada. La operación
+        es idempotente. La respuesta viene envuelta en {"data": ...} con el mensaje
+        de confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la deuda
+        in: path
+        name: debtorID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deuda pagada
+          schema:
+            type: string
+        "400":
+          description: debtorID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: deuda no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Marcar deuda como pagada
+      tags:
+      - Debtors
   /app/empresas/{empresaID}/expenses:
     get:
       description: 'Devuelve una página de los gastos de la empresa autenticada, ordenados
