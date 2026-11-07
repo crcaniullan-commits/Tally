@@ -1,0 +1,202 @@
+package integration
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/crcaniullan-commits/Tally/tests/integration/testutil"
+	"github.com/stretchr/testify/require"
+)
+
+func TestUsersFlow(t *testing.T) {
+	user := testutil.NewUser(t)
+	const updatedPassword = "NewPassword123"
+	const secondPassword = "AnotherPassword123"
+	updatedName := "Usuario Renombrado"
+
+	t.Run("actualiza nombre y contraseña", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+			"nombre":   updatedName,
+			"password": updatedPassword,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Usuario actualizado con exito", testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("inicia sesión con la contraseña nueva", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+			"email":    user.Email,
+			"password": updatedPassword,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusAccepted)
+		require.NotEmpty(t, testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("la contraseña anterior ya no sirve", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+			"email":    user.Email,
+			"password": user.Password,
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "crypto/bcrypt: hashedPassword is not the hash of the given password")
+	})
+
+	t.Run("actualiza solo la contraseña", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+			"password": secondPassword,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Usuario actualizado con exito", testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("inicia sesión con la segunda contraseña", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+			"email":    user.Email,
+			"password": secondPassword,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusAccepted)
+		require.NotEmpty(t, testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("actualizar solo el nombre falla con 500", func(t *testing.T) {
+		// BUG: AuthTokenMiddleware carga el usuario con UserStore.GetByID, que
+		// no selecciona password_hash. Update escribe user.PasswordHash.Hash
+		// (nil) en una columna NOT NULL y PostgreSQL rechaza el UPDATE. El
+		// nombre no se actualiza y el handler responde 500.
+		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+			"nombre": "Solo Nombre",
+		})
+
+		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+	})
+
+	t.Run("un payload vacío también falla con 500", func(t *testing.T) {
+		// Mismo bug: con ambos campos vacíos el service igual llama al store,
+		// que intenta escribir password_hash NULL.
+		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]any{})
+
+		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+	})
+
+	t.Run("un municipal consulta un usuario por RUT", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/"+user.RUT, testutil.MunicipalToken(t), nil)
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		data := testutil.DecodeData[map[string]any](t, res)
+		require.Equal(t, user.ID.String(), data["id"])
+		require.Equal(t, user.Email, data["email"])
+		require.Equal(t, updatedName, data["nombre"])
+		require.Equal(t, "usuario", data["role"])
+		require.NotNil(t, data["plan_expires_at"])
+
+		rut, ok := data["rut"].(map[string]any)
+		require.True(t, ok, "rut debería ser un objeto: %v", data["rut"])
+		// DISCREPANCIA: el swagger define rut como {cuerpo, dv}, pero el struct
+		// model.RUT no tiene tags JSON y serializa {Cuerpo, DV}.
+		require.Contains(t, rut, "Cuerpo")
+		require.Contains(t, rut, "DV")
+		require.NotContains(t, rut, "cuerpo")
+		require.NotContains(t, rut, "dv")
+
+		// BUG: GetByRut no selecciona created_at ni updated_at, así que salen
+		// en el zero value de time.Time.
+		require.Equal(t, "0001-01-01T00:00:00Z", data["created_at"])
+		require.Equal(t, "0001-01-01T00:00:00Z", data["updated_at"])
+	})
+
+	t.Run("consulta por RUT con formato inválido", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/abc", testutil.MunicipalToken(t), nil)
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "el formato del RUT no es válido")
+	})
+
+	t.Run("consulta por RUT inexistente", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/99999999-9", testutil.MunicipalToken(t), nil)
+
+		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+	})
+
+	t.Run("un usuario común no puede consultar por RUT", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/"+user.RUT, user.Token, nil)
+
+		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+	})
+
+	t.Run("un municipal no puede actualizar ni borrar usuarios", func(t *testing.T) {
+		patch := testutil.Request(t, http.MethodPatch, "/v1/app/users", testutil.MunicipalToken(t), map[string]string{
+			"nombre": "Municipal Intruso",
+		})
+		testutil.RequireError(t, patch, http.StatusForbidden, "forbidden")
+
+		del := testutil.Request(t, http.MethodDelete, "/v1/app/users", testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, del, http.StatusForbidden, "forbidden")
+	})
+
+	t.Run("validación del payload", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			body    any
+			message string
+		}{
+			{
+				name:    "contraseña corta",
+				body:    map[string]string{"password": "short"},
+				message: "Key: 'UpdateUserPayload.Password' Error:Field validation for 'Password' failed on the 'min' tag",
+			},
+			{
+				name:    "contraseña demasiado larga",
+				body:    map[string]string{"password": strings.Repeat("a", 73)},
+				message: "Key: 'UpdateUserPayload.Password' Error:Field validation for 'Password' failed on the 'max' tag",
+			},
+			{
+				name:    "nombre demasiado largo",
+				body:    map[string]string{"nombre": strings.Repeat("n", 101)},
+				message: "Key: 'UpdateUserPayload.Name' Error:Field validation for 'Name' failed on the 'max' tag",
+			},
+			{
+				name:    "campo desconocido",
+				body:    map[string]any{"nombre": "X", "extra": 1},
+				message: `json: unknown field "extra"`,
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, tc.body)
+				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
+			})
+		}
+	})
+
+	t.Run("elimina su propia cuenta", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodDelete, "/v1/app/users", user.Token, nil)
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Usuario eliminado", testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("el token deja de servir tras borrar la cuenta", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", user.Token, nil)
+
+		testutil.RequireError(t, res, http.StatusUnauthorized, "unauthorized")
+	})
+
+	t.Run("no se puede volver a iniciar sesión", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+			"email":    user.Email,
+			"password": secondPassword,
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "resource not found")
+	})
+
+	requireProtected(t, http.MethodPatch, "/v1/app/users")
+	requireProtected(t, http.MethodDelete, "/v1/app/users")
+	requireProtected(t, http.MethodGet, "/v1/app/users/municipal/99999999-9")
+}

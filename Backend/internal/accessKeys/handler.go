@@ -48,7 +48,7 @@ func (h *AccessKeysHandler) IssueForUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, accessKey); err != nil {
+	if err := util.JsonResponse(w, http.StatusCreated, accessKey); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}

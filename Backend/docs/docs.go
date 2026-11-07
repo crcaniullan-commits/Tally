@@ -1536,7 +1536,7 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "código creado",
                         "schema": {
                             "$ref": "#/definitions/model.AccessKey"
@@ -1912,7 +1912,7 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "token de autenticacion",
                         "schema": {
                             "type": "string"
@@ -1996,7 +1996,7 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "token de autenticacion",
                         "schema": {
                             "type": "string"

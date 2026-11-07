@@ -134,7 +134,7 @@ func (h *AuthHandler) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, data); err != nil {
+	if err := util.JsonResponse(w, http.StatusCreated, data); err != nil {
 		h.errors.InternalServerError(w, r, err)
 		return
 	}
