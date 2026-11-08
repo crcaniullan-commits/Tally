@@ -41,12 +41,7 @@ func (h *CategoriesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}
@@ -106,12 +101,7 @@ func (h *CategoriesHandler) CambiarNombre(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := util.ReadJSON(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
-		return
-	}
-
-	if err := util.Validate.Struct(payload); err != nil {
+	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
 		h.errors.BadRequestResponse(w, r, err)
 		return
 	}

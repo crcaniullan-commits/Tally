@@ -199,7 +199,7 @@ func TestAuthHandler_Login(t *testing.T) {
 }
 
 func TestAuthHandler_CrearMunicipal(t *testing.T) {
-	t.Run("responde 200 sin exigir code en el payload", func(t *testing.T) {
+	t.Run("responde 201 sin exigir code en el payload", func(t *testing.T) {
 		// Regresion: el payload municipal compartido con registro exigia code,
 		// rompiendo la creacion de municipales.
 		service := new(ServiceAuthMock)
@@ -217,7 +217,7 @@ func TestAuthHandler_CrearMunicipal(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.CrearMunicipal(w, request(http.MethodPost, "/auth/municipal", body))
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyTokenOK, w.Body.String())
 		service.AssertExpectations(t)
 	})

@@ -77,7 +77,7 @@ func decodeEnvelope(t *testing.T, body string) map[string]any {
 }
 
 func TestAccessKeysHandler_IssueForUser(t *testing.T) {
-	t.Run("responde 200 con la llave creada envuelta en data", func(t *testing.T) {
+	t.Run("responde 201 con la llave creada envuelta en data", func(t *testing.T) {
 		service := new(ServiceAccessKeyMock)
 		handler := newTestHandler(service)
 
@@ -90,7 +90,7 @@ func TestAccessKeysHandler_IssueForUser(t *testing.T) {
 
 		handler.IssueForUser(w, r)
 
-		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, http.StatusCreated, w.Code)
 
 		envelope := decodeEnvelope(t, w.Body.String())
 		data, ok := envelope["data"].(map[string]any)
@@ -116,7 +116,7 @@ func TestAccessKeysHandler_IssueForUser(t *testing.T) {
 
 		handler.IssueForUser(w, r)
 
-		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, http.StatusCreated, w.Code)
 		service.AssertCalled(t, "IssueForUser", mock.Anything, testMunicipalID, "destino@correo.cl")
 	})
 
@@ -396,7 +396,7 @@ func TestAccessKeysHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 		handler.IssueForUser(w, r)
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 		store.AssertExpectations(t)
 		email.esperar(t, 1)
 	})
@@ -417,7 +417,7 @@ func TestAccessKeysHandler_ServiceAndHandlerWiring(t *testing.T) {
 		w := httptest.NewRecorder()
 		handler.IssueForUser(w, r)
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 		service.AssertCalled(t, "IssueForUser", mock.Anything, uuid.MustParse(usuario.ID.String()), testEmail)
 	})
 }
