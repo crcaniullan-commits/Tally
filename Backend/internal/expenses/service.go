@@ -4,27 +4,27 @@ import (
 	"context"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type StoreExpenses interface {
-	AddExpense(context.Context, *model.Expense) error
-	DeleteExpense(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllExpensesOfEmpresa(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Expense, error)
-	CategoryExists(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+type RepositorioGastos interface {
+	AgregarGasto(context.Context, *model.Expense) error
+	EliminarGasto(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerGastosDeEmpresa(context.Context, uuid.UUID, paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error)
+	CategoriaExiste(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 }
 
-type ExpenseService struct {
-	store StoreExpenses
+type ServicioGastos struct {
+	store RepositorioGastos
 }
 
-func NewExpenseService(store StoreExpenses) *ExpenseService {
-	return &ExpenseService{store: store}
+func NuevoServicioGastos(store RepositorioGastos) *ServicioGastos {
+	return &ServicioGastos{store: store}
 }
 
-func (s *ExpenseService) AddExpense(ctx context.Context, payload ExpensePayload, empresaID uuid.UUID) (model.Expense, error) {
+func (s *ServicioGastos) AgregarGasto(ctx context.Context, payload PayloadGasto, empresaID uuid.UUID) (model.Expense, error) {
 	expense := &model.Expense{
 		EmpresaID:   empresaID,
 		Monto:       payload.Monto,
@@ -32,36 +32,36 @@ func (s *ExpenseService) AddExpense(ctx context.Context, payload ExpensePayload,
 	}
 
 	if payload.CategoryID == nil {
-		return model.Expense{}, util.ErrNotFound
+		return model.Expense{}, utilidades.ErrorNoEncontrado
 	}
 
-	existe, err := s.store.CategoryExists(ctx, *payload.CategoryID, empresaID)
+	existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID)
 	if err != nil {
 		return model.Expense{}, err
 	}
 	if !existe {
-		return model.Expense{}, util.ErrNotFound
+		return model.Expense{}, utilidades.ErrorNoEncontrado
 	}
 
 	expense.CategoryID = *payload.CategoryID
 
-	if err := s.store.AddExpense(ctx, expense); err != nil {
+	if err := s.store.AgregarGasto(ctx, expense); err != nil {
 		return model.Expense{}, err
 	}
 
 	return *expense, nil
 }
 
-func (s *ExpenseService) DeleteExpense(ctx context.Context, expenseID uuid.UUID, empresaID uuid.UUID) error {
-	if err := s.store.DeleteExpense(ctx, expenseID, empresaID); err != nil {
+func (s *ServicioGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {
+	if err := s.store.EliminarGasto(ctx, gastoID, empresaID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *ExpenseService) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Expense, error) {
-	expenses, err := s.store.GetAllExpensesOfEmpresa(ctx, empresaID, fq)
+func (s *ServicioGastos) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
+	expenses, err := s.store.ObtenerGastosDeEmpresa(ctx, empresaID, fq)
 
 	if err != nil {
 		return nil, err

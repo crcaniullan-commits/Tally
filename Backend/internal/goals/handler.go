@@ -5,174 +5,174 @@ import (
 	"errors"
 	"net/http"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceGoals interface {
-	createGoal(context.Context, CreateGoalPayload, uuid.UUID) (model.Goal, error)
-	DeleteGoal(context.Context, uuid.UUID, uuid.UUID) error
-	GetGoalState(context.Context, uuid.UUID, uuid.UUID) (GoalState, error)
-	getGoal(context.Context, uuid.UUID, uuid.UUID) (model.Goal, error)
-	getGoals(context.Context, uuid.UUID) ([]model.Goal, error)
+type IServiceMetas interface {
+	CrearMeta(context.Context, PayloadCrearMeta, uuid.UUID) (model.Goal, error)
+	EliminarMeta(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerEstadoMeta(context.Context, uuid.UUID, uuid.UUID) (EstadoMeta, error)
+	ObtenerMeta(context.Context, uuid.UUID, uuid.UUID) (model.Goal, error)
+	ObtenerMetas(context.Context, uuid.UUID) ([]model.Goal, error)
 }
 
-type GoalsHandler struct {
-	service ServiceGoals
-	errors  errorhandler.ErrorsResponse
+type HandlerMetas struct {
+	service IServiceMetas
+	errors  errores.RespuestaErrores
 }
 
-type GoalState struct {
+type EstadoMeta struct {
 	MontoActual        int64   `json:"monto_actual"`
 	PorcentajeActual   float64 `json:"porcentaje_actual"`
 	MontoPendiente     int64   `json:"monto_pendiente"`
 	PorcentajeFaltante float64 `json:"porcentaje_faltante"`
 }
 
-type CreateGoalPayload struct {
-	Nombre     string          `json:"nombre" validate:"required,max=30"`
-	Periodo    util.GoalPeriod `json:"periodo" validate:"required,oneof=dia semana mes"`
-	Monto_meta int64           `json:"monto_meta" validate:"required,gt=0"`
+type PayloadCrearMeta struct {
+	Nombre    string                 `json:"nombre" validate:"required,max=30"`
+	Periodo   utilidades.PeriodoMeta `json:"periodo" validate:"required,oneof=dia semana mes"`
+	MontoMeta int64                  `json:"monto_meta" validate:"required,gt=0"`
 }
 
-func NewGoalsHandler(s ServiceGoals, e errorhandler.ErrorsResponse) *GoalsHandler {
-	return &GoalsHandler{s, e}
+func NuevoHandlerMetas(s IServiceMetas, e errores.RespuestaErrores) *HandlerMetas {
+	return &HandlerMetas{s, e}
 }
 
-func (h *GoalsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload CreateGoalPayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerMetas) Crear(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadCrearMeta
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r)
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresaID == nil {
-		h.errors.BadRequestResponse(w, r, errors.New("not Empresa ID in the request"))
+		h.errors.ErrorSolicitudInvalida(w, r, errors.New("no hay ID de empresa en la solicitud"))
 		return
 	}
 
-	goal, err := h.service.createGoal(r.Context(), payload, empresaID.ID)
+	goal, err := h.service.CrearMeta(r.Context(), payload, empresaID.ID)
 
 	if err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, goal); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, goal); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *GoalsHandler) DeleteGoal(w http.ResponseWriter, r *http.Request) {
-	goalID, err := uuid.Parse(chi.URLParam(r, "goalID"))
+func (h *HandlerMetas) EliminarMeta(w http.ResponseWriter, r *http.Request) {
+	metaID, err := uuid.Parse(chi.URLParam(r, "metaID"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	if err := h.service.DeleteGoal(r.Context(), goalID, empresaID); err != nil {
+	if err := h.service.EliminarMeta(r.Context(), metaID, empresaID); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Objetivo eliminado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Meta eliminada"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *GoalsHandler) GetGoalState(w http.ResponseWriter, r *http.Request) {
-	goalID, err := uuid.Parse(chi.URLParam(r, "goalID"))
+func (h *HandlerMetas) ObtenerEstadoMeta(w http.ResponseWriter, r *http.Request) {
+	metaID, err := uuid.Parse(chi.URLParam(r, "metaID"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	state, err := h.service.GetGoalState(r.Context(), goalID, empresaID)
+	state, err := h.service.ObtenerEstadoMeta(r.Context(), metaID, empresaID)
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, state); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, state); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *GoalsHandler) getGoal(w http.ResponseWriter, r *http.Request) {
-	goalID, err := uuid.Parse(chi.URLParam(r, "goalID"))
+func (h *HandlerMetas) ObtenerMeta(w http.ResponseWriter, r *http.Request) {
+	metaID, err := uuid.Parse(chi.URLParam(r, "metaID"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	goal, err := h.service.getGoal(r.Context(), goalID, empresaID)
+	goal, err := h.service.ObtenerMeta(r.Context(), metaID, empresaID)
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, goal); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, goal); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *GoalsHandler) getGoals(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerMetas) ObtenerMetas(w http.ResponseWriter, r *http.Request) {
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	goals, err := h.service.getGoals(r.Context(), empresaID)
+	goals, err := h.service.ObtenerMetas(r.Context(), empresaID)
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, goals); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, goals); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }

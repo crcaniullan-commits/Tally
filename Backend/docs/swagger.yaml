@@ -1,13 +1,6 @@
 basePath: /v1
 definitions:
-  accesskeys.EmailPayload:
-    properties:
-      email:
-        type: string
-    required:
-    - email
-    type: object
-  auth.CreateMunicipalPayload:
+  auth.PayloadCrearMunicipal:
     properties:
       email:
         maxLength: 100
@@ -29,7 +22,7 @@ definitions:
     - password
     - rut
     type: object
-  auth.CreateUserPayload:
+  auth.PayloadCrearUsuario:
     properties:
       code:
         type: string
@@ -53,7 +46,7 @@ definitions:
     - password
     - rut
     type: object
-  auth.LoginUserPayload:
+  auth.PayloadInicioSesion:
     properties:
       email:
         maxLength: 100
@@ -66,7 +59,7 @@ definitions:
     - email
     - password
     type: object
-  categories.CategoriaPayload:
+  categories.PayloadCategoria:
     properties:
       nombre:
         maxLength: 30
@@ -74,7 +67,28 @@ definitions:
     required:
     - nombre
     type: object
-  debtors.DebtorPayload:
+  clavesacceso.PayloadCorreo:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  debtors.PayloadActualizacionDeudor:
+    properties:
+      fecha_limite:
+        type: string
+      monto:
+        type: integer
+      nombre:
+        maxLength: 30
+        type: string
+    required:
+    - fecha_limite
+    - monto
+    - nombre
+    type: object
+  debtors.PayloadDeudor:
     properties:
       descripcion:
         maxLength: 100
@@ -92,21 +106,7 @@ definitions:
     - monto
     - nombre
     type: object
-  debtors.UpdatePayload:
-    properties:
-      fecha_limite:
-        type: string
-      monto:
-        type: integer
-      nombre:
-        maxLength: 30
-        type: string
-    required:
-    - fecha_limite
-    - monto
-    - nombre
-    type: object
-  empresas.empresaPayload:
+  empresas.PayloadEmpresa:
     properties:
       nombre_empresa:
         maxLength: 30
@@ -114,7 +114,7 @@ definitions:
     required:
     - nombre_empresa
     type: object
-  expenses.ExpensePayload:
+  expenses.PayloadGasto:
     properties:
       category_id:
         type: string
@@ -127,26 +127,7 @@ definitions:
     - category_id
     - monto
     type: object
-  goals.CreateGoalPayload:
-    properties:
-      monto_meta:
-        type: integer
-      nombre:
-        maxLength: 30
-        type: string
-      periodo:
-        allOf:
-        - $ref: '#/definitions/util.GoalPeriod'
-        enum:
-        - dia
-        - semana
-        - mes
-    required:
-    - monto_meta
-    - nombre
-    - periodo
-    type: object
-  goals.GoalState:
+  goals.EstadoMeta:
     properties:
       monto_actual:
         type: integer
@@ -157,7 +138,26 @@ definitions:
       porcentaje_faltante:
         type: number
     type: object
-  incomes.IncomePayload:
+  goals.PayloadCrearMeta:
+    properties:
+      monto_meta:
+        type: integer
+      nombre:
+        maxLength: 30
+        type: string
+      periodo:
+        allOf:
+        - $ref: '#/definitions/utilidades.PeriodoMeta'
+        enum:
+        - dia
+        - semana
+        - mes
+    required:
+    - monto_meta
+    - nombre
+    - periodo
+    type: object
+  incomes.PayloadIngreso:
     properties:
       category_id:
         type: string
@@ -345,7 +345,7 @@ definitions:
     x-enum-varnames:
     - UserRoleUsuario
     - UserRoleMunicipal
-  users.UpdateUserPayload:
+  users.PayloadActualizarUsuario:
     properties:
       nombre:
         maxLength: 100
@@ -355,7 +355,7 @@ definitions:
         minLength: 8
         type: string
     type: object
-  util.GoalPeriod:
+  utilidades.PeriodoMeta:
     enum:
     - dia
     - semana
@@ -377,10 +377,143 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Tally
 paths:
-  /app/empresas:
+  /aplicacion/claves:
+    post:
+      consumes:
+      - application/json
+      description: 'Genera un código de acceso, lo guarda asociado al municipal autenticado
+        (created_by) con un año de vencimiento y lo envía por correo al destinatario
+        del payload. La respuesta viene envuelta en {"datos": ...} con la llave creada;
+        el código también viaja en el correo. Emitir es independiente de canjear:
+        el emprendedor lo canjea después en POST /aplicacion/autenticacion.'
+      parameters:
+      - description: correo del destinatario
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/clavesacceso.PayloadCorreo'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: código creado
+          schema:
+            $ref: '#/definitions/model.AccessKey'
+        "400":
+          description: payload inválido o email mal formado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Emitir un código de acceso
+      tags:
+      - ClavesAcceso
+  /aplicacion/claves/IDAcceso/{claveID}:
+    post:
+      consumes:
+      - application/json
+      description: 'Vuelve a mandar por correo el código de una llave existente, sin
+        crear una llave nueva ni mover su vencimiento: si el correo se perdió, el
+        código sigue siendo el mismo. La respuesta viene envuelta en {"datos": ...}
+        con el mensaje de confirmación. Un claveID que no sea un UUID responde 400
+        y una llave inexistente, 404.'
+      parameters:
+      - description: ID de la llave de acceso
+        in: path
+        name: claveID
+        required: true
+        type: string
+      - description: correo del destinatario
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/clavesacceso.PayloadCorreo'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: correo reenviado
+          schema:
+            type: string
+        "400":
+          description: claveID inválido o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: llave de acceso inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Reenviar el código de acceso
+      tags:
+      - ClavesAcceso
+  /aplicacion/claves/revocar/{codigo}:
+    post:
+      description: 'Revoca una llave por su código, dejando registro de quién la revocó
+        (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer:
+        deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {"datos":
+        ...} con el mensaje de confirmación. Un código que no existe responde 404.'
+      parameters:
+      - description: código de acceso a revocar
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: código revocado
+          schema:
+            type: string
+        "400":
+          description: código vacío
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: código inexistente
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Revocar un código de acceso
+      tags:
+      - ClavesAcceso
+  /aplicacion/empresas:
     get:
       description: 'Devuelve todas las empresas asociadas al usuario autenticado.
-        La respuesta viene envuelta en {"data": ...}.'
+        La respuesta viene envuelta en {"datos": ...}.'
       produces:
       - application/json
       responses:
@@ -411,18 +544,18 @@ paths:
       consumes:
       - application/json
       description: 'Crea una nueva empresa asociada al usuario autenticado. La respuesta
-        viene envuelta en {"data": ...} con la empresa creada.'
+        viene envuelta en {"datos": ...} con la empresa creada.'
       parameters:
       - description: payload
         in: body
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/empresas.empresaPayload'
+          $ref: '#/definitions/empresas.PayloadEmpresa'
       produces:
       - application/json
       responses:
-        "200":
+        "201":
           description: empresa creada
           schema:
             $ref: '#/definitions/model.Empresa'
@@ -443,10 +576,10 @@ paths:
       summary: Crear empresa
       tags:
       - Empresas
-  /app/empresas/{empresaID}:
+  /aplicacion/empresas/{empresaID}:
     delete:
       description: 'Elimina una empresa, siempre que pertenezca al usuario autenticado.
-        La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.'
+        La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -477,11 +610,11 @@ paths:
       summary: Eliminar empresa
       tags:
       - Empresas
-  /app/empresas/{empresaID}/{nombre}:
+  /aplicacion/empresas/{empresaID}/{nombre}:
     patch:
       description: 'Cambia el nombre de una empresa, siempre que pertenezca al usuario
-        autenticado. La respuesta viene envuelta en {"data": ...} con el mensaje de
-        confirmación.'
+        autenticado. La respuesta viene envuelta en {"datos": ...} con el mensaje
+        de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -523,11 +656,11 @@ paths:
       summary: Cambiar nombre de empresa
       tags:
       - Empresas
-  /app/empresas/{empresaID}/categories:
+  /aplicacion/empresas/{empresaID}/categorias:
     get:
       description: 'Devuelve las categorías de la empresa autenticada y las globales.
         Las globales se distinguen porque "empresa_id" viene null. La respuesta viene
-        envuelta en {"data": [...]} con las categorías propias primero, ordenadas
+        envuelta en {"datos": [...]} con las categorías propias primero, ordenadas
         por nombre.'
       parameters:
       - description: ID de la empresa
@@ -554,12 +687,12 @@ paths:
       - ApiKeyAuth: []
       summary: Listar categorías
       tags:
-      - Categories
+      - Categorias
     post:
       consumes:
       - application/json
       description: 'Crea una nueva categoría asociada a la empresa autenticada. La
-        respuesta viene envuelta en {"data": ...} con la categoría creada.'
+        respuesta viene envuelta en {"datos": ...} con la categoría creada.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -571,7 +704,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/categories.CategoriaPayload'
+          $ref: '#/definitions/categories.PayloadCategoria'
       produces:
       - application/json
       responses:
@@ -580,7 +713,7 @@ paths:
           schema:
             $ref: '#/definitions/model.Categorie'
         "400":
-          description: payload de la categoría erroneo o la categoría ya existe
+          description: payload de la categoría erróneo o la categoría ya existe
           schema:
             additionalProperties:
               type: string
@@ -595,11 +728,11 @@ paths:
       - ApiKeyAuth: []
       summary: Crear categoría
       tags:
-      - Categories
-  /app/empresas/{empresaID}/categories/{categoria}:
+      - Categorias
+  /aplicacion/empresas/{empresaID}/categorias/{categoria}:
     delete:
       description: 'Elimina una categoría, siempre que pertenezca a la empresa autenticada.
-        La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.'
+        La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -640,12 +773,12 @@ paths:
       - ApiKeyAuth: []
       summary: Eliminar categoría
       tags:
-      - Categories
-  /app/empresas/{empresaID}/categories/{categoriaID}:
+      - Categorias
+  /aplicacion/empresas/{empresaID}/categorias/{categoriaID}:
     patch:
       description: 'Cambia el nombre de una categoría, siempre que pertenezca a la
-        empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje
-        de confirmación.'
+        empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el
+        mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -662,7 +795,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/categories.CategoriaPayload'
+          $ref: '#/definitions/categories.PayloadCategoria'
       produces:
       - application/json
       responses:
@@ -671,7 +804,7 @@ paths:
           schema:
             type: string
         "400":
-          description: categoriaID invalido o payload erroneo
+          description: categoriaID inválido o payload erróneo
           schema:
             additionalProperties:
               type: string
@@ -692,11 +825,11 @@ paths:
       - ApiKeyAuth: []
       summary: Cambiar nombre de categoría
       tags:
-      - Categories
-  /app/empresas/{empresaID}/debtors:
+      - Categorias
+  /aplicacion/empresas/{empresaID}/deudas:
     get:
       description: 'Devuelve todas las deudas de la empresa autenticada, ordenadas
-        de la más nueva a la más antigua. La respuesta viene envuelta en {"data":
+        de la más nueva a la más antigua. La respuesta viene envuelta en {"datos":
         [...]}. Si no hay deudas devuelve una lista vacía.'
       parameters:
       - description: ID de la empresa
@@ -725,13 +858,13 @@ paths:
       - ApiKeyAuth: []
       summary: Listar deudas
       tags:
-      - Debtors
+      - Deudas
     post:
       consumes:
       - application/json
       description: 'Crea una deuda asociada a la empresa autenticada. "monto" es un
         entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. "fecha_limite"
-        se envía como fecha-hora RFC3339. La respuesta viene envuelta en {"data":
+        se envía como fecha-hora RFC3339. La respuesta viene envuelta en {"datos":
         ...} con la deuda creada.'
       parameters:
       - description: ID de la empresa
@@ -744,7 +877,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/debtors.DebtorPayload'
+          $ref: '#/definitions/debtors.PayloadDeudor'
       produces:
       - application/json
       responses:
@@ -753,7 +886,7 @@ paths:
           schema:
             $ref: '#/definitions/model.Debtor'
         "400":
-          description: payload invalido
+          description: payload inválido
           schema:
             additionalProperties:
               type: string
@@ -768,15 +901,15 @@ paths:
       - ApiKeyAuth: []
       summary: Crear deuda
       tags:
-      - Debtors
-  /app/empresas/{empresaID}/debtors/{debtorID}:
+      - Deudas
+  /aplicacion/empresas/{empresaID}/deudas/{deudorID}:
     patch:
       consumes:
       - application/json
       description: 'Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la
         empresa autenticada. La descripción no se modifica. "monto" es un entero en
         pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta
-        viene envuelta en {"data": ...}.'
+        viene envuelta en {"datos": ...}.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -785,7 +918,7 @@ paths:
         type: string
       - description: ID de la deuda
         in: path
-        name: debtorID
+        name: deudorID
         required: true
         type: string
       - description: payload
@@ -793,7 +926,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/debtors.UpdatePayload'
+          $ref: '#/definitions/debtors.PayloadActualizacionDeudor'
       produces:
       - application/json
       responses:
@@ -802,7 +935,7 @@ paths:
           schema:
             type: string
         "400":
-          description: debtorID o payload invalido
+          description: deudorID o payload inválido
           schema:
             additionalProperties:
               type: string
@@ -823,11 +956,11 @@ paths:
       - ApiKeyAuth: []
       summary: Actualizar deuda
       tags:
-      - Debtors
-  /app/empresas/{empresaID}/debtors/{debtorID}/paid:
+      - Deudas
+  /aplicacion/empresas/{empresaID}/deudas/{deudorID}/pagada:
     patch:
       description: 'Marca como pagada una deuda de la empresa autenticada. La operación
-        es idempotente. La respuesta viene envuelta en {"data": ...} con el mensaje
+        es idempotente. La respuesta viene envuelta en {"datos": ...} con el mensaje
         de confirmación.'
       parameters:
       - description: ID de la empresa
@@ -837,7 +970,7 @@ paths:
         type: string
       - description: ID de la deuda
         in: path
-        name: debtorID
+        name: deudorID
         required: true
         type: string
       produces:
@@ -848,7 +981,7 @@ paths:
           schema:
             type: string
         "400":
-          description: debtorID invalido
+          description: deudorID invalido
           schema:
             additionalProperties:
               type: string
@@ -869,15 +1002,15 @@ paths:
       - ApiKeyAuth: []
       summary: Marcar deuda como pagada
       tags:
-      - Debtors
-  /app/empresas/{empresaID}/expenses:
+      - Deudas
+  /aplicacion/empresas/{empresaID}/gastos:
     get:
       description: 'Devuelve una página de los gastos de la empresa autenticada, ordenados
-        del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}.
-        Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota
-        con since y until en formato AAAA-MM-DD, y por categoría con category_id (el
-        UUID de la categoría, no su nombre). Un parámetro mal formado responde 400.
-        Los montos son enteros en pesos chilenos (CLP, sin decimales).'
+        del más reciente al más antiguo. La respuesta viene envuelta en {"datos":
+        [...]}. Paginá con limite (entre 1 y 30, por defecto 30) y desplazamiento;
+        el rango se acota con desde y hasta en formato AAAA-MM-DD, y por categoría
+        con categoria_id (el UUID de la categoría, no su nombre). Un parámetro mal
+        formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
       parameters:
       - description: ID de la empresa
         in: path
@@ -886,23 +1019,23 @@ paths:
         type: string
       - description: cantidad maxima de gastos a devolver (1-30, default 30)
         in: query
-        name: limit
+        name: limite
         type: integer
       - description: gastos a saltar, para pedir la pagina siguiente
         in: query
-        name: offset
+        name: desplazamiento
         type: integer
       - description: fecha minima del rango (AAAA-MM-DD)
         in: query
-        name: since
+        name: desde
         type: string
       - description: fecha maxima del rango (AAAA-MM-DD)
         in: query
-        name: until
+        name: hasta
         type: string
       - description: UUID de la categoria por la que filtrar
         in: query
-        name: category_id
+        name: categoria_id
         type: string
       produces:
       - application/json
@@ -931,15 +1064,15 @@ paths:
       - ApiKeyAuth: []
       summary: Listar gastos de la empresa
       tags:
-      - Expenses
+      - Gastos
     post:
       consumes:
       - application/json
       description: 'Registra un nuevo gasto asociado a la empresa autenticada. La
-        respuesta viene envuelta en {"data": ...} con el gasto creado, incluyendo
+        respuesta viene envuelta en {"datos": ...} con el gasto creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales). "category_id" es obligatorio y debe ser el UUID de una
-        categoría global o de la empresa; si no existe o pertenece a otra empresa
+        (CLP, sin decimales). "categoria_id" es obligatorio y debe ser el UUID de
+        una categoría global o de la empresa; si no existe o pertenece a otra empresa
         responde 400. El payload no acepta "fecha": la asigna la base de datos con
         CURRENT_DATE.'
       parameters:
@@ -953,7 +1086,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/expenses.ExpensePayload'
+          $ref: '#/definitions/expenses.PayloadGasto'
       produces:
       - application/json
       responses:
@@ -962,7 +1095,7 @@ paths:
           schema:
             $ref: '#/definitions/model.Expense'
         "400":
-          description: payload del gasto erroneo
+          description: payload del gasto erróneo
           schema:
             additionalProperties:
               type: string
@@ -977,12 +1110,12 @@ paths:
       - ApiKeyAuth: []
       summary: Registrar gasto
       tags:
-      - Expenses
-  /app/empresas/{empresaID}/expenses/{expenseID}:
+      - Gastos
+  /aplicacion/empresas/{empresaID}/gastos/{gastoID}:
     delete:
       description: 'Elimina un gasto por su ID, siempre que pertenezca a la empresa
-        autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de
-        confirmación.'
+        autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje
+        de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -991,7 +1124,7 @@ paths:
         type: string
       - description: ID del gasto
         in: path
-        name: expenseID
+        name: gastoID
         required: true
         type: string
       produces:
@@ -1002,7 +1135,7 @@ paths:
           schema:
             type: string
         "400":
-          description: expenseID invalido
+          description: gastoID invalido
           schema:
             additionalProperties:
               type: string
@@ -1023,228 +1156,14 @@ paths:
       - ApiKeyAuth: []
       summary: Eliminar gasto
       tags:
-      - Expenses
-  /app/empresas/{empresaID}/goal:
-    get:
-      description: 'Devuelve todos los objetivos de la empresa autenticada. La respuesta
-        viene envuelta en {"data": [...]}. Un objetivo no tiene estado: su progreso
-        se calcula contra los ingresos del periodo actual y se reinicia con cada dia,
-        semana o mes.'
-      parameters:
-      - description: ID de la empresa
-        in: path
-        name: empresaID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: objetivos de la empresa
-          schema:
-            additionalProperties:
-              items:
-                $ref: '#/definitions/model.Goal'
-              type: array
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Listar objetivos
-      tags:
-      - Goals
-    post:
-      consumes:
-      - application/json
-      description: 'Crea un objetivo asociado a la empresa autenticada. "periodo"
-        acepta dia, semana o mes. "monto_meta" es un entero en pesos chilenos (CLP,
-        sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"data":
-        ...} con el objetivo creado.'
-      parameters:
-      - description: ID de la empresa
-        in: path
-        name: empresaID
-        required: true
-        type: string
-      - description: payload
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/goals.CreateGoalPayload'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: objetivo creado
-          schema:
-            $ref: '#/definitions/model.Goal'
-        "400":
-          description: payload invalido o falta la empresa en el contexto
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Crear objetivo
-      tags:
-      - Goals
-  /app/empresas/{empresaID}/goal/{goalID}:
-    delete:
-      description: 'Elimina un objetivo de la empresa autenticada por su ID. La respuesta
-        viene envuelta en {"data": ...} con el mensaje de confirmacion.'
-      parameters:
-      - description: ID de la empresa
-        in: path
-        name: empresaID
-        required: true
-        type: string
-      - description: ID del objetivo
-        in: path
-        name: goalID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: objetivo eliminado
-          schema:
-            type: string
-        "400":
-          description: goalID invalido
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: objetivo no encontrado
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Eliminar objetivo
-      tags:
-      - Goals
-    get:
-      description: 'Devuelve un objetivo de la empresa autenticada por su ID. La respuesta
-        viene envuelta en {"data": ...}.'
-      parameters:
-      - description: ID de la empresa
-        in: path
-        name: empresaID
-        required: true
-        type: string
-      - description: ID del objetivo
-        in: path
-        name: goalID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: objetivo encontrado
-          schema:
-            $ref: '#/definitions/model.Goal'
-        "400":
-          description: goalID invalido
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: objetivo no encontrado
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Obtener objetivo
-      tags:
-      - Goals
-  /app/empresas/{empresaID}/goal/{goalID}/state:
-    get:
-      description: 'Suma los ingresos de la empresa en el periodo actual (dia, semana
-        desde el lunes, o mes) y calcula el avance contra "monto_meta". La respuesta
-        viene envuelta en {"data": ...} con monto_actual, porcentaje_actual, monto_pendiente
-        y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin
-        decimales).'
-      parameters:
-      - description: ID de la empresa
-        in: path
-        name: empresaID
-        required: true
-        type: string
-      - description: ID del objetivo
-        in: path
-        name: goalID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: estado del objetivo
-          schema:
-            $ref: '#/definitions/goals.GoalState'
-        "400":
-          description: goalID invalido
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: objetivo no encontrado
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Estado del objetivo
-      tags:
-      - Goals
-  /app/empresas/{empresaID}/incomes:
+      - Gastos
+  /aplicacion/empresas/{empresaID}/ingresos:
     get:
       description: 'Devuelve una página de los ingresos de la empresa autenticada,
         ordenados del más reciente al más antiguo. La respuesta viene envuelta en
-        {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset;
-        el rango se acota con since y until en formato AAAA-MM-DD, y por categoría
-        con category_id (el UUID de la categoría, no su nombre). Un parámetro mal
+        {"datos": [...]}. Paginá con limite (entre 1 y 30, por defecto 30) y desplazamiento;
+        el rango se acota con desde y hasta en formato AAAA-MM-DD, y por categoría
+        con categoria_id (el UUID de la categoría, no su nombre). Un parámetro mal
         formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).'
       parameters:
       - description: ID de la empresa
@@ -1254,23 +1173,23 @@ paths:
         type: string
       - description: cantidad maxima de ingresos a devolver (1-30, default 30)
         in: query
-        name: limit
+        name: limite
         type: integer
       - description: ingresos a saltar, para pedir la pagina siguiente
         in: query
-        name: offset
+        name: desplazamiento
         type: integer
       - description: fecha minima del rango (AAAA-MM-DD)
         in: query
-        name: since
+        name: desde
         type: string
       - description: fecha maxima del rango (AAAA-MM-DD)
         in: query
-        name: until
+        name: hasta
         type: string
       - description: UUID de la categoria por la que filtrar
         in: query
-        name: category_id
+        name: categoria_id
         type: string
       produces:
       - application/json
@@ -1299,16 +1218,16 @@ paths:
       - ApiKeyAuth: []
       summary: Listar ingresos de la empresa
       tags:
-      - Incomes
+      - Ingresos
     post:
       consumes:
       - application/json
       description: 'Registra un nuevo ingreso asociado a la empresa autenticada. La
-        respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo
+        respuesta viene envuelta en {"datos": ...} con el ingreso creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y
-        debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece
-        a otra empresa responde 400.'
+        (CLP, sin decimales). "categoria_id" es opcional (la columna es nullable)
+        y debe ser el UUID de una categoría global o de la empresa; si no existe o
+        pertenece a otra empresa responde 400.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1320,7 +1239,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/incomes.IncomePayload'
+          $ref: '#/definitions/incomes.PayloadIngreso'
       produces:
       - application/json
       responses:
@@ -1329,7 +1248,7 @@ paths:
           schema:
             $ref: '#/definitions/model.Income'
         "400":
-          description: payload del ingreso erroneo
+          description: payload del ingreso erróneo
           schema:
             additionalProperties:
               type: string
@@ -1344,12 +1263,12 @@ paths:
       - ApiKeyAuth: []
       summary: Registrar ingreso
       tags:
-      - Incomes
-  /app/empresas/{empresaID}/incomes/{incomeID}:
+      - Ingresos
+  /aplicacion/empresas/{empresaID}/ingresos/{ingresoID}:
     delete:
       description: 'Elimina un ingreso por su ID, siempre que pertenezca a la empresa
-        autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de
-        confirmación.'
+        autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje
+        de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1358,7 +1277,7 @@ paths:
         type: string
       - description: ID del ingreso
         in: path
-        name: incomeID
+        name: ingresoID
         required: true
         type: string
       produces:
@@ -1369,7 +1288,7 @@ paths:
           schema:
             type: string
         "400":
-          description: incomeID invalido
+          description: ingresoID invalido
           schema:
             additionalProperties:
               type: string
@@ -1390,32 +1309,69 @@ paths:
       - ApiKeyAuth: []
       summary: Eliminar ingreso
       tags:
-      - Incomes
-  /app/key:
+      - Ingresos
+  /aplicacion/empresas/{empresaID}/metas:
+    get:
+      description: 'Devuelve todas las metas de la empresa autenticada. La respuesta
+        viene envuelta en {"datos": [...]}. Una meta no tiene estado: su progreso
+        se calcula contra los ingresos del periodo actual y se reinicia con cada dia,
+        semana o mes.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: metas de la empresa
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Goal'
+              type: array
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar metas
+      tags:
+      - Metas
     post:
       consumes:
       - application/json
-      description: 'Genera un código de acceso, lo guarda asociado al municipal autenticado
-        (created_by) con un año de vencimiento y lo envía por correo al destinatario
-        del payload. La respuesta viene envuelta en {"data": ...} con la llave creada;
-        el código también viaja en el correo. Emitir es independiente de canjear:
-        el emprendedor lo canjea después en POST /app/users/exchange/{code}.'
+      description: 'Crea un meta asociada a la empresa autenticada. "periodo" acepta
+        dia, semana o mes. "monto_meta" es un entero en pesos chilenos (CLP, sin decimales)
+        y debe ser mayor que cero. La respuesta viene envuelta en {"datos": ...} con
+        la meta creada.'
       parameters:
-      - description: correo del destinatario
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: payload
         in: body
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/accesskeys.EmailPayload'
+          $ref: '#/definitions/goals.PayloadCrearMeta'
       produces:
       - application/json
       responses:
         "201":
-          description: código creado
+          description: objetivo creado
           schema:
-            $ref: '#/definitions/model.AccessKey'
+            $ref: '#/definitions/model.Goal'
         "400":
-          description: payload inválido o email mal formado
+          description: payload inválido o falta la empresa en el contexto
           schema:
             additionalProperties:
               type: string
@@ -1428,87 +1384,39 @@ paths:
             type: object
       security:
       - ApiKeyAuth: []
-      summary: Emitir un código de acceso
+      summary: Crear meta
       tags:
-      - AccessKeys
-  /app/key/AccessID/{keyID}:
-    post:
-      consumes:
-      - application/json
-      description: 'Vuelve a mandar por correo el código de una llave existente, sin
-        crear una llave nueva ni mover su vencimiento: si el correo se perdió, el
-        código sigue siendo el mismo. La respuesta viene envuelta en {"data": ...}
-        con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y
-        una llave inexistente, 404.'
+      - Metas
+  /aplicacion/empresas/{empresaID}/metas/{metaID}:
+    delete:
+      description: 'Elimina una meta de la empresa autenticada por su ID. La respuesta
+        viene envuelta en {"datos": ...} con el mensaje de confirmacion.'
       parameters:
-      - description: ID de la llave de acceso
+      - description: ID de la empresa
         in: path
-        name: keyID
+        name: empresaID
         required: true
         type: string
-      - description: correo del destinatario
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/accesskeys.EmailPayload'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: correo reenviado
-          schema:
-            type: string
-        "400":
-          description: keyID inválido o payload inválido
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: llave de acceso inexistente
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Reenviar el código de acceso
-      tags:
-      - AccessKeys
-  /app/key/revoke/{code}:
-    post:
-      description: 'Revoca una llave por su código, dejando registro de quién la revocó
-        (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer:
-        deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {"data":
-        ...} con el mensaje de confirmación. Un código que no existe responde 404.'
-      parameters:
-      - description: código de acceso a revocar
+      - description: ID de la meta
         in: path
-        name: code
+        name: metaID
         required: true
         type: string
       produces:
       - application/json
       responses:
         "200":
-          description: código revocado
+          description: meta eliminada
           schema:
             type: string
         "400":
-          description: código vacío
+          description: metaID invalido
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: código inexistente
+          description: meta no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1521,10 +1429,102 @@ paths:
             type: object
       security:
       - ApiKeyAuth: []
-      summary: Revocar un código de acceso
+      summary: Eliminar meta
       tags:
-      - AccessKeys
-  /app/users:
+      - Metas
+    get:
+      description: 'Devuelve una meta de la empresa autenticada por su ID. La respuesta
+        viene envuelta en {"datos": ...}.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la meta
+        in: path
+        name: metaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: meta encontrada
+          schema:
+            $ref: '#/definitions/model.Goal'
+        "400":
+          description: metaID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: meta no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Obtener meta
+      tags:
+      - Metas
+  /aplicacion/empresas/{empresaID}/metas/{metaID}/estado:
+    get:
+      description: 'Suma los ingresos de la empresa en el periodo actual (dia, semana
+        desde el lunes, o mes) y calcula el avance contra "monto_meta". La respuesta
+        viene envuelta en {"datos": ...} con monto_actual, porcentaje_actual, monto_pendiente
+        y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin
+        decimales).'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la meta
+        in: path
+        name: metaID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: estado del objetivo
+          schema:
+            $ref: '#/definitions/goals.EstadoMeta'
+        "400":
+          description: metaID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: meta no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Estado de la meta
+      tags:
+      - Metas
+  /aplicacion/usuarios:
     delete:
       description: Elimina un usuario de la base de datos
       responses:
@@ -1534,18 +1534,27 @@ paths:
             type: string
         "400":
           description: userID invalido
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: usuario no encontrado
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - ApiKeyAuth: []
       summary: Eliminar usuario
       tags:
-      - Users
+      - Usuarios
     patch:
       consumes:
       - application/json
@@ -1556,7 +1565,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/users.UpdateUserPayload'
+          $ref: '#/definitions/users.PayloadActualizarUsuario'
       produces:
       - application/json
       responses:
@@ -1565,61 +1574,29 @@ paths:
           schema:
             type: string
         "400":
-          description: payload del usuario erroneo
-          schema: {}
+          description: payload del usuario erróneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: usuario no encontrado
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - ApiKeyAuth: []
       summary: Actualizar usuario
       tags:
-      - Users
-  /app/users/exchange/{code}:
-    post:
-      description: Canjea un código de acceso y extiende el plan del usuario autenticado
-        hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado
-        se responde 400; uno inexistente, 404.
-      parameters:
-      - description: codigo de acceso
-        in: path
-        name: code
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "202":
-          description: codigo canjeado
-          schema:
-            type: string
-        "400":
-          description: codigo invalido, vencido, revocado o ya canjeado
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "404":
-          description: codigo inexistente
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "500":
-          description: error interno del servidor
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Canjear un código de acceso
-      tags:
-      - Users
-  /app/users/municipal/{rut}:
+      - Usuarios
+  /aplicacion/usuarios/municipal/{rut}:
     get:
       description: Busca un usuario por su rut
       parameters:
@@ -1637,19 +1614,28 @@ paths:
             $ref: '#/definitions/model.User'
         "400":
           description: rut invalido
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: usuario no encontrado
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       security:
       - ApiKeyAuth: []
       summary: Buscar usuario por rut
       tags:
-      - Users
-  /auth:
+      - Usuarios
+  /autenticacion:
     post:
       consumes:
       - application/json
@@ -1660,7 +1646,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/auth.CreateUserPayload'
+          $ref: '#/definitions/auth.PayloadCrearUsuario'
       produces:
       - application/json
       responses:
@@ -1669,15 +1655,21 @@ paths:
           schema:
             type: string
         "400":
-          description: payload erroneo o datos duplicados
-          schema: {}
+          description: payload erróneo o datos duplicados
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Registrar usuario
       tags:
-      - Auth
-  /auth/login:
+      - Autenticacion
+  /autenticacion/inicio-sesion:
     post:
       consumes:
       - application/json
@@ -1688,7 +1680,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/auth.LoginUserPayload'
+          $ref: '#/definitions/auth.PayloadInicioSesion'
       produces:
       - application/json
       responses:
@@ -1698,14 +1690,20 @@ paths:
             type: string
         "400":
           description: credenciales invalidas
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Iniciar sesión
       tags:
-      - Auth
-  /auth/municipal:
+      - Autenticacion
+  /autenticacion/municipal:
     post:
       consumes:
       - application/json
@@ -1716,7 +1714,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/auth.CreateMunicipalPayload'
+          $ref: '#/definitions/auth.PayloadCrearMunicipal'
       produces:
       - application/json
       responses:
@@ -1725,14 +1723,20 @@ paths:
           schema:
             type: string
         "400":
-          description: payload erroneo o datos duplicados
-          schema: {}
+          description: payload erróneo o datos duplicados
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
-          schema: {}
+          schema:
+            additionalProperties:
+              type: string
+            type: object
       summary: Registrar usuario municipal
       tags:
-      - Auth
+      - Autenticacion
 securityDefinitions:
   ApiKeyAuth:
     in: header

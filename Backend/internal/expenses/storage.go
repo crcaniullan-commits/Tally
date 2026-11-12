@@ -5,27 +5,27 @@ import (
 	"database/sql"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type StoreExpense struct {
+type AlmacenGastos struct {
 	db *sql.DB
 }
 
-func NewStorage(db *sql.DB) *StoreExpense {
-	return &StoreExpense{db: db}
+func NuevoAlmacenGastos(db *sql.DB) *AlmacenGastos {
+	return &AlmacenGastos{db: db}
 }
 
-func (s *StoreExpense) AddExpense(ctx context.Context, expense *model.Expense) error {
+func (s *AlmacenGastos) AgregarGasto(ctx context.Context, expense *model.Expense) error {
 	query := `
 		INSERT INTO expenses (empresa_id, monto, category_id, descripcion)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, fecha, created_at
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	var fecha sql.NullTime
@@ -51,16 +51,16 @@ func (s *StoreExpense) AddExpense(ctx context.Context, expense *model.Expense) e
 	return nil
 }
 
-func (s *StoreExpense) DeleteExpense(ctx context.Context, expenseID uuid.UUID, empresaID uuid.UUID) error {
+func (s *AlmacenGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM expenses
 		WHERE id = $1 and empresa_id = $2
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, expenseID, empresaID)
+	res, err := s.db.ExecContext(ctx, query, gastoID, empresaID)
 
 	if err != nil {
 		return err
@@ -73,13 +73,13 @@ func (s *StoreExpense) DeleteExpense(ctx context.Context, expenseID uuid.UUID, e
 	}
 
 	if row == 0 {
-		return util.ErrNotFound
+		return utilidades.ErrorNoEncontrado
 	}
 
 	return nil
 }
 
-func (s *StoreExpense) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Expense, error) {
+func (s *AlmacenGastos) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
 	query := `
 		SELECT id, empresa_id, monto, category_id, descripcion, fecha, created_at
 		FROM expenses
@@ -91,10 +91,10 @@ func (s *StoreExpense) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uu
 		LIMIT $2 OFFSET $3
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	rows, err := s.db.QueryContext(ctx, query, empresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID)
+	rows, err := s.db.QueryContext(ctx, query, empresaID, fq.Limite, fq.Desplazamiento, fq.Desde, fq.Hasta, fq.CategoryID)
 
 	if err != nil {
 		return nil, err
@@ -129,10 +129,10 @@ func (s *StoreExpense) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uu
 	return expenses, nil
 }
 
-// CategoryExists verifica que la categoría exista y sea visible para la
+// CategoriaExiste verifica que la categoría exista y sea visible para la
 // empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
 // no pasa el filtro y el service la trata como inexistente.
-func (s *StoreExpense) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+func (s *AlmacenGastos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1
@@ -141,7 +141,7 @@ func (s *StoreExpense) CategoryExists(ctx context.Context, categoryID uuid.UUID,
 		)
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	var existe bool

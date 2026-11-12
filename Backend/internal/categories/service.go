@@ -10,22 +10,22 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-type CategoriaStore interface {
-	Create(context.Context, *model.Categorie) error
+type RepositorioCategorias interface {
+	Crear(context.Context, *model.Categorie) error
 	CambiarNombre(context.Context, string, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
-	GetCategoriasPorEmpresa(context.Context, uuid.UUID) ([]model.Categorie, error)
-	GetCategoriasVisibles(context.Context, uuid.UUID) ([]model.Categorie, error)
+	ObtenerCategoriasPorEmpresa(context.Context, uuid.UUID) ([]model.Categorie, error)
+	ObtenerCategoriasVisibles(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
-type CategorieService struct {
-	store CategoriaStore
-}
-
-func NewCategorieService(store CategoriaStore) *CategorieService {
-	return &CategorieService{store: store}
+type ServicioCategorias struct {
+	store RepositorioCategorias
 }
 
-func (s *CategorieService) Create(ctx context.Context, payload CategoriaPayload, categoriaID *uuid.UUID) (model.Categorie, error) {
+func NuevoServicioCategorias(store RepositorioCategorias) *ServicioCategorias {
+	return &ServicioCategorias{store: store}
+}
+
+func (s *ServicioCategorias) Crear(ctx context.Context, payload PayloadCategoria, categoriaID *uuid.UUID) (model.Categorie, error) {
 	categoria := &model.Categorie{
 		Nombre:    payload.Nombre,
 		EmpresaID: categoriaID,
@@ -37,14 +37,14 @@ func (s *CategorieService) Create(ctx context.Context, payload CategoriaPayload,
 		}
 	}
 
-	if err := s.store.Create(ctx, categoria); err != nil {
+	if err := s.store.Crear(ctx, categoria); err != nil {
 		return model.Categorie{}, err
 	}
 
 	return *categoria, nil
 }
 
-func (s *CategorieService) CambiarNombre(ctx context.Context, payload CategoriaPayload, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+func (s *ServicioCategorias) CambiarNombre(ctx context.Context, payload PayloadCategoria, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	if err := s.validarNombreUnico(ctx, payload.Nombre, empresaID, &categoriaID); err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (s *CategorieService) CambiarNombre(ctx context.Context, payload CategoriaP
 	return nil
 }
 
-func (s *CategorieService) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+func (s *ServicioCategorias) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 
 	if err := s.store.BorrarCategoria(ctx, categoriaID, empresaID); err != nil {
 		return err
@@ -63,8 +63,8 @@ func (s *CategorieService) BorrarCategoria(ctx context.Context, categoriaID uuid
 	return nil
 }
 
-func (s *CategorieService) GetCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
-	return s.store.GetCategoriasVisibles(ctx, empresaID)
+func (s *ServicioCategorias) ObtenerCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+	return s.store.ObtenerCategoriasVisibles(ctx, empresaID)
 }
 
 // normalizarNombre deja el nombre comparable: sin espacios en los extremos, en
@@ -86,11 +86,11 @@ func normalizarNombre(nombre string) string {
 	return strings.ToLower(normalizado.String())
 }
 
-// validarNombreUnico devuelve AlreadyExistError si otra categoría de la misma
+// validarNombreUnico devuelve ErrorCategoriaDuplicada si otra categoría de la misma
 // empresa ya usa el nombre, sin distinguir mayúsculas, acentos ni espacios.
 // excluirID permite ignorar la categoría que se está renombrando.
-func (s *CategorieService) validarNombreUnico(ctx context.Context, nombre string, empresaID uuid.UUID, excluirID *uuid.UUID) error {
-	categorias, err := s.store.GetCategoriasPorEmpresa(ctx, empresaID)
+func (s *ServicioCategorias) validarNombreUnico(ctx context.Context, nombre string, empresaID uuid.UUID, excluirID *uuid.UUID) error {
+	categorias, err := s.store.ObtenerCategoriasPorEmpresa(ctx, empresaID)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (s *CategorieService) validarNombreUnico(ctx context.Context, nombre string
 			continue
 		}
 		if normalizarNombre(categoria.Nombre) == buscado {
-			return AlreadyExistError
+			return ErrorCategoriaDuplicada
 		}
 	}
 

@@ -3,23 +3,23 @@ package debtors
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStorage(db)
-	svc := NewDebtorService(repo)
-	hdl := NewDebtorsHandler(svc, err)
+	repo := NuevoAlmacenDeudores(db)
+	svc := NuevoServicioDeudores(repo)
+	hdl := NuevoHandlerDeudores(svc, err)
 
-	r.Route("/debtors", func(r chi.Router) {
-		r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
-		r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetDebtorsOfEmpresa))
-		r.Patch("/{debtorID}", middl.CheckOwnership(util.UserRoleUsuario, hdl.Update))
-		r.Patch("/{debtorID}/paid", middl.CheckOwnership(util.UserRoleUsuario, hdl.PaidDebtor))
+	r.Route("/deudas", func(r chi.Router) {
+		r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Crear))
+		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerDeudoresDeEmpresa))
+		r.Patch("/{deudorID}", middl.VerificarRol(utilidades.RolUsuario, hdl.Actualizar))
+		r.Patch("/{deudorID}/pagada", middl.VerificarRol(utilidades.RolUsuario, hdl.MarcarDeudorPagado))
 	})
 }

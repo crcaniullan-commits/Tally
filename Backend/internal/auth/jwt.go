@@ -16,7 +16,7 @@ func NewJWTAuthenticator(secret, aud, iss string) *JWTAuthenticator {
 	return &JWTAuthenticator{secret, aud, iss}
 }
 
-func (a *JWTAuthenticator) GenerateToken(claims jwt.Claims) (string, error) {
+func (a *JWTAuthenticator) GenerarToken(claims jwt.Claims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte(a.secret))
@@ -28,10 +28,10 @@ func (a *JWTAuthenticator) GenerateToken(claims jwt.Claims) (string, error) {
 	return tokenString, nil
 }
 
-func (a *JWTAuthenticator) ValidateToken(token string) (*jwt.Token, error) {
+func (a *JWTAuthenticator) ValidarToken(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
+			return nil, fmt.Errorf("método de firma inesperado %v", t.Header["alg"])
 		}
 
 		return []byte(a.secret), nil

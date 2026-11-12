@@ -6,135 +6,135 @@ import (
 	"net/http"
 	"time"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceDebtors interface {
-	Create(context.Context, uuid.UUID, DebtorPayload) (model.Debtor, error)
-	Update(context.Context, uuid.UUID, uuid.UUID, UpdatePayload) error
-	PaidDebtor(context.Context, uuid.UUID, uuid.UUID) error
-	GetDebtors(context.Context, uuid.UUID) ([]model.Debtor, error)
+type IServiceDeudores interface {
+	Crear(context.Context, uuid.UUID, PayloadDeudor) (model.Debtor, error)
+	Actualizar(context.Context, uuid.UUID, uuid.UUID, PayloadActualizacionDeudor) error
+	MarcarDeudorPagado(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerDeudores(context.Context, uuid.UUID) ([]model.Debtor, error)
 }
 
-type DebtorsHandler struct {
-	service ServiceDebtors
-	error   errorhandler.ErrorsResponse
+type HandlerDeudores struct {
+	service IServiceDeudores
+	error   errores.RespuestaErrores
 }
 
-func NewDebtorsHandler(s ServiceDebtors, e errorhandler.ErrorsResponse) *DebtorsHandler {
-	return &DebtorsHandler{s, e}
+func NuevoHandlerDeudores(s IServiceDeudores, e errores.RespuestaErrores) *HandlerDeudores {
+	return &HandlerDeudores{s, e}
 }
 
-type DebtorPayload struct {
+type PayloadDeudor struct {
 	Nombre      string    `json:"nombre" validate:"required,max=30"`
 	Monto       int64     `json:"monto" validate:"required,gt=0"`
 	Descripcion string    `json:"descripcion" validate:"required,max=100"`
 	FechaLimite time.Time `json:"fecha_limite" validate:"required"`
 }
 
-func (h *DebtorsHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload DebtorPayload
+func (h *HandlerDeudores) Crear(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadDeudor
 
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.error.BadRequestResponse(w, r, err)
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.error.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	deb, err := h.service.Create(r.Context(), empresaID, payload)
+	deb, err := h.service.Crear(r.Context(), empresaID, payload)
 
 	if err != nil {
-		h.error.InternalServerError(w, r, err)
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, deb); err != nil {
-		h.error.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, deb); err != nil {
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-type UpdatePayload struct {
+type PayloadActualizacionDeudor struct {
 	Nombre      string    `json:"nombre" validate:"required,max=30"`
 	Monto       int64     `json:"monto" validate:"required,gt=0"`
 	FechaLimite time.Time `json:"fecha_limite" validate:"required"`
 }
 
-func (h *DebtorsHandler) Update(w http.ResponseWriter, r *http.Request) {
-	debtorID, err := uuid.Parse(chi.URLParam(r, "debtorID"))
+func (h *HandlerDeudores) Actualizar(w http.ResponseWriter, r *http.Request) {
+	deudorID, err := uuid.Parse(chi.URLParam(r, "deudorID"))
 
 	if err != nil {
-		h.error.BadRequestResponse(w, r, err)
+		h.error.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	var payload UpdatePayload
+	var payload PayloadActualizacionDeudor
 
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.error.BadRequestResponse(w, r, err)
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.error.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	if err := h.service.Update(r.Context(), debtorID, empresaID, payload); err != nil {
+	if err := h.service.Actualizar(r.Context(), deudorID, empresaID, payload); err != nil {
 		switch {
-		case errors.Is(err, util.ErrNotFound):
-			h.error.NotFoundResponse(w, r, err)
+		case errors.Is(err, utilidades.ErrorNoEncontrado):
+			h.error.ErrorNoEncontrado(w, r, err)
 		default:
-			h.error.InternalServerError(w, r, err)
+			h.error.ErrorInterno(w, r, err)
 		}
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Deuda actualizada"); err != nil {
-		h.error.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Deuda actualizada"); err != nil {
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *DebtorsHandler) PaidDebtor(w http.ResponseWriter, r *http.Request) {
-	debtorID, err := uuid.Parse(chi.URLParam(r, "debtorID"))
+func (h *HandlerDeudores) MarcarDeudorPagado(w http.ResponseWriter, r *http.Request) {
+	deudorID, err := uuid.Parse(chi.URLParam(r, "deudorID"))
 
 	if err != nil {
-		h.error.BadRequestResponse(w, r, err)
+		h.error.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresaID := util.GetEmpresaFromContext(r).ID
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	if err := h.service.PaidDebtor(r.Context(), debtorID, empresaID); err != nil {
+	if err := h.service.MarcarDeudorPagado(r.Context(), deudorID, empresaID); err != nil {
 		switch {
-		case errors.Is(err, util.ErrNotFound):
-			h.error.NotFoundResponse(w, r, err)
+		case errors.Is(err, utilidades.ErrorNoEncontrado):
+			h.error.ErrorNoEncontrado(w, r, err)
 		default:
-			h.error.InternalServerError(w, r, err)
+			h.error.ErrorInterno(w, r, err)
 		}
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Deuda pagada"); err != nil {
-		h.error.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Deuda pagada"); err != nil {
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *DebtorsHandler) GetDebtorsOfEmpresa(w http.ResponseWriter, r *http.Request) {
-	empresaID := util.GetEmpresaFromContext(r).ID
+func (h *HandlerDeudores) ObtenerDeudoresDeEmpresa(w http.ResponseWriter, r *http.Request) {
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
 
-	debtors, err := h.service.GetDebtors(r.Context(), empresaID)
+	debtors, err := h.service.ObtenerDeudores(r.Context(), empresaID)
 	if err != nil {
-		h.error.InternalServerError(w, r, err)
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, debtors); err != nil {
-		h.error.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, debtors); err != nil {
+		h.error.ErrorInterno(w, r, err)
 		return
 	}
 }

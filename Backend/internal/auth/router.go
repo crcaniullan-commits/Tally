@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"time"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/bdtx"
+	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -16,10 +16,10 @@ var (
 	cExp          time.Duration
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, tran *dbtx.Transactor,
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, tran *bdtx.Transactor,
 	secret, iss string, exp time.Duration) {
-	err := errorhandler.NewErrorResponse(logger)
-	rem := accesskeys.NewStorage(db)
+	err := errores.NuevaRespuestaErrores(logger)
+	rem := clavesacceso.NuevoAlmacenClavesAcceso(db)
 	jwt := NewJWTAuthenticator(
 		secret,
 		iss,
@@ -30,13 +30,13 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, tran *dbtx.
 	cIss = iss
 	cExp = exp
 
-	repo := NewStorage(db)
-	svc := NewAuthService(repo, jwt, tran, rem)
-	hdl := NewAuthHandler(svc, err)
+	repo := NuevoAlmacenAuth(db)
+	svc := NuevoServicioAuth(repo, jwt, tran, rem)
+	hdl := NuevoHandlerAuth(svc, err)
 
-	r.Route("/auth", func(r chi.Router) {
-		r.Post("/", hdl.RegisterHandler)
-		r.Post("/login", hdl.Login)
+	r.Route("/autenticacion", func(r chi.Router) {
+		r.Post("/", hdl.Registrar)
+		r.Post("/inicio-sesion", hdl.Login)
 		r.Post("/municipal", hdl.CrearMunicipal)
 	})
 }

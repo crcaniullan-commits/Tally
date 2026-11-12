@@ -5,158 +5,158 @@ import (
 	"fmt"
 	"net/http"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceCategories interface {
-	Create(context.Context, CategoriaPayload, *uuid.UUID) (model.Categorie, error)
-	CambiarNombre(context.Context, CategoriaPayload, uuid.UUID, uuid.UUID) error
+type IServiceCategorias interface {
+	Crear(context.Context, PayloadCategoria, *uuid.UUID) (model.Categorie, error)
+	CambiarNombre(context.Context, PayloadCategoria, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
-	GetCategorias(context.Context, uuid.UUID) ([]model.Categorie, error)
+	ObtenerCategorias(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
 
-type CategoriesHandler struct {
-	service ServiceCategories
-	errors  errorhandler.ErrorsResponse
+type HandlerCategorias struct {
+	service IServiceCategorias
+	errors  errores.RespuestaErrores
 }
 
-func NewCategoriesHandler(s ServiceCategories, e errorhandler.ErrorsResponse) *CategoriesHandler {
-	return &CategoriesHandler{s, e}
+func NuevoHandlerCategorias(s IServiceCategorias, e errores.RespuestaErrores) *HandlerCategorias {
+	return &HandlerCategorias{s, e}
 }
 
-type CategoriaPayload struct {
+type PayloadCategoria struct {
 	Nombre string `json:"nombre" validate:"required,max=30"`
 }
 
-func (h *CategoriesHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload CategoriaPayload
-	empresa := util.GetEmpresaFromContext(r)
+func (h *HandlerCategorias) Crear(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadCategoria
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	categoria, err := h.service.Create(r.Context(), payload, &empresa.ID)
+	categoria, err := h.service.Crear(r.Context(), payload, &empresa.ID)
 
 	if err != nil {
 		switch err {
-		case AlreadyExistError:
-			h.errors.BadRequestResponse(w, r, err)
+		case ErrorCategoriaDuplicada:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, categoria); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, categoria); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *CategoriesHandler) GetCategorias(w http.ResponseWriter, r *http.Request) {
-	empresa := util.GetEmpresaFromContext(r)
+func (h *HandlerCategorias) ObtenerCategorias(w http.ResponseWriter, r *http.Request) {
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	categorias, err := h.service.GetCategorias(r.Context(), empresa.ID)
+	categorias, err := h.service.ObtenerCategorias(r.Context(), empresa.ID)
 	if err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, categorias); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, categorias); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *CategoriesHandler) CambiarNombre(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerCategorias) CambiarNombre(w http.ResponseWriter, r *http.Request) {
 	categoriaID, err := uuid.Parse(chi.URLParam(r, "categoriaID"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	var payload CategoriaPayload
-	empresa := util.GetEmpresaFromContext(r)
+	var payload PayloadCategoria
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
 	if err := h.service.CambiarNombre(r.Context(), payload, categoriaID, empresa.ID); err != nil {
 		switch err {
-		case AlreadyExistError:
-			h.errors.BadRequestResponse(w, r, err)
+		case ErrorCategoriaDuplicada:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Nombre cambiado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Nombre cambiado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
 }
 
-func (h *CategoriesHandler) BorrarCategoria(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerCategorias) BorrarCategoria(w http.ResponseWriter, r *http.Request) {
 	categoriaID, err := uuid.Parse(chi.URLParam(r, "categoria"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresa := util.GetEmpresaFromContext(r)
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
 	if err := h.service.BorrarCategoria(r.Context(), categoriaID, empresa.ID); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	mensaje := fmt.Sprintf("Categoria %v eliminada", categoriaID)
+	mensaje := fmt.Sprintf("Categoría %v eliminada", categoriaID)
 
-	if err := util.JsonResponse(w, http.StatusOK, mensaje); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, mensaje); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }

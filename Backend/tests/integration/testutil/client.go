@@ -69,12 +69,12 @@ func DecodeData[T any](t *testing.T, r Result) T {
 	t.Helper()
 
 	var envelope struct {
-		Data T `json:"data"`
+		Datos T `json:"datos"`
 	}
 
 	require.NoError(t, json.Unmarshal(r.Body, &envelope), "respuesta no es JSON válido: %s", r.Body)
 
-	return envelope.Data
+	return envelope.Datos
 }
 
 func DecodeError(t *testing.T, r Result) string {

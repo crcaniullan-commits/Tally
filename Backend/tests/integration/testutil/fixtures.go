@@ -57,7 +57,7 @@ func registerMunicipal() (string, string, error) {
 	email := UniqueEmail("municipal")
 	rut := NewRUT()
 
-	res, err := doRequest(http.MethodPost, "/v1/auth/municipal", "", map[string]string{
+	res, err := doRequest(http.MethodPost, "/v1/autenticacion/municipal", "", map[string]string{
 		"email":    email,
 		"password": "Municipal123",
 		"nombre":   "Municipal Integration",
@@ -72,13 +72,13 @@ func registerMunicipal() (string, string, error) {
 	}
 
 	var envelope struct {
-		Data string `json:"data"`
+		Datos string `json:"datos"`
 	}
 	if err := json.Unmarshal(res.Body, &envelope); err != nil {
 		return "", "", fmt.Errorf("decodificando token municipal: %w", err)
 	}
 
-	return envelope.Data, rut, nil
+	return envelope.Datos, rut, nil
 }
 
 func MunicipalToken(t *testing.T) string {
@@ -116,7 +116,7 @@ func NewUser(t *testing.T) *User {
 	for attempt := 0; attempt < 5; attempt++ {
 		rut := NewRUT()
 
-		res := Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    email,
 			"password": password,
 			"nombre":   "Usuario Integration",
@@ -157,7 +157,7 @@ func NewUser(t *testing.T) *User {
 func IssueKey(t *testing.T, email string) model.AccessKey {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, "/v1/app/key", MunicipalToken(t), map[string]string{
+	res := Request(t, http.MethodPost, "/v1/aplicacion/claves", MunicipalToken(t), map[string]string{
 		"email": email,
 	})
 
@@ -177,13 +177,13 @@ func userIDByEmail(t *testing.T, email string) uuid.UUID {
 }
 
 func EmpresaPath(empresaID uuid.UUID, suffix string) string {
-	return "/v1/app/empresas/" + empresaID.String() + suffix
+	return "/v1/aplicacion/empresas/" + empresaID.String() + suffix
 }
 
 func CreateEmpresa(t *testing.T, user *User) model.Empresa {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, "/v1/app/empresas", user.Token, map[string]string{
+	res := Request(t, http.MethodPost, "/v1/aplicacion/empresas", user.Token, map[string]string{
 		"nombre_empresa": UniqueName("Empresa"),
 	})
 
@@ -195,7 +195,7 @@ func CreateEmpresa(t *testing.T, user *User) model.Empresa {
 func CreateCategory(t *testing.T, user *User, empresaID uuid.UUID) model.Categorie {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/categories"), user.Token, map[string]string{
+	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/categorias"), user.Token, map[string]string{
 		"nombre": UniqueName("Cat"),
 	})
 
@@ -215,7 +215,7 @@ func CreateIncome(t *testing.T, user *User, empresaID uuid.UUID, monto int64, ca
 		payload["category_id"] = categoryID.String()
 	}
 
-	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/incomes"), user.Token, payload)
+	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/ingresos"), user.Token, payload)
 
 	RequireStatus(t, res, http.StatusCreated)
 
@@ -225,7 +225,7 @@ func CreateIncome(t *testing.T, user *User, empresaID uuid.UUID, monto int64, ca
 func CreateExpense(t *testing.T, user *User, empresaID uuid.UUID, monto int64, categoryID uuid.UUID) model.Expense {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/expenses"), user.Token, map[string]any{
+	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/gastos"), user.Token, map[string]any{
 		"monto":       monto,
 		"category_id": categoryID.String(),
 	})
@@ -238,7 +238,7 @@ func CreateExpense(t *testing.T, user *User, empresaID uuid.UUID, monto int64, c
 func CreateDebtor(t *testing.T, user *User, empresaID uuid.UUID, monto int64) model.Debtor {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/debtors"), user.Token, map[string]any{
+	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/deudas"), user.Token, map[string]any{
 		"nombre":       UniqueName("Deudor"),
 		"monto":        monto,
 		"descripcion":  "deuda de prueba",
@@ -253,7 +253,7 @@ func CreateDebtor(t *testing.T, user *User, empresaID uuid.UUID, monto int64) mo
 func CreateGoal(t *testing.T, user *User, empresaID uuid.UUID, periodo string, montoMeta int64) model.Goal {
 	t.Helper()
 
-	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/goal"), user.Token, map[string]any{
+	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/metas"), user.Token, map[string]any{
 		"nombre":     UniqueName("Meta"),
 		"periodo":    periodo,
 		"monto_meta": montoMeta,

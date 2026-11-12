@@ -16,7 +16,7 @@ func TestAuthFlow(t *testing.T) {
 	const municipalPassword = "Municipal123"
 
 	t.Run("registra un usuario municipal", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/municipal", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/municipal", "", map[string]string{
 			"email":    municipalEmail,
 			"password": municipalPassword,
 			"nombre":   "Municipal Auth",
@@ -28,7 +28,7 @@ func TestAuthFlow(t *testing.T) {
 	})
 
 	t.Run("el municipal puede iniciar sesión", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    municipalEmail,
 			"password": municipalPassword,
 		})
@@ -45,7 +45,7 @@ func TestAuthFlow(t *testing.T) {
 	var token string
 
 	t.Run("registra un usuario canjeando una llave", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    email,
 			"password": password,
 			"nombre":   "Usuario Auth",
@@ -68,7 +68,7 @@ func TestAuthFlow(t *testing.T) {
 	})
 
 	t.Run("el usuario registrado puede iniciar sesión", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    email,
 			"password": password,
 		})
@@ -78,7 +78,7 @@ func TestAuthFlow(t *testing.T) {
 	})
 
 	t.Run("la misma llave no se puede canjear dos veces", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    testutil.UniqueEmail("auth_second"),
 			"password": password,
 			"nombre":   "Segundo Usuario",
@@ -86,11 +86,11 @@ func TestAuthFlow(t *testing.T) {
 			"code":     key.Code,
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "The code can't be Redeemed")
+		testutil.RequireError(t, res, http.StatusBadRequest, "El código no se puede canjear")
 	})
 
 	t.Run("una llave inexistente no se puede canjear", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    testutil.UniqueEmail("auth_badkey"),
 			"password": password,
 			"nombre":   "Sin Llave",
@@ -98,12 +98,12 @@ func TestAuthFlow(t *testing.T) {
 			"code":     "NO-EXISTE",
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "The code can't be Redeemed")
+		testutil.RequireError(t, res, http.StatusBadRequest, "El código no se puede canjear")
 	})
 
 	t.Run("rechaza un email ya registrado", func(t *testing.T) {
 		otherKey := testutil.IssueKey(t, testutil.UniqueEmail("auth_dup_email"))
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    email,
 			"password": password,
 			"nombre":   "Duplicado",
@@ -111,16 +111,16 @@ func TestAuthFlow(t *testing.T) {
 			"code":     otherKey.Code,
 		})
 
-		// BUG: auth.StoreAuth.Create compara err.Error() contra el texto exacto
+		// BUG: auth.AlmacenAuth.Crear compara err.Error() contra el texto exacto
 		// de pq, pero lib/pq agrega " (23505)". El error no matchea y el
-		// handler responde 500 en vez del 400 "a user with that email already
-		// exists" que declara users.ErrDuplicateEmail.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		// handler responde 500 en vez del 400 "ya existe un usuario con ese
+		// correo" que declara users.ErrDuplicateEmail.
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("rechaza un RUT ya registrado", func(t *testing.T) {
 		otherKey := testutil.IssueKey(t, testutil.UniqueEmail("auth_dup_rut"))
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    testutil.UniqueEmail("auth_dup_rut_user"),
 			"password": password,
 			"nombre":   "Duplicado",
@@ -130,11 +130,11 @@ func TestAuthFlow(t *testing.T) {
 
 		// Mismo bug que el email duplicado: el sufijo " (23505)" impide que
 		// el error se traduzca a users.ErrDuplicateRut.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("rechaza un RUT con formato inválido", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    testutil.UniqueEmail("auth_bad_rut"),
 			"password": password,
 			"nombre":   "RUT Inválido",
@@ -144,11 +144,11 @@ func TestAuthFlow(t *testing.T) {
 
 		// BUG: el handler de auth no mapea model.ErrFormatoInvalido, así que
 		// ParseRUT termina en un 500 en vez de un 400 con el mensaje de dominio.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("login rechaza una contraseña incorrecta", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    email,
 			"password": "WrongPassword123",
 		})
@@ -157,12 +157,12 @@ func TestAuthFlow(t *testing.T) {
 	})
 
 	t.Run("login rechaza un email inexistente", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    testutil.UniqueEmail("auth_nobody"),
 			"password": password,
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
 
 	t.Run("login valida el payload", func(t *testing.T) {
@@ -174,23 +174,23 @@ func TestAuthFlow(t *testing.T) {
 			{
 				name:    "email inválido",
 				body:    map[string]string{"email": "no-es-email", "password": password},
-				message: "Key: 'LoginUserPayload.Email' Error:Field validation for 'Email' failed on the 'email' tag",
+				message: "Key: 'PayloadInicioSesion.Email' Error:Field validation for 'Email' failed on the 'email' tag",
 			},
 			{
 				name:    "contraseña corta",
 				body:    map[string]string{"email": email, "password": "short"},
-				message: "Key: 'LoginUserPayload.Password' Error:Field validation for 'Password' failed on the 'min' tag",
+				message: "Key: 'PayloadInicioSesion.Password' Error:Field validation for 'Password' failed on the 'min' tag",
 			},
 			{
 				name:    "campos faltantes",
 				body:    map[string]any{},
-				message: "Key: 'LoginUserPayload.Email' Error:Field validation for 'Email' failed on the 'required' tag\nKey: 'LoginUserPayload.Password' Error:Field validation for 'Password' failed on the 'required' tag",
+				message: "Key: 'PayloadInicioSesion.Email' Error:Field validation for 'Email' failed on the 'required' tag\nKey: 'PayloadInicioSesion.Password' Error:Field validation for 'Password' failed on the 'required' tag",
 			},
 		}
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", tc.body)
+				res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
@@ -205,22 +205,22 @@ func TestAuthFlow(t *testing.T) {
 			{
 				name:    "email inválido",
 				body:    map[string]string{"email": "no-es-email", "password": password, "nombre": "X", "rut": testutil.NewRUT(), "code": "x"},
-				message: "Key: 'CreateUserPayload.Email' Error:Field validation for 'Email' failed on the 'email' tag",
+				message: "Key: 'PayloadCrearUsuario.Email' Error:Field validation for 'Email' failed on the 'email' tag",
 			},
 			{
 				name:    "contraseña corta",
 				body:    map[string]string{"email": "x@example.com", "password": "short", "nombre": "X", "rut": testutil.NewRUT(), "code": "x"},
-				message: "Key: 'CreateUserPayload.Password' Error:Field validation for 'Password' failed on the 'min' tag",
+				message: "Key: 'PayloadCrearUsuario.Password' Error:Field validation for 'Password' failed on the 'min' tag",
 			},
 			{
 				name:    "contraseña larga",
 				body:    map[string]string{"email": "x@example.com", "password": string(make([]byte, 73)), "nombre": "X", "rut": testutil.NewRUT(), "code": "x"},
-				message: "Key: 'CreateUserPayload.Password' Error:Field validation for 'Password' failed on the 'max' tag",
+				message: "Key: 'PayloadCrearUsuario.Password' Error:Field validation for 'Password' failed on the 'max' tag",
 			},
 			{
 				name:    "campos faltantes",
 				body:    map[string]any{},
-				message: "Key: 'CreateUserPayload.Email' Error:Field validation for 'Email' failed on the 'required' tag\nKey: 'CreateUserPayload.Password' Error:Field validation for 'Password' failed on the 'required' tag\nKey: 'CreateUserPayload.Name' Error:Field validation for 'Name' failed on the 'required' tag\nKey: 'CreateUserPayload.Rut' Error:Field validation for 'Rut' failed on the 'required' tag\nKey: 'CreateUserPayload.Code' Error:Field validation for 'Code' failed on the 'required' tag",
+				message: "Key: 'PayloadCrearUsuario.Email' Error:Field validation for 'Email' failed on the 'required' tag\nKey: 'PayloadCrearUsuario.Password' Error:Field validation for 'Password' failed on the 'required' tag\nKey: 'PayloadCrearUsuario.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag\nKey: 'PayloadCrearUsuario.Rut' Error:Field validation for 'Rut' failed on the 'required' tag\nKey: 'PayloadCrearUsuario.Code' Error:Field validation for 'Code' failed on the 'required' tag",
 			},
 			{
 				name:    "JSON malformado",
@@ -230,7 +230,7 @@ func TestAuthFlow(t *testing.T) {
 			{
 				name:    "tipo incorrecto",
 				body:    `{"email":1,"password":true}`,
-				message: "json: cannot unmarshal number into Go struct field CreateUserPayload.email of type string",
+				message: "json: cannot unmarshal number into Go struct field PayloadCrearUsuario.email of type string",
 			},
 			{
 				name:    "campo desconocido",
@@ -240,13 +240,13 @@ func TestAuthFlow(t *testing.T) {
 			{
 				name:    "nombre demasiado largo",
 				body:    map[string]string{"email": "x@example.com", "password": password, "nombre": string(make([]byte, 101)), "rut": testutil.NewRUT(), "code": "x"},
-				message: "Key: 'CreateUserPayload.Name' Error:Field validation for 'Name' failed on the 'max' tag",
+				message: "Key: 'PayloadCrearUsuario.Nombre' Error:Field validation for 'Nombre' failed on the 'max' tag",
 			},
 		}
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPost, "/v1/auth", "", tc.body)
+				res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
@@ -261,25 +261,25 @@ func TestAuthFlow(t *testing.T) {
 			{
 				name:    "RUT corto",
 				body:    map[string]string{"email": testutil.UniqueEmail("muni_short"), "password": municipalPassword, "nombre": "X", "rut": "1234-5"},
-				message: "Key: 'CreateMunicipalPayload.Rut' Error:Field validation for 'Rut' failed on the 'min' tag",
+				message: "Key: 'PayloadCrearMunicipal.Rut' Error:Field validation for 'Rut' failed on the 'min' tag",
 			},
 			{
 				name:    "RUT largo",
 				body:    map[string]string{"email": testutil.UniqueEmail("muni_long"), "password": municipalPassword, "nombre": "X", "rut": "1234567890123-4"},
-				message: "Key: 'CreateMunicipalPayload.Rut' Error:Field validation for 'Rut' failed on the 'max' tag",
+				message: "Key: 'PayloadCrearMunicipal.Rut' Error:Field validation for 'Rut' failed on the 'max' tag",
 			},
 		}
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPost, "/v1/auth/municipal", "", tc.body)
+				res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/municipal", "", tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
 	})
 
 	t.Run("rechaza un email municipal duplicado", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/municipal", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/municipal", "", map[string]string{
 			"email":    municipalEmail,
 			"password": municipalPassword,
 			"nombre":   "Municipal Duplicado",
@@ -287,14 +287,14 @@ func TestAuthFlow(t *testing.T) {
 		})
 
 		// Mismo bug de comparación de errores pq que en el registro normal.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("el token permite acceder a una ruta protegida", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", token, nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", token, nil)
 		testutil.RequireStatus(t, res, http.StatusOK)
 	})
 
-	requireProtected(t, http.MethodGet, "/v1/app/empresas")
-	requireProtected(t, http.MethodPatch, "/v1/app/users")
+	requireProtected(t, http.MethodGet, "/v1/aplicacion/empresas")
+	requireProtected(t, http.MethodPatch, "/v1/aplicacion/usuarios")
 }

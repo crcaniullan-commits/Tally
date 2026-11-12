@@ -9,70 +9,70 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// GoalStoreMock es un mock de GoalStorage para probar GoalService sin tocar la
+// GoalStoreMock es un mock de RepositorioMetas para probar ServicioMetas sin tocar la
 // base de datos.
 type GoalStoreMock struct {
 	mock.Mock
 }
 
-func (m *GoalStoreMock) CreateGoal(ctx context.Context, goal *model.Goal) error {
+func (m *GoalStoreMock) CrearMeta(ctx context.Context, goal *model.Goal) error {
 	args := m.Called(ctx, goal)
 	return args.Error(0)
 }
 
-func (m *GoalStoreMock) DeleteGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, goalID, empresaID)
+func (m *GoalStoreMock) EliminarMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, metaID, empresaID)
 	return args.Error(0)
 }
 
-func (m *GoalStoreMock) GetIncomesTotalByPeriod(ctx context.Context, empresaID uuid.UUID, period model.GoalPeriod) (int64, error) {
+func (m *GoalStoreMock) ObtenerTotalIngresosPorPeriodo(ctx context.Context, empresaID uuid.UUID, period model.GoalPeriod) (int64, error) {
 	args := m.Called(ctx, empresaID, period)
 	total, _ := args.Get(0).(int64)
 	return total, args.Error(1)
 }
 
-func (m *GoalStoreMock) GetGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
-	args := m.Called(ctx, goalID, empresaID)
+func (m *GoalStoreMock) ObtenerMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
+	args := m.Called(ctx, metaID, empresaID)
 	goal, _ := args.Get(0).(model.Goal)
 	return goal, args.Error(1)
 }
 
-func (m *GoalStoreMock) GetGoals(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
+func (m *GoalStoreMock) ObtenerMetas(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
 	args := m.Called(ctx, empresaID)
 	goals, _ := args.Get(0).([]model.Goal)
 	return goals, args.Error(1)
 }
 
-// ServiceGoalsMock es un mock de ServiceGoals para probar GoalsHandler de forma
+// IServiceGoalsMock es un mock de IServiceMetas para probar HandlerMetas de forma
 // aislada.
-type ServiceGoalsMock struct {
+type IServiceGoalsMock struct {
 	mock.Mock
 }
 
-func (m *ServiceGoalsMock) createGoal(ctx context.Context, payload CreateGoalPayload, empresaID uuid.UUID) (model.Goal, error) {
+func (m *IServiceGoalsMock) CrearMeta(ctx context.Context, payload PayloadCrearMeta, empresaID uuid.UUID) (model.Goal, error) {
 	args := m.Called(ctx, payload, empresaID)
 	goal, _ := args.Get(0).(model.Goal)
 	return goal, args.Error(1)
 }
 
-func (m *ServiceGoalsMock) DeleteGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, goalID, empresaID)
+func (m *IServiceGoalsMock) EliminarMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, metaID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceGoalsMock) GetGoalState(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (GoalState, error) {
-	args := m.Called(ctx, goalID, empresaID)
-	state, _ := args.Get(0).(GoalState)
+func (m *IServiceGoalsMock) ObtenerEstadoMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (EstadoMeta, error) {
+	args := m.Called(ctx, metaID, empresaID)
+	state, _ := args.Get(0).(EstadoMeta)
 	return state, args.Error(1)
 }
 
-func (m *ServiceGoalsMock) getGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
-	args := m.Called(ctx, goalID, empresaID)
+func (m *IServiceGoalsMock) ObtenerMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
+	args := m.Called(ctx, metaID, empresaID)
 	goal, _ := args.Get(0).(model.Goal)
 	return goal, args.Error(1)
 }
 
-func (m *ServiceGoalsMock) getGoals(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
+func (m *IServiceGoalsMock) ObtenerMetas(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
 	args := m.Called(ctx, empresaID)
 	goals, _ := args.Get(0).([]model.Goal)
 	return goals, args.Error(1)
@@ -99,10 +99,10 @@ func newTestGoal() model.Goal {
 }
 
 // newTestPayloadGoal arma el payload de alta con valores que pasan la validación.
-func newTestPayloadGoal() CreateGoalPayload {
-	return CreateGoalPayload{
-		Nombre:     "Ahorrar",
-		Periodo:    model.GoalPeriodMes,
-		Monto_meta: 10000,
+func newTestPayloadGoal() PayloadCrearMeta {
+	return PayloadCrearMeta{
+		Nombre:    "Ahorrar",
+		Periodo:   model.GoalPeriodMes,
+		MontoMeta: 10000,
 	}
 }

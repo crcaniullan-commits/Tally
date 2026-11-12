@@ -1,56 +1,56 @@
 package categories
 
-// GetCategorias
+// ObtenerCategorias
 //
 //	@Summary		Listar categorías
-//	@Description	Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque "empresa_id" viene null. La respuesta viene envuelta en {"data": [...]} con las categorías propias primero, ordenadas por nombre.
-//	@Tags			Categories
+//	@Description	Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque "empresa_id" viene null. La respuesta viene envuelta en {"datos": [...]} con las categorías propias primero, ordenadas por nombre.
+//	@Tags			Categorias
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Success		200			{array}		model.Categorie		"categorías de la empresa y globales"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/categories	[get]
-func GetCategorias() {}
+//	@Router			/aplicacion/empresas/{empresaID}/categorias	[get]
+func ObtenerCategorias() {}
 
-// Create
+// Crear
 //
 //	@Summary		Crear categoría
-//	@Description	Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con la categoría creada.
-//	@Tags			Categories
+//	@Description	Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con la categoría creada.
+//	@Tags			Categorias
 //	@Accept			json
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		CategoriaPayload	true	"payload"
+//	@Param			payload		body		PayloadCategoria	true	"payload"
 //	@Success		201			{object}	model.Categorie		"categoría creada"
-//	@Failure		400			{object}	map[string]string	"payload de la categoría erroneo o la categoría ya existe"
+//	@Failure		400			{object}	map[string]string	"payload de la categoría erróneo o la categoría ya existe"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/categories	[post]
-func Create() {}
+//	@Router			/aplicacion/empresas/{empresaID}/categorias	[post]
+func Crear() {}
 
 // CambiarNombre
 //
 //	@Summary		Cambiar nombre de categoría
-//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.
-//	@Tags			Categories
+//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Tags			Categorias
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			categoriaID	path		string				true	"ID de la categoría"
-//	@Param			payload		body		CategoriaPayload	true	"payload"
+//	@Param			payload		body		PayloadCategoria	true	"payload"
 //	@Success		200			{object}	string				"nombre cambiado"
-//	@Failure		400			{object}	map[string]string	"categoriaID invalido o payload erroneo"
+//	@Failure		400			{object}	map[string]string	"categoriaID inválido o payload erróneo"
 //	@Failure		404			{object}	map[string]string	"categoría no encontrada"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/categories/{categoriaID}	[patch]
+//	@Router			/aplicacion/empresas/{empresaID}/categorias/{categoriaID}	[patch]
 func CambiarNombre() {}
 
 // BorrarCategoria
 //
 //	@Summary		Eliminar categoría
-//	@Description	Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.
-//	@Tags			Categories
+//	@Description	Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Tags			Categorias
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			categoria	path		string				true	"ID de la categoría"
@@ -59,5 +59,5 @@ func CambiarNombre() {}
 //	@Failure		404			{object}	map[string]string	"categoría no encontrada"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/categories/{categoria}	[delete]
+//	@Router			/aplicacion/empresas/{empresaID}/categorias/{categoria}	[delete]
 func BorrarCategoria() {}

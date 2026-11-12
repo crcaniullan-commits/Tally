@@ -7,25 +7,25 @@ import (
 	"fmt"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type StoreGoal struct {
+type AlmacenMetas struct {
 	db *sql.DB
 }
 
-func NewStoreGoal(db *sql.DB) *StoreGoal {
-	return &StoreGoal{db: db}
+func NuevoAlmacenMetas(db *sql.DB) *AlmacenMetas {
+	return &AlmacenMetas{db: db}
 }
 
-func (s *StoreGoal) CreateGoal(ctx context.Context, goal *model.Goal) error {
+func (s *AlmacenMetas) CrearMeta(ctx context.Context, goal *model.Goal) error {
 	query := `
 		INSERT INTO goals (empresa_id, nombre, periodo, monto_meta)
 		VALUES ($1, $2, $3, $4) RETURNING id, created_at
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	err := s.db.QueryRowContext(ctx, query, goal.EmpresaID, goal.Nombre, goal.Periodo, goal.MontoMeta).Scan(
@@ -40,16 +40,16 @@ func (s *StoreGoal) CreateGoal(ctx context.Context, goal *model.Goal) error {
 	return nil
 }
 
-func (s *StoreGoal) DeleteGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) error {
+func (s *AlmacenMetas) EliminarMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM goals
 		WHERE id = $1 and empresa_id = $2
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, goalID, empresaID)
+	res, err := s.db.ExecContext(ctx, query, metaID, empresaID)
 
 	if err != nil {
 		return err
@@ -62,16 +62,16 @@ func (s *StoreGoal) DeleteGoal(ctx context.Context, goalID uuid.UUID, empresaID 
 	}
 
 	if row == 0 {
-		return util.ErrNotFound
+		return utilidades.ErrorNoEncontrado
 	}
 
 	return nil
 }
 
-// dateTruncUnit traduce el período del dominio (en español) al unit que
+// unidadDateTrunc traduce el período del dominio (en español) al unit que
 // entiende date_trunc. La traducción vive en Go para que un período inválido
 // falle antes de llegar a Postgres.
-func dateTruncUnit(period model.GoalPeriod) (string, error) {
+func unidadDateTrunc(period model.GoalPeriod) (string, error) {
 	switch period {
 	case model.GoalPeriodDia:
 		return "day", nil
@@ -84,11 +84,11 @@ func dateTruncUnit(period model.GoalPeriod) (string, error) {
 	}
 }
 
-// GetIncomesTotalByPeriod suma los ingresos de la empresa dentro del período
+// ObtenerTotalIngresosPorPeriodo suma los ingresos de la empresa dentro del período
 // actual (día, semana o mes). El rango es semiabierto [inicio, fin) sobre
 // fecha, y date_trunc('week') usa la semana ISO (lunes).
-func (s *StoreGoal) GetIncomesTotalByPeriod(ctx context.Context, empresaID uuid.UUID, period model.GoalPeriod) (int64, error) {
-	unit, err := dateTruncUnit(period)
+func (s *AlmacenMetas) ObtenerTotalIngresosPorPeriodo(ctx context.Context, empresaID uuid.UUID, period model.GoalPeriod) (int64, error) {
+	unit, err := unidadDateTrunc(period)
 	if err != nil {
 		return 0, err
 	}
@@ -105,7 +105,7 @@ func (s *StoreGoal) GetIncomesTotalByPeriod(ctx context.Context, empresaID uuid.
 		  END)::date
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	var total int64
@@ -117,19 +117,19 @@ func (s *StoreGoal) GetIncomesTotalByPeriod(ctx context.Context, empresaID uuid.
 	return total, nil
 }
 
-func (s *StoreGoal) GetGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
+func (s *AlmacenMetas) ObtenerMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
 	query := `
 		SELECT id, empresa_id, nombre, periodo, monto_meta, created_At
 		FROM goals
 		WHERE empresa_id = $1 and id = $2
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	var goal model.Goal
 
-	err := s.db.QueryRowContext(ctx, query, empresaID, goalID).Scan(
+	err := s.db.QueryRowContext(ctx, query, empresaID, metaID).Scan(
 		&goal.ID,
 		&goal.EmpresaID,
 		&goal.Nombre,
@@ -140,7 +140,7 @@ func (s *StoreGoal) GetGoal(ctx context.Context, goalID uuid.UUID, empresaID uui
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return model.Goal{}, util.ErrNotFound
+			return model.Goal{}, utilidades.ErrorNoEncontrado
 		}
 
 		return model.Goal{}, err
@@ -149,13 +149,13 @@ func (s *StoreGoal) GetGoal(ctx context.Context, goalID uuid.UUID, empresaID uui
 	return goal, nil
 }
 
-func (s *StoreGoal) GetGoals(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
+func (s *AlmacenMetas) ObtenerMetas(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
 	query := `
 		SELECT id, empresa_id, nombre, periodo, monto_meta, created_At
 		FROM goals
 		WHERE empresa_id = $1
 	`
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	goals := make([]model.Goal, 0)

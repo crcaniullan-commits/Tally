@@ -5,28 +5,28 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
-// StoreExpensesMock es un mock de la capa de persistencia (StoreExpenses) usado
-// para probar ExpenseService sin tocar la base de datos.
-type StoreExpensesMock struct {
+// RepositorioExpensesMock es un mock de la capa de persistencia (RepositorioGastos) usado
+// para probar ServicioGastos sin tocar la base de datos.
+type RepositorioExpensesMock struct {
 	mock.Mock
 }
 
-func (m *StoreExpensesMock) AddExpense(ctx context.Context, expense *model.Expense) error {
+func (m *RepositorioExpensesMock) AgregarGasto(ctx context.Context, expense *model.Expense) error {
 	args := m.Called(ctx, expense)
 	return args.Error(0)
 }
 
-func (m *StoreExpensesMock) DeleteExpense(ctx context.Context, expenseID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, expenseID, empresaID)
+func (m *RepositorioExpensesMock) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, gastoID, empresaID)
 	return args.Error(0)
 }
 
-func (m *StoreExpensesMock) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Expense, error) {
+func (m *RepositorioExpensesMock) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
 	args := m.Called(ctx, empresaID, fq)
 
 	expenses, _ := args.Get(0).([]model.Expense)
@@ -34,7 +34,7 @@ func (m *StoreExpensesMock) GetAllExpensesOfEmpresa(ctx context.Context, empresa
 	return expenses, args.Error(1)
 }
 
-func (m *StoreExpensesMock) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+func (m *RepositorioExpensesMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	args := m.Called(ctx, categoryID, empresaID)
 
 	existe, _ := args.Get(0).(bool)
@@ -42,13 +42,13 @@ func (m *StoreExpensesMock) CategoryExists(ctx context.Context, categoryID uuid.
 	return existe, args.Error(1)
 }
 
-// ServiceExpensesMock es un mock de la capa de servicio (ServiceExpenses) usado
-// para probar ExpensesHandler de forma aislada.
-type ServiceExpensesMock struct {
+// IServiceExpensesMock es un mock de la capa de servicio (IServiceGastos) usado
+// para probar HandlerGastos de forma aislada.
+type IServiceExpensesMock struct {
 	mock.Mock
 }
 
-func (m *ServiceExpensesMock) AddExpense(ctx context.Context, payload ExpensePayload, empresaID uuid.UUID) (model.Expense, error) {
+func (m *IServiceExpensesMock) AgregarGasto(ctx context.Context, payload PayloadGasto, empresaID uuid.UUID) (model.Expense, error) {
 	args := m.Called(ctx, payload, empresaID)
 
 	expense, _ := args.Get(0).(model.Expense)
@@ -56,12 +56,12 @@ func (m *ServiceExpensesMock) AddExpense(ctx context.Context, payload ExpensePay
 	return expense, args.Error(1)
 }
 
-func (m *ServiceExpensesMock) DeleteExpense(ctx context.Context, expenseID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, expenseID, empresaID)
+func (m *IServiceExpensesMock) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, gastoID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceExpensesMock) GetAllExpensesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Expense, error) {
+func (m *IServiceExpensesMock) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
 	args := m.Called(ctx, empresaID, fq)
 
 	expenses, _ := args.Get(0).([]model.Expense)
@@ -93,9 +93,9 @@ func newTestExpense() model.Expense {
 }
 
 // newTestPayloadExpense arma el payload de alta con valores que pasan la validación.
-func newTestPayloadExpense() ExpensePayload {
+func newTestPayloadExpense() PayloadGasto {
 	descripcion := "Compra insumos"
-	return ExpensePayload{
+	return PayloadGasto{
 		Monto:       1500,
 		CategoryID:  &testCategoryID,
 		Descripcion: &descripcion,
@@ -103,6 +103,6 @@ func newTestPayloadExpense() ExpensePayload {
 }
 
 // newTestFilterQuery es la paginación por defecto.
-func newTestFilterQuery() pagination.IncomePaginationQuery {
-	return pagination.NewIncomePaginationQuery()
+func newTestFilterQuery() paginacion.ConsultaPaginacionIngresos {
+	return paginacion.NuevaConsultaPaginacionIngresos()
 }

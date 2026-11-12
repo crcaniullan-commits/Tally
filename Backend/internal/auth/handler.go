@@ -4,87 +4,87 @@ import (
 	"context"
 	"net/http"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/users"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type ServiceAuth interface {
-	RegisterUser(context.Context, *CreateUserPayload) (string, error)
-	Login(context.Context, *LoginUserPayload) (string, error)
-	CreateMunicipal(context.Context, *CreateMunicipalPayload) (string, error)
+type IServiceAuth interface {
+	RegistrarUsuario(context.Context, *PayloadCrearUsuario) (string, error)
+	Login(context.Context, *PayloadInicioSesion) (string, error)
+	CrearMunicipal(context.Context, *PayloadCrearMunicipal) (string, error)
 }
 
-type AuthHandler struct {
-	service ServiceAuth
-	errors  errorhandler.ErrorsResponse
+type HandlerAuth struct {
+	service IServiceAuth
+	errors  errores.RespuestaErrores
 }
 
-func NewAuthHandler(s ServiceAuth, e errorhandler.ErrorsResponse) *AuthHandler {
-	return &AuthHandler{s, e}
+func NuevoHandlerAuth(s IServiceAuth, e errores.RespuestaErrores) *HandlerAuth {
+	return &HandlerAuth{s, e}
 }
 
-type CreateUserPayload struct {
+type PayloadCrearUsuario struct {
 	Email    string `json:"email" validate:"required,max=100,email"`
 	Password string `json:"password" validate:"required,min=8,max=72"`
-	Name     string `json:"nombre" validate:"required,max=100"`
+	Nombre   string `json:"nombre" validate:"required,max=100"`
 	Rut      string `json:"rut" validate:"required,max=10"`
 	Code     string `json:"code" validate:"required"`
 }
 
-// CreateMunicipalPayload no incluye code: crear un municipal no implica canjear
+// PayloadCrearMunicipal no incluye code: crear un municipal no implica canjear
 // una llave de acceso.
-type CreateMunicipalPayload struct {
+type PayloadCrearMunicipal struct {
 	Email    string `json:"email" validate:"required,max=100,email"`
 	Password string `json:"password" validate:"required,min=8,max=72"`
-	Name     string `json:"nombre" validate:"required,max=100"`
+	Nombre   string `json:"nombre" validate:"required,max=100"`
 	Rut      string `json:"rut" validate:"required,min=9,max=12"`
 }
 
-func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	var payload CreateUserPayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerAuth) Registrar(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadCrearUsuario
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	data, err := h.service.RegisterUser(r.Context(), &payload)
+	data, err := h.service.RegistrarUsuario(r.Context(), &payload)
 
 	if err != nil {
 		switch err {
 		case users.ErrDuplicateEmail:
-			h.errors.BadRequestResponse(w, r, err)
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		case users.ErrDuplicateRut:
-			h.errors.BadRequestResponse(w, r, err)
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
-		case accesskeys.ErrNotRedeemable:
-			h.errors.BadRequestResponse(w, r, err)
+		case clavesacceso.ErrorCodigoNoCanjeable:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, data); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, data); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
 }
 
-type LoginUserPayload struct {
+type PayloadInicioSesion struct {
 	Email    string `json:"email" validate:"required,max=100,email"`
 	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var payload LoginUserPayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerAuth) Login(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadInicioSesion
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
@@ -92,50 +92,50 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.BadRequestResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		case bcrypt.ErrMismatchedHashAndPassword:
-			h.errors.BadRequestResponse(w, r, err)
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err = util.JsonResponse(w, http.StatusAccepted, data); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err = utilidades.RespuestaJSON(w, http.StatusAccepted, data); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
 }
 
-func (h *AuthHandler) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
-	var payload CreateMunicipalPayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerAuth) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadCrearMunicipal
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	data, err := h.service.CreateMunicipal(r.Context(), &payload)
+	data, err := h.service.CrearMunicipal(r.Context(), &payload)
 
 	if err != nil {
 		switch err {
 		case users.ErrDuplicateEmail:
-			h.errors.BadRequestResponse(w, r, err)
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		case users.ErrDuplicateRut:
-			h.errors.BadRequestResponse(w, r, err)
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, data); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, data); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 

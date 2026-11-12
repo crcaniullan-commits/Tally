@@ -8,62 +8,62 @@ import (
 	"github.com/google/uuid"
 )
 
-type GoalStorage interface {
-	CreateGoal(context.Context, *model.Goal) error
-	DeleteGoal(context.Context, uuid.UUID, uuid.UUID) error
-	GetIncomesTotalByPeriod(context.Context, uuid.UUID, model.GoalPeriod) (int64, error)
-	GetGoal(context.Context, uuid.UUID, uuid.UUID) (model.Goal, error)
-	GetGoals(context.Context, uuid.UUID) ([]model.Goal, error)
+type RepositorioMetas interface {
+	CrearMeta(context.Context, *model.Goal) error
+	EliminarMeta(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerTotalIngresosPorPeriodo(context.Context, uuid.UUID, model.GoalPeriod) (int64, error)
+	ObtenerMeta(context.Context, uuid.UUID, uuid.UUID) (model.Goal, error)
+	ObtenerMetas(context.Context, uuid.UUID) ([]model.Goal, error)
 }
-type GoalService struct {
-	store GoalStorage
-}
-
-func NewGoalService(store GoalStorage) *GoalService {
-	return &GoalService{store: store}
+type ServicioMetas struct {
+	store RepositorioMetas
 }
 
-func (s *GoalService) createGoal(ctx context.Context, payload CreateGoalPayload, empresaID uuid.UUID) (model.Goal, error) {
+func NuevoServicioMetas(store RepositorioMetas) *ServicioMetas {
+	return &ServicioMetas{store: store}
+}
+
+func (s *ServicioMetas) CrearMeta(ctx context.Context, payload PayloadCrearMeta, empresaID uuid.UUID) (model.Goal, error) {
 
 	goal := &model.Goal{
 		Nombre:    payload.Nombre,
 		Periodo:   payload.Periodo,
-		MontoMeta: payload.Monto_meta,
+		MontoMeta: payload.MontoMeta,
 		EmpresaID: empresaID,
 	}
 
-	if err := s.store.CreateGoal(ctx, goal); err != nil {
+	if err := s.store.CrearMeta(ctx, goal); err != nil {
 		return model.Goal{}, err
 	}
 
 	return *goal, nil
 }
 
-func (s *GoalService) DeleteGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) error {
+func (s *ServicioMetas) EliminarMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) error {
 
-	if err := s.store.DeleteGoal(ctx, goalID, empresaID); err != nil {
+	if err := s.store.EliminarMeta(ctx, metaID, empresaID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *GoalService) GetGoalState(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (GoalState, error) {
+func (s *ServicioMetas) ObtenerEstadoMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (EstadoMeta, error) {
 
-	goal, err := s.store.GetGoal(ctx, goalID, empresaID)
+	goal, err := s.store.ObtenerMeta(ctx, metaID, empresaID)
 
 	if err != nil {
-		return GoalState{}, err
+		return EstadoMeta{}, err
 	}
 
 	if goal.MontoMeta <= 0 {
-		return GoalState{}, fmt.Errorf("el goal %s tiene monto_meta inválido: %d", goal.ID, goal.MontoMeta)
+		return EstadoMeta{}, fmt.Errorf("la meta %s tiene un monto_meta inválido: %d", goal.ID, goal.MontoMeta)
 	}
 
-	monto, err := s.store.GetIncomesTotalByPeriod(ctx, empresaID, goal.Periodo)
+	monto, err := s.store.ObtenerTotalIngresosPorPeriodo(ctx, empresaID, goal.Periodo)
 
 	if err != nil {
-		return GoalState{}, err
+		return EstadoMeta{}, err
 	}
 
 	porActual := float64(monto) * 100 / float64(goal.MontoMeta)
@@ -78,7 +78,7 @@ func (s *GoalService) GetGoalState(ctx context.Context, goalID uuid.UUID, empres
 		porFaltante = 0
 	}
 
-	state := GoalState{
+	state := EstadoMeta{
 		MontoActual:        monto,
 		PorcentajeActual:   porActual,
 		MontoPendiente:     pendiente,
@@ -88,9 +88,9 @@ func (s *GoalService) GetGoalState(ctx context.Context, goalID uuid.UUID, empres
 	return state, nil
 }
 
-func (s *GoalService) getGoal(ctx context.Context, goalID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
+func (s *ServicioMetas) ObtenerMeta(ctx context.Context, metaID uuid.UUID, empresaID uuid.UUID) (model.Goal, error) {
 
-	goal, err := s.store.GetGoal(ctx, goalID, empresaID)
+	goal, err := s.store.ObtenerMeta(ctx, metaID, empresaID)
 
 	if err != nil {
 		return model.Goal{}, err
@@ -99,9 +99,9 @@ func (s *GoalService) getGoal(ctx context.Context, goalID uuid.UUID, empresaID u
 	return goal, nil
 }
 
-func (s *GoalService) getGoals(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
+func (s *ServicioMetas) ObtenerMetas(ctx context.Context, empresaID uuid.UUID) ([]model.Goal, error) {
 
-	goals, err := s.store.GetGoals(ctx, empresaID)
+	goals, err := s.store.ObtenerMetas(ctx, empresaID)
 
 	if err != nil {
 		return nil, err

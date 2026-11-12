@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/cmd/application"
-	"github.com/crcaniullan-commits/Tally/internal/db"
-	"github.com/crcaniullan-commits/Tally/internal/env"
+	"github.com/crcaniullan-commits/Tally/internal/bd"
+	"github.com/crcaniullan-commits/Tally/internal/entorno"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,23 +30,23 @@ import (
 // @description
 func main() {
 	cfg := application.Config{
-		Addr: env.GetString("ADDR", ":8080"),
-		Db: application.DbConfig{
-			Addr:         env.GetString("DB_ADDR", "postgres://postgres:tally_password_env@localhost/tally?sslmode=disable"),
-			MaxOpenConns: env.GetInt("DB_MAX_OPEN_CONNS", 30),
-			MaxIdleConns: env.GetInt("DB_MAX_IDLE_CONNS", 30),
-			MaxIdleTime:  env.GetString("DB_MAX_IDLE_TIME", "15m"),
+		Addr: entorno.ObtenerCadena("ADDR", ":8080"),
+		BD: application.ConfigBD{
+			Addr:         entorno.ObtenerCadena("DB_ADDR", "postgres://postgres:tally_password_env@localhost/tally?sslmode=disable"),
+			MaxOpenConns: entorno.ObtenerEntero("DB_MAX_OPEN_CONNS", 30),
+			MaxIdleConns: entorno.ObtenerEntero("DB_MAX_IDLE_CONNS", 30),
+			MaxIdleTime:  entorno.ObtenerCadena("DB_MAX_IDLE_TIME", "15m"),
 		},
-		ApiURL: env.GetString("EXTERNAL_URL", "localhost:8080"),
-		JwtConfig: application.JwtConfig{
-			Secret: env.GetString("JWT_SECRET", "llaveSecreta"),
+		URLAPI: entorno.ObtenerCadena("EXTERNAL_URL", "localhost:8080"),
+		ConfigJWT: application.ConfigJWT{
+			Secret: entorno.ObtenerCadena("JWT_SECRET", "llaveSecreta"),
 			Exp:    time.Hour * 24 * 3,
 			Iss:    "Tally",
 		},
-		EmailConfig: application.EmailConfig{
-			Username: env.GetString("GMAIL_SMTP_USERNAME", ""),
-			Password: env.GetString("GMAIL_SMTP_PASSWORD", ""),
-			From:     env.GetString("GMAIL_SMTP_FROM", ""),
+		ConfigCorreo: application.ConfigCorreo{
+			Username: entorno.ObtenerCadena("GMAIL_SMTP_USERNAME", ""),
+			Password: entorno.ObtenerCadena("GMAIL_SMTP_PASSWORD", ""),
+			From:     entorno.ObtenerCadena("GMAIL_SMTP_FROM", ""),
 		},
 	}
 
@@ -65,11 +65,11 @@ func main() {
 	logger := zap.New(core).Sugar()
 	defer logger.Sync()
 
-	db, err := db.New(
-		cfg.Db.Addr,
-		cfg.Db.MaxOpenConns,
-		cfg.Db.MaxIdleConns,
-		cfg.Db.MaxIdleTime,
+	db, err := bd.Nuevo(
+		cfg.BD.Addr,
+		cfg.BD.MaxOpenConns,
+		cfg.BD.MaxIdleConns,
+		cfg.BD.MaxIdleTime,
 	)
 
 	if err != nil {

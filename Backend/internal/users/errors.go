@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	ErrDuplicateEmail    = errors.New("a user with that email already exists")
-	ErrDuplicateUsername = errors.New("a user with that username already exists")
-	ErrDuplicateRut      = errors.New("a user with that rut already exists")
+	ErrDuplicateEmail    = errors.New("ya existe un usuario con ese correo")
+	ErrDuplicateUsername = errors.New("ya existe un usuario con ese nombre de usuario")
+	ErrDuplicateRut      = errors.New("ya existe un usuario con ese RUT")
 )

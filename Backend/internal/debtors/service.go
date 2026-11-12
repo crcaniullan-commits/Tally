@@ -7,22 +7,22 @@ import (
 	"github.com/google/uuid"
 )
 
-type DebtorStorage interface {
-	GetDebtor(context.Context, uuid.UUID, uuid.UUID) (bool, error)
-	Create(context.Context, *model.Debtor) error
-	Update(context.Context, uuid.UUID, uuid.UUID, model.Debtor) error
-	PaidDebtor(context.Context, uuid.UUID, uuid.UUID) error
-	GetDebtors(context.Context, uuid.UUID) ([]model.Debtor, error)
+type RepositorioDeudores interface {
+	ObtenerDeudor(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	Crear(context.Context, *model.Debtor) error
+	Actualizar(context.Context, uuid.UUID, uuid.UUID, model.Debtor) error
+	MarcarDeudorPagado(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerDeudores(context.Context, uuid.UUID) ([]model.Debtor, error)
 }
-type DebtorService struct {
-	store DebtorStorage
-}
-
-func NewDebtorService(store DebtorStorage) *DebtorService {
-	return &DebtorService{store: store}
+type ServicioDeudores struct {
+	store RepositorioDeudores
 }
 
-func (s *DebtorService) Create(ctx context.Context, empresaID uuid.UUID, payload DebtorPayload) (model.Debtor, error) {
+func NuevoServicioDeudores(store RepositorioDeudores) *ServicioDeudores {
+	return &ServicioDeudores{store: store}
+}
+
+func (s *ServicioDeudores) Crear(ctx context.Context, empresaID uuid.UUID, payload PayloadDeudor) (model.Debtor, error) {
 	debtor := &model.Debtor{
 		Nombre:      payload.Nombre,
 		Monto:       payload.Monto,
@@ -31,14 +31,14 @@ func (s *DebtorService) Create(ctx context.Context, empresaID uuid.UUID, payload
 		EmpresaID:   empresaID,
 	}
 
-	if err := s.store.Create(ctx, debtor); err != nil {
+	if err := s.store.Crear(ctx, debtor); err != nil {
 		return model.Debtor{}, err
 	}
 
 	return *debtor, nil
 }
 
-func (s *DebtorService) Update(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID, payload UpdatePayload) error {
+func (s *ServicioDeudores) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, payload PayloadActualizacionDeudor) error {
 
 	debtor := model.Debtor{
 		Monto:       payload.Monto,
@@ -46,24 +46,24 @@ func (s *DebtorService) Update(ctx context.Context, debtorID uuid.UUID, empresaI
 		FechaLimite: &payload.FechaLimite,
 	}
 
-	if err := s.store.Update(ctx, debtorID, empresaID, debtor); err != nil {
+	if err := s.store.Actualizar(ctx, deudorID, empresaID, debtor); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *DebtorService) PaidDebtor(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID) error {
+func (s *ServicioDeudores) MarcarDeudorPagado(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
 
-	if err := s.store.PaidDebtor(ctx, debtorID, empresaID); err != nil {
+	if err := s.store.MarcarDeudorPagado(ctx, deudorID, empresaID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *DebtorService) GetDebtors(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
-	debtors, err := s.store.GetDebtors(ctx, empresaID)
+func (s *ServicioDeudores) ObtenerDeudores(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
+	debtors, err := s.store.ObtenerDeudores(ctx, empresaID)
 	if err != nil {
 		return nil, err
 	}

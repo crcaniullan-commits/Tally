@@ -6,26 +6,26 @@ import (
 	"errors"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type UserStore struct {
+type AlmacenUsuarios struct {
 	db *sql.DB
 }
 
-func NewStorage(db *sql.DB) *UserStore {
-	return &UserStore{db}
+func NuevoAlmacenUsuarios(db *sql.DB) *AlmacenUsuarios {
+	return &AlmacenUsuarios{db}
 }
 
-func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*model.User, error) {
+func (s *AlmacenUsuarios) ObtenerPorID(ctx context.Context, userID uuid.UUID) (*model.User, error) {
 	query := `
 		SELECT id, email, nombre, rut, role, plan_expires_at
 		FROM users
 		WHERE id = $1
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	user := &model.User{}
@@ -44,12 +44,12 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*model.User,
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, util.ErrNotFound
+			return nil, utilidades.ErrorNoEncontrado
 		}
 		return nil, err
 	}
 
-	parsedRut, err := util.ParseRUT(rawRut)
+	parsedRut, err := utilidades.ParseRUT(rawRut)
 
 	if err != nil {
 		return nil, err
@@ -60,14 +60,14 @@ func (s *UserStore) GetByID(ctx context.Context, userID uuid.UUID) (*model.User,
 	return user, nil
 }
 
-func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*model.User, error) {
+func (s *AlmacenUsuarios) ObtenerPorRUT(ctx context.Context, userRut string) (*model.User, error) {
 	query := `
 		SELECT id, email, nombre, rut, role, plan_expires_at
 		FROM users
 		WHERE rut = $1;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	user := &model.User{}
@@ -86,12 +86,12 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*model.User, 
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, util.ErrNotFound
+			return nil, utilidades.ErrorNoEncontrado
 		}
 		return nil, err
 	}
 
-	parsedRut, err := util.ParseRUT(rawRut)
+	parsedRut, err := utilidades.ParseRUT(rawRut)
 
 	if err != nil {
 		return nil, err
@@ -102,14 +102,14 @@ func (s *UserStore) GetByRut(ctx context.Context, userRut string) (*model.User, 
 	return user, nil
 }
 
-func (s *UserStore) Update(ctx context.Context, user *model.User) error {
+func (s *AlmacenUsuarios) Actualizar(ctx context.Context, user *model.User) error {
 	query := `
 		UPDATE users
 		SET password_hash = $1, nombre = $2, updated_at = NOW()
 		WHERE id = $3
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.Hash, user.Nombre, user.ID)
@@ -125,19 +125,19 @@ func (s *UserStore) Update(ctx context.Context, user *model.User) error {
 	}
 
 	if rows == 0 {
-		return util.ErrNotFound
+		return utilidades.ErrorNoEncontrado
 	}
 
 	return nil
 }
 
-func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
+func (s *AlmacenUsuarios) Eliminar(ctx context.Context, userID uuid.UUID) error {
 	query := `
 		DELETE FROM users
 		WHERE ID = $1
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	res, err := s.db.ExecContext(ctx, query, userID)
@@ -153,7 +153,7 @@ func (s *UserStore) Delete(ctx context.Context, userID uuid.UUID) error {
 	}
 
 	if rows == 0 {
-		return util.ErrNotFound
+		return utilidades.ErrorNoEncontrado
 	}
 	return nil
 }

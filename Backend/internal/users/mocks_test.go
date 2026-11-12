@@ -4,28 +4,28 @@ import (
 	"context"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
-// StoreUserMock es un mock de la capa de persistencia (StoreUser) usado para
-// probar UserService sin tocar la base de datos.
-type StoreUserMock struct {
+// RepositorioUsuariosMock es un mock de la capa de persistencia (RepositorioUsuarios) usado para
+// probar ServicioUsuarios sin tocar la base de datos.
+type RepositorioUsuariosMock struct {
 	mock.Mock
 }
 
-func (m *StoreUserMock) Update(ctx context.Context, user *model.User) error {
+func (m *RepositorioUsuariosMock) Actualizar(ctx context.Context, user *model.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *StoreUserMock) Delete(ctx context.Context, userID uuid.UUID) error {
+func (m *RepositorioUsuariosMock) Eliminar(ctx context.Context, userID uuid.UUID) error {
 	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
 
-func (m *StoreUserMock) GetByRut(ctx context.Context, rut string) (*model.User, error) {
+func (m *RepositorioUsuariosMock) ObtenerPorRUT(ctx context.Context, rut string) (*model.User, error) {
 	args := m.Called(ctx, rut)
 
 	user, _ := args.Get(0).(*model.User)
@@ -33,23 +33,23 @@ func (m *StoreUserMock) GetByRut(ctx context.Context, rut string) (*model.User, 
 	return user, args.Error(1)
 }
 
-// ServiceUsersMock es un mock de la capa de servicio (ServiceUsers) usado para
-// probar UsersHandler de forma aislada.
-type ServiceUsersMock struct {
+// IServiceUsuariosMock es un mock de la capa de servicio (IServiceUsuarios) usado para
+// probar HandlerUsuarios de forma aislada.
+type IServiceUsuariosMock struct {
 	mock.Mock
 }
 
-func (m *ServiceUsersMock) Update(ctx context.Context, user *model.User, payload *UpdateUserPayload) error {
+func (m *IServiceUsuariosMock) Actualizar(ctx context.Context, user *model.User, payload *PayloadActualizarUsuario) error {
 	args := m.Called(ctx, user, payload)
 	return args.Error(0)
 }
 
-func (m *ServiceUsersMock) Delete(ctx context.Context, userID uuid.UUID) error {
+func (m *IServiceUsuariosMock) Eliminar(ctx context.Context, userID uuid.UUID) error {
 	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
 
-func (m *ServiceUsersMock) GetByRut(ctx context.Context, rut util.RUT) (*model.User, error) {
+func (m *IServiceUsuariosMock) ObtenerPorRUT(ctx context.Context, rut utilidades.RUT) (*model.User, error) {
 	args := m.Called(ctx, rut)
 
 	user, _ := args.Get(0).(*model.User)
@@ -65,7 +65,7 @@ func newTestUser() *model.User {
 		ID:     testUserID,
 		Email:  "emprendedor@correo.cl",
 		Nombre: "Nombre Original",
-		Role:   util.UserRoleUsuario,
-		Rut:    util.RUT{Cuerpo: 19234567, DV: "K"},
+		Role:   utilidades.RolUsuario,
+		Rut:    utilidades.RUT{Cuerpo: 19234567, DV: "K"},
 	}
 }

@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
-// AuthStoreMock mockea AuthStore (persistencia de auth).
+// AuthStoreMock mockea RepositorioAuth (persistencia de auth).
 type AuthStoreMock struct {
 	mock.Mock
 }
@@ -20,7 +20,7 @@ func (m *AuthStoreMock) Create(ctx context.Context, user *model.User) error {
 	return m.Called(ctx, user).Error(0)
 }
 
-func (m *AuthStoreMock) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (m *AuthStoreMock) ObtenerPorEmail(ctx context.Context, email string) (*model.User, error) {
 	args := m.Called(ctx, email)
 
 	user, _ := args.Get(0).(*model.User)
@@ -28,19 +28,19 @@ func (m *AuthStoreMock) GetByEmail(ctx context.Context, email string) (*model.Us
 	return user, args.Error(1)
 }
 
-// setExpire implementa el metodo unexportado de AuthStore. Es posible porque el
+// establecerVencimiento implementa el metodo unexportado de RepositorioAuth. Es posible porque el
 // mock vive en el mismo package que la interfaz.
-func (m *AuthStoreMock) setExpire(ctx context.Context, expiresAt time.Time, userID uuid.UUID) error {
+func (m *AuthStoreMock) establecerVencimiento(ctx context.Context, expiresAt time.Time, userID uuid.UUID) error {
 	return m.Called(ctx, expiresAt, userID).Error(0)
 }
 
-// RedeemerMock mockea la interfaz Redeemer (resuelve el canje de una llave). En
+// CanjeadorMock mockea la interfaz Canjeador (resuelve el canje de una llave). En
 // produccion la implementa el store de accessKeys.
-type RedeemerMock struct {
+type CanjeadorMock struct {
 	mock.Mock
 }
 
-func (m *RedeemerMock) Redeem(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error) {
+func (m *CanjeadorMock) Canjear(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error) {
 	args := m.Called(ctx, code, userID)
 
 	accessKey, _ := args.Get(0).(*model.AccessKey)
@@ -48,17 +48,17 @@ func (m *RedeemerMock) Redeem(ctx context.Context, code string, userID uuid.UUID
 	return accessKey, args.Error(1)
 }
 
-// AuthenticatorMock mockea Authenticator para no firmar/validar JWT reales.
-type AuthenticatorMock struct {
+// AutenticadorMock mockea Authenticator para no firmar/validar JWT reales.
+type AutenticadorMock struct {
 	mock.Mock
 }
 
-func (m *AuthenticatorMock) GenerateToken(claims jwt.Claims) (string, error) {
+func (m *AutenticadorMock) GenerarToken(claims jwt.Claims) (string, error) {
 	args := m.Called(claims)
 	return args.String(0), args.Error(1)
 }
 
-func (m *AuthenticatorMock) ValidateToken(token string) (*jwt.Token, error) {
+func (m *AutenticadorMock) ValidarToken(token string) (*jwt.Token, error) {
 	args := m.Called(token)
 
 	t, _ := args.Get(0).(*jwt.Token)
@@ -66,23 +66,23 @@ func (m *AuthenticatorMock) ValidateToken(token string) (*jwt.Token, error) {
 	return t, args.Error(1)
 }
 
-// ServiceAuthMock mockea la capa de servicio (ServiceAuth) para probar
-// AuthHandler de forma aislada.
-type ServiceAuthMock struct {
+// IServiceAuthMock mockea la capa de servicio (IServiceAuth) para probar
+// HandlerAuth de forma aislada.
+type IServiceAuthMock struct {
 	mock.Mock
 }
 
-func (m *ServiceAuthMock) RegisterUser(ctx context.Context, payload *CreateUserPayload) (string, error) {
+func (m *IServiceAuthMock) RegistrarUsuario(ctx context.Context, payload *PayloadCrearUsuario) (string, error) {
 	args := m.Called(ctx, payload)
 	return args.String(0), args.Error(1)
 }
 
-func (m *ServiceAuthMock) Login(ctx context.Context, payload *LoginUserPayload) (string, error) {
+func (m *IServiceAuthMock) Login(ctx context.Context, payload *PayloadInicioSesion) (string, error) {
 	args := m.Called(ctx, payload)
 	return args.String(0), args.Error(1)
 }
 
-func (m *ServiceAuthMock) CreateMunicipal(ctx context.Context, payload *CreateMunicipalPayload) (string, error) {
+func (m *IServiceAuthMock) CrearMunicipal(ctx context.Context, payload *PayloadCrearMunicipal) (string, error) {
 	args := m.Called(ctx, payload)
 	return args.String(0), args.Error(1)
 }
@@ -102,8 +102,8 @@ func newTestUser() *model.User {
 		ID:     testUserID,
 		Email:  "emprendedor@correo.cl",
 		Nombre: "Nombre Original",
-		Role:   util.UserRoleUsuario,
-		Rut:    util.RUT{Cuerpo: 19234567, DV: "K"},
+		Role:   utilidades.RolUsuario,
+		Rut:    utilidades.RUT{Cuerpo: 19234567, DV: "K"},
 	}
 
 	_ = user.PasswordHash.Set(testPassword)
@@ -124,21 +124,21 @@ func newTestAccessKey() model.AccessKey {
 	}
 }
 
-func newTestRegisterPayload() *CreateUserPayload {
-	return &CreateUserPayload{
+func newTestRegisterPayload() *PayloadCrearUsuario {
+	return &PayloadCrearUsuario{
 		Email:    "nuevo@correo.cl",
 		Password: testPassword,
-		Name:     "Nombre Nuevo",
+		Nombre:   "Nombre Nuevo",
 		Rut:      "19.234.567-K",
 		Code:     testAccessKeyCode,
 	}
 }
 
-func newTestMunicipalPayload() *CreateMunicipalPayload {
-	return &CreateMunicipalPayload{
+func newTestMunicipalPayload() *PayloadCrearMunicipal {
+	return &PayloadCrearMunicipal{
 		Email:    "municipal@correo.cl",
 		Password: testPassword,
-		Name:     "Nombre Municipal",
+		Nombre:   "Nombre Municipal",
 		Rut:      "19.234.567-K",
 	}
 }

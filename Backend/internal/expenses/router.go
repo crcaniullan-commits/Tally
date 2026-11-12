@@ -3,22 +3,22 @@ package expenses
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStorage(db)
-	svc := NewExpenseService(repo)
-	hdl := NewExpensesHandler(svc, err)
+	repo := NuevoAlmacenGastos(db)
+	svc := NuevoServicioGastos(repo)
+	hdl := NuevoHandlerGastos(svc, err)
 
-	r.Route("/expenses", func(r chi.Router) {
-		r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
-		r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetExpensesOfEmpresa))
-		r.Delete("/{expenseID}", middl.CheckOwnership(util.UserRoleUsuario, hdl.Delete))
+	r.Route("/gastos", func(r chi.Router) {
+		r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Crear))
+		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerGastosDeEmpresa))
+		r.Delete("/{gastoID}", middl.VerificarRol(utilidades.RolUsuario, hdl.Eliminar))
 	})
 }

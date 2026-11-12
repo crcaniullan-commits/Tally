@@ -9,17 +9,17 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var errDBBoom = errors.New("boom: fallo de la base de datos")
 
-// mockStore envuelve un StoreExpense sobre sqlmock y guarda el SQL.
+// mockStore envuelve un AlmacenGastos sobre sqlmock y guarda el SQL.
 type mockStore struct {
-	store *StoreExpense
+	store *AlmacenGastos
 	mock  sqlmock.Sqlmock
 	sql   string
 }
@@ -45,7 +45,7 @@ func newMockStore(t *testing.T) *mockStore {
 		_ = db.Close()
 	})
 
-	ms.store = NewStorage(db)
+	ms.store = NuevoAlmacenGastos(db)
 	ms.mock = mock
 
 	return ms
@@ -76,23 +76,23 @@ func TestStoreExpense_DeleteExpense(t *testing.T) {
 			WithArgs(testExpenseID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := ms.store.DeleteExpense(context.Background(), testExpenseID, testEmpresaID)
+		err := ms.store.EliminarGasto(context.Background(), testExpenseID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "DELETE FROM expenses")
 		assert.Contains(t, ms.sql, "WHERE id = $1 and empresa_id = $2")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se elimino ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no se elimino ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
 			WithArgs(testExpenseID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := ms.store.DeleteExpense(context.Background(), testExpenseID, testEmpresaID)
+		err := ms.store.EliminarGasto(context.Background(), testExpenseID, testEmpresaID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestStoreExpense_DeleteExpense(t *testing.T) {
 			WithArgs(testExpenseID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.DeleteExpense(context.Background(), testExpenseID, testEmpresaID)
+		err := ms.store.EliminarGasto(context.Background(), testExpenseID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -124,7 +124,7 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 			WithArgs(testEmpresaID, int64(1500), testCategoryID, &descripcion).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).AddRow(testExpenseID, testFecha, testFecha.Add(2*time.Hour)))
 
-		err := ms.store.AddExpense(context.Background(), expense)
+		err := ms.store.AgregarGasto(context.Background(), expense)
 
 		require.NoError(t, err)
 		assert.Equal(t, testExpenseID, expense.ID)
@@ -146,7 +146,7 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 			WithArgs(testEmpresaID, int64(1500), testCategoryID, (*string)(nil)).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.AddExpense(context.Background(), expense)
+		err := ms.store.AgregarGasto(context.Background(), expense)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -156,13 +156,13 @@ func TestStoreExpense_GetAllExpensesOfEmpresa(t *testing.T) {
 	t.Run("mapea las columnas a model.Expense", func(t *testing.T) {
 		ms := newMockStore(t)
 
-		fq := pagination.NewIncomePaginationQuery()
+		fq := paginacion.NuevaConsultaPaginacionIngresos()
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testEmpresaID, fq.Limit, fq.Offset, fq.Since, fq.Until, fq.CategoryID).
+			WithArgs(testEmpresaID, fq.Limite, fq.Desplazamiento, fq.Desde, fq.Hasta, fq.CategoryID).
 			WillReturnRows(sqlmock.NewRows(expenseColumns()).AddRow(expenseRow()...))
 
-		expenses, err := ms.store.GetAllExpensesOfEmpresa(context.Background(), testEmpresaID, fq)
+		expenses, err := ms.store.ObtenerGastosDeEmpresa(context.Background(), testEmpresaID, fq)
 
 		require.NoError(t, err)
 		require.Len(t, expenses, 1)
@@ -187,7 +187,7 @@ func TestStoreExpense_CategoryExists(t *testing.T) {
 			WithArgs(testCategoryID, testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
-		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.True(t, existe)
@@ -203,7 +203,7 @@ func TestStoreExpense_CategoryExists(t *testing.T) {
 			WithArgs(testCategoryID, testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
-		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.False(t, existe)
@@ -216,7 +216,7 @@ func TestStoreExpense_CategoryExists(t *testing.T) {
 			WithArgs(testCategoryID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		existe, err := ms.store.CategoryExists(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.False(t, existe)

@@ -3,26 +3,26 @@ package goals
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStoreGoal(db)
-	svc := NewGoalService(repo)
-	hdl := NewGoalsHandler(svc, err)
+	repo := NuevoAlmacenMetas(db)
+	svc := NuevoServicioMetas(repo)
+	hdl := NuevoHandlerMetas(svc, err)
 
-	r.Route("/goal", func(r chi.Router) {
-		r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
-		r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.getGoals))
-		r.Route("/{goalID}", func(r chi.Router) {
-			r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.getGoal))
-			r.Delete("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.DeleteGoal))
-			r.Get("/state", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetGoalState))
+	r.Route("/metas", func(r chi.Router) {
+		r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Crear))
+		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerMetas))
+		r.Route("/{metaID}", func(r chi.Router) {
+			r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerMeta))
+			r.Delete("/", middl.VerificarRol(utilidades.RolUsuario, hdl.EliminarMeta))
+			r.Get("/estado", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerEstadoMeta))
 		})
 	})
 }

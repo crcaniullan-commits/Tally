@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 )
 
 const (
-	bodyIncomeCreated = `{"data":{
+	bodyIncomeCreated = `{"datos":{
 		"id": "9c8b7a65-4d3c-4b2a-9f8e-7d6c5b4a3f2e",
 		"empresa_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 		"monto": 1500,
@@ -32,15 +32,15 @@ const (
 		"created_at": "2026-09-30T02:00:00Z",
 		"category_id": "b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"
 	}}`
-	bodyIncomeDeleted = `{"data":"income eliminado"}`
-	bodyNotFound      = `{"error":"not found"}`
-	bodyInternalError = `{"error":"the server encountered a problem"}`
+	bodyIncomeDeleted = `{"datos":"ingreso eliminado"}`
+	bodyNotFound      = `{"error":"no encontrado"}`
+	bodyInternalError = `{"error":"el servidor encontró un problema"}`
 )
 
-// newTestHandler arma un IncomesHandler con un service mockeado y el logger de
+// newTestHandler arma un HandlerIngresos con un service mockeado y el logger de
 // errorhandler apontando a un noop (para que los tests no ensucien la salida).
-func newTestHandler(service ServiceIncomes) *IncomesHandler {
-	return NewIncomesHandler(service, errorhandler.NewErrorResponse(zap.NewNop().Sugar()))
+func newTestHandler(service IServiceIngresos) *HandlerIngresos {
+	return NuevoHandlerIngresos(service, errores.NuevaRespuestaErrores(zap.NewNop().Sugar()))
 }
 
 // requestWithUser construye una request con el usuario y la empresa del
@@ -53,30 +53,30 @@ func requestWithUser(method, target, body string) *http.Request {
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 	}
 
-	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
 	empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
 
-	ctx := context.WithValue(r.Context(), util.UserCtx, usuario)
-	ctx = context.WithValue(ctx, util.EmpresaCtx, empresa)
+	ctx := context.WithValue(r.Context(), utilidades.ContextoUsuario, usuario)
+	ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
 
 	return r.WithContext(ctx)
 }
 
-// requestWithIncomeIDParam inyecta el URL param "incomeID" que lee el handler
+// requestWithIncomeIDParam inyecta el URL param "ingresoID" que lee el handler
 // vía chi.URLParam, replicando lo que hace el router real.
-func requestWithIncomeIDParam(method, target, incomeID string) *http.Request {
+func requestWithIncomeIDParam(method, target, ingresoID string) *http.Request {
 	routeCtx := chi.NewRouteContext()
-	routeCtx.URLParams.Add("incomeID", incomeID)
+	routeCtx.URLParams.Add("ingresoID", ingresoID)
 
 	r := httptest.NewRequest(method, target, nil).WithContext(
 		context.WithValue(context.Background(), chi.RouteCtxKey, routeCtx),
 	)
 
-	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
 	empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
 
-	ctx := context.WithValue(r.Context(), util.UserCtx, usuario)
-	ctx = context.WithValue(ctx, util.EmpresaCtx, empresa)
+	ctx := context.WithValue(r.Context(), utilidades.ContextoUsuario, usuario)
+	ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
 
 	return r.WithContext(ctx)
 }
@@ -92,14 +92,14 @@ func decodeEnvelope(t *testing.T, body string) map[string]any {
 
 func TestIncomesHandler_AddIncome(t *testing.T) {
 	t.Run("responde 201 con el payload creado", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":1500,"payment_method":"debito","descripcion":"Venta de almuerzo","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
-		service.On("AddIncome", mock.Anything, IncomePayload{
+		service.On("AgregarIngreso", mock.Anything, PayloadIngreso{
 			Monto:         1500,
-			PaymentMethod: util.PaymentMethodDebito,
+			PaymentMethod: utilidades.MetodoPagoDebito,
 			Descripcion:   ptr("Venta de almuerzo"),
 			CategoryID:    &testCategoryID,
 		}, testEmpresaID).Return(newTestIncome(), nil).Once()
@@ -107,7 +107,7 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyIncomeCreated, w.Body.String())
@@ -115,20 +115,20 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 	})
 
 	t.Run("usa el ID de la empresa del contexto, no uno del body", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":1500,"payment_method":"debito"}`
 
-		service.On("AddIncome", mock.Anything, mock.Anything, testEmpresaID).Return(model.Income{}, nil).Once()
+		service.On("AgregarIngreso", mock.Anything, mock.Anything, testEmpresaID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		require.Equal(t, http.StatusCreated, w.Code)
-		service.AssertCalled(t, "AddIncome", mock.Anything, mock.Anything, testEmpresaID)
+		service.AssertCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, testEmpresaID)
 	})
 
 	t.Run("acepta los cuatro metodos de pago", func(t *testing.T) {
@@ -136,21 +136,21 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 		for _, metodo := range metodos {
 			t.Run(metodo, func(t *testing.T) {
-				service := new(ServiceIncomesMock)
+				service := new(IServiceIncomesMock)
 				handler := newTestHandler(service)
 
 				body := `{"monto":100,"payment_method":"` + metodo + `"}`
-				service.On("AddIncome", mock.Anything, mock.Anything, mock.Anything).
+				service.On("AgregarIngreso", mock.Anything, mock.Anything, mock.Anything).
 					Return(model.Income{}, nil).Once()
 
 				r := requestWithUser(http.MethodPost, "/incomes", body)
 
 				w := httptest.NewRecorder()
-				handler.AddIncome(w, r)
+				handler.AgregarIngreso(w, r)
 
 				assert.Equal(t, http.StatusCreated, w.Code)
-				service.AssertCalled(t, "AddIncome", mock.Anything,
-					mock.MatchedBy(func(p IncomePayload) bool {
+				service.AssertCalled(t, "AgregarIngreso", mock.Anything,
+					mock.MatchedBy(func(p PayloadIngreso) bool {
 						return string(p.PaymentMethod) == metodo
 					}), testEmpresaID)
 			})
@@ -158,63 +158,63 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 	})
 
 	t.Run("responde 400 y no llama al servicio si el monto es cero", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":0,"payment_method":"debito"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Monto")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el monto es negativo", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":-50,"payment_method":"debito"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "gt")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si falta el metodo de pago", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":100}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "PaymentMethod")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el metodo de pago no es valido", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":100,"payment_method":"bitcoin"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "oneof")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si la descripcion supera los 100 caracteres", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		larga := strings.Repeat("a", 101)
@@ -228,145 +228,145 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 		r := requestWithUser(http.MethodPost, "/incomes", string(body))
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Descripcion")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("acepta el alta sin categoría: categoria es opcional", func(t *testing.T) {
 		// incomes.category_id es nullable (migrations/000006), asi que el tag
 		// es omitempty y el payload sin categoria tiene que pasar.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":1500,"payment_method":"debito"}`
 
-		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
+		service.On("AgregarIngreso", mock.Anything, mock.MatchedBy(func(p PayloadIngreso) bool {
 			return p.CategoryID == nil
 		}), testEmpresaID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		service.AssertExpectations(t)
 	})
 
 	t.Run("manda la categoria por id al servicio", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":100,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
-		service.On("AddIncome", mock.Anything, mock.MatchedBy(func(p IncomePayload) bool {
+		service.On("AgregarIngreso", mock.Anything, mock.MatchedBy(func(p PayloadIngreso) bool {
 			return p.CategoryID != nil && *p.CategoryID == testCategoryID
 		}), testEmpresaID).Return(model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 400 si category_id no es un UUID", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes",
 			`{"monto":100,"payment_method":"debito","category_id":"Comida"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si mandan la categoria por nombre", func(t *testing.T) {
-		// El contrato ya no acepta "categoria": util.ReadJSON usa
+		// El contrato ya no acepta "categoria": utilidades.LeerJSON usa
 		// DisallowUnknownFields, así que el campo viejo es un 400 y no se
 		// ignora en silencio.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes",
 			`{"monto":100,"payment_method":"debito","categoria":"Comida"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "categoria")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si la categoria no existe", func(t *testing.T) {
-		// El service valida el id y devuelve util.ErrNotFound. Es culpa del
+		// El service valida el id y devuelve utilidades.ErrorNoEncontrado. Es culpa del
 		// cliente, asi que el handler responde 400 y no un 500.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		body := `{"monto":100,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
-		service.On("AddIncome", mock.Anything, mock.Anything, testEmpresaID).
-			Return(model.Income{}, util.ErrNotFound).Once()
+		service.On("AgregarIngreso", mock.Anything, mock.Anything, testEmpresaID).
+			Return(model.Income{}, utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithUser(http.MethodPost, "/incomes", body)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"resource not found"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"recurso no encontrado"}`, w.Body.String())
 		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 400 y no llama al servicio si el body no es JSON valido", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		// util.ReadJSON usa DisallowUnknownFields
+		// utilidades.LeerJSON usa DisallowUnknownFields
 		r := requestWithUser(http.MethodPost, "/incomes",
 			`{"monto":100,"payment_method":"debito","empresa_id":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"}`)
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "empresa_id")
-		service.AssertNotCalled(t, "AddIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "AgregarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 500 si el servicio falla", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":100,"payment_method":"debito"}`)
-		service.On("AddIncome", mock.Anything, mock.Anything, mock.Anything).
+		service.On("AgregarIngreso", mock.Anything, mock.Anything, mock.Anything).
 			Return(model.Income{}, errStoreBoom).Once()
 
 		w := httptest.NewRecorder()
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -376,45 +376,45 @@ func TestIncomesHandler_AddIncome(t *testing.T) {
 
 func TestIncomesHandler_Delete(t *testing.T) {
 	t.Run("responde 200 y elimina el ingreso del URL param", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(nil).Once()
+		service.On("EliminarIngreso", mock.Anything, testIncomeID, testEmpresaID).Return(nil).Once()
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/"+testIncomeID.String(), testIncomeID.String())
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, bodyIncomeDeleted, w.Body.String())
 		service.AssertExpectations(t)
-		service.AssertCalled(t, "DeleteIncome", mock.Anything, testIncomeID, testEmpresaID)
+		service.AssertCalled(t, "EliminarIngreso", mock.Anything, testIncomeID, testEmpresaID)
 	})
 
-	t.Run("responde 400 y no llama al servicio si el incomeID no es un UUID", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+	t.Run("responde 400 y no llama al servicio si el ingresoID no es un UUID", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/no-es-uuid", "no-es-uuid")
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "DeleteIncome", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "EliminarIngreso", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 404 si el ingreso no existe", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(util.ErrNotFound).Once()
+		service.On("EliminarIngreso", mock.Anything, testIncomeID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/"+testIncomeID.String(), testIncomeID.String())
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
@@ -422,15 +422,15 @@ func TestIncomesHandler_Delete(t *testing.T) {
 	})
 
 	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).Return(errStoreBoom).Once()
+		service.On("EliminarIngreso", mock.Anything, testIncomeID, testEmpresaID).Return(errStoreBoom).Once()
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/"+testIncomeID.String(), testIncomeID.String())
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -439,37 +439,37 @@ func TestIncomesHandler_Delete(t *testing.T) {
 
 	t.Run("pasa el ID del contexto para que el store acote el borrado", func(t *testing.T) {
 		// El handler tiene que adjuntar el ID del token. Si solo mandara el
-		// incomeID de la URL, el store no podria distinguir de quien es el
+		// ingresoID de la URL, el store no podria distinguir de quien es el
 		// ingreso y responderia 200 al borrar algo ajeno.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		victima := newTestIncome()
-		service.On("DeleteIncome", mock.Anything, victima.ID, testEmpresaID).Return(nil).Once()
+		service.On("EliminarIngreso", mock.Anything, victima.ID, testEmpresaID).Return(nil).Once()
 
 		r := requestWithIncomeIDParam(http.MethodDelete,
 			"/incomes/"+victima.ID.String(), victima.ID.String())
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
-		service.AssertCalled(t, "DeleteIncome", mock.Anything, victima.ID, testEmpresaID)
+		service.AssertCalled(t, "EliminarIngreso", mock.Anything, victima.ID, testEmpresaID)
 	})
 
 	t.Run("responde 404 cuando el ingreso es de otra empresa", func(t *testing.T) {
 		// El store acotó por empresa_id, no matcheó filas y devolvió ErrNotFound.
 		// El handler lo traduce a 404 en vez de 200.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("DeleteIncome", mock.Anything, testIncomeID, testEmpresaID).
-			Return(util.ErrNotFound).Once()
+		service.On("EliminarIngreso", mock.Anything, testIncomeID, testEmpresaID).
+			Return(utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/"+testIncomeID.String(), testIncomeID.String())
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
@@ -479,23 +479,23 @@ func TestIncomesHandler_Delete(t *testing.T) {
 
 func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 	t.Run("responde 200 con la lista de ingresos de la empresa del contexto", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		esperados := []model.Income{newTestIncome()}
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, newTestFilterQuery()).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, newTestFilterQuery()).
 			Return(esperados, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
 
 		envelope := decodeEnvelope(t, w.Body.String())
-		data, ok := envelope["data"].([]any)
+		data, ok := envelope["datos"].([]any)
 		require.True(t, ok, "la respuesta debe traer un arreglo en \"data\"")
 
 		require.Len(t, data, 1)
@@ -509,63 +509,63 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 	})
 
 	t.Run("sin query params pide la primera página del tamaño tope", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID,
-			mock.MatchedBy(func(fq pagination.IncomePaginationQuery) bool {
-				return fq == pagination.NewIncomePaginationQuery()
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID,
+			mock.MatchedBy(func(fq paginacion.ConsultaPaginacionIngresos) bool {
+				return fq == paginacion.NuevaConsultaPaginacionIngresos()
 			}),
 		).Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
 	})
 
 	t.Run("manda al servicio los query params de paginación y rango", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		esperada := pagination.IncomePaginationQuery{
-			Limit:  5,
-			Offset: 10,
-			Since:  "2026-09-01",
-			Until:  "2026-09-30",
+		esperada := paginacion.ConsultaPaginacionIngresos{
+			Limite:         5,
+			Desplazamiento: 10,
+			Desde:          "2026-09-01",
+			Hasta:          "2026-09-30",
 		}
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, esperada).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, esperada).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
-			"/incomes?limit=5&offset=10&since=2026-09-01&until=2026-09-30", "")
+			"/incomes?limite=5&desplazamiento=10&desde=2026-09-01&hasta=2026-09-30", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
-		service.AssertCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, esperada)
+		service.AssertCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, esperada)
 	})
 
 	t.Run("filtra por categoría con category_id", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
 		esperada := filterQueryWithCategory()
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, esperada).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, esperada).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet,
-			"/incomes?category_id="+testCategoryID.String(), "")
+			"/incomes?categoria_id="+testCategoryID.String(), "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
@@ -574,125 +574,125 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 	t.Run("responde 400 y no llama al servicio si limit no es un entero", func(t *testing.T) {
 		// Si el Parse se comiera el error, el cliente pediría una página y
 		// recibiría otra sin enterarse.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodGet, "/incomes?limit=abc", "")
+		r := requestWithUser(http.MethodGet, "/incomes?limite=abc", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "limit")
-		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si limit se pasa del máximo", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodGet, "/incomes?limit=500", "")
+		r := requestWithUser(http.MethodGet, "/incomes?limite=500", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si offset es negativo", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodGet, "/incomes?offset=-1", "")
+		r := requestWithUser(http.MethodGet, "/incomes?desplazamiento=-1", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si la fecha del rango no es AAAA-MM-DD", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodGet, "/incomes?since=30-09-2026", "")
+		r := requestWithUser(http.MethodGet, "/incomes?desde=30-09-2026", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "since")
-		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
+		assert.Contains(t, w.Body.String(), "desde")
+		service.AssertNotCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 y no llama al servicio si category_id no es un UUID", func(t *testing.T) {
 		// El filtro es por id, no por nombre: un nombre de categoría en
 		// category_id no matchea ninguna fila, así que tiene que ser 400 y no
 		// una lista vacía.
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithUser(http.MethodGet, "/incomes?category_id=Venta", "")
+		r := requestWithUser(http.MethodGet, "/incomes?categoria_id=Venta", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "category_id")
-		service.AssertNotCalled(t, "GetAllIncomesOfEmpresa", mock.Anything, mock.Anything, mock.Anything)
+		assert.Contains(t, w.Body.String(), "categoria_id")
+		service.AssertNotCalled(t, "ObtenerIngresosDeEmpresa", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 200 con data null cuando la empresa no tiene ingresos", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return(nil, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		envelope := decodeEnvelope(t, w.Body.String())
 
-		assert.Nil(t, envelope["data"], "slice nil se serializa como null")
+		assert.Nil(t, envelope["datos"], "slice nil se serializa como null")
 		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 200 con data vacio cuando el store devuelve slice vacío", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return([]model.Income{}, nil).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		envelope := decodeEnvelope(t, w.Body.String())
 
-		assert.Equal(t, []any{}, envelope["data"])
+		assert.Equal(t, []any{}, envelope["datos"])
 		service.AssertExpectations(t)
 	})
 
 	t.Run("responde 500 si el servicio falla", func(t *testing.T) {
-		service := new(ServiceIncomesMock)
+		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, mock.Anything).
+		service.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, mock.Anything).
 			Return(nil, errStoreBoom).Once()
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 
 		w := httptest.NewRecorder()
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -701,63 +701,63 @@ func TestIncomesHandler_GetIncomesOfUser(t *testing.T) {
 }
 
 func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
-	t.Run("IncomeService satisface la interfaz que espera el handler", func(t *testing.T) {
-		// Guarda contra regresiones de firmas: si cambia ServiceIncomes, esto
+	t.Run("ServicioIngresos satisface la interfaz que espera el handler", func(t *testing.T) {
+		// Guarda contra regresiones de firmas: si cambia IServiceIngresos, esto
 		// deja de compilar.
-		var _ ServiceIncomes = NewIncomeService(new(StoreIncomesMock))
+		var _ IServiceIngresos = NuevoServicioIngresos(new(RepositorioIngresosMock))
 	})
 
-	t.Run("el handler construye un IncomeService real sobre un store mockeado", func(t *testing.T) {
-		store := new(StoreIncomesMock)
-		store.On("GetAllIncomesOfEmpresa", mock.Anything, testEmpresaID, newTestFilterQuery()).
+	t.Run("el handler construye un ServicioIngresos real sobre un store mockeado", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		store.On("ObtenerIngresosDeEmpresa", mock.Anything, testEmpresaID, newTestFilterQuery()).
 			Return([]model.Income{newTestIncome()}, nil).Once()
 
-		handler := newTestHandler(NewIncomeService(store))
+		handler := newTestHandler(NuevoServicioIngresos(store))
 
 		r := requestWithUser(http.MethodGet, "/incomes", "")
 		w := httptest.NewRecorder()
 
-		handler.GetIncomesOfUser(w, r)
+		handler.ObtenerIngresosDeEmpresa(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("el alta llega al store con el ID del contexto", func(t *testing.T) {
-		store := new(StoreIncomesMock)
-		store.On("AddIncome", mock.Anything, mock.Anything).Return(nil).Once()
+		store := new(RepositorioIngresosMock)
+		store.On("AgregarIngreso", mock.Anything, mock.Anything).Return(nil).Once()
 
-		handler := newTestHandler(NewIncomeService(store))
+		handler := newTestHandler(NuevoServicioIngresos(store))
 
 		r := requestWithUser(http.MethodPost, "/incomes", `{"monto":100,"payment_method":"efectivo"}`)
 		w := httptest.NewRecorder()
 
-		handler.AddIncome(w, r)
+		handler.AgregarIngreso(w, r)
 
 		require.Equal(t, http.StatusCreated, w.Code)
-		store.AssertCalled(t, "AddIncome", mock.Anything,
+		store.AssertCalled(t, "AgregarIngreso", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
 				return i.EmpresaID == testEmpresaID &&
 					i.Monto == 100 &&
-					i.PaymentMethod == util.PaymentMethodEfectivo &&
+					i.PaymentMethod == utilidades.MetodoPagoEfectivo &&
 					i.Descripcion == nil
 			}))
 	})
 
 	t.Run("el UUID del income propagado coincide con el de la URL", func(t *testing.T) {
-		store := new(StoreIncomesMock)
+		store := new(RepositorioIngresosMock)
 		otroID := uuid.New()
-		store.On("DeleteIncome", mock.Anything, otroID, testEmpresaID).Return(nil).Once()
+		store.On("EliminarIngreso", mock.Anything, otroID, testEmpresaID).Return(nil).Once()
 
-		handler := newTestHandler(NewIncomeService(store))
+		handler := newTestHandler(NuevoServicioIngresos(store))
 
 		r := requestWithIncomeIDParam(http.MethodDelete, "/incomes/"+otroID.String(), otroID.String())
 		w := httptest.NewRecorder()
 
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		store.AssertCalled(t, "DeleteIncome", mock.Anything, otroID, testEmpresaID)
+		store.AssertCalled(t, "EliminarIngreso", mock.Anything, otroID, testEmpresaID)
 	})
 }
 

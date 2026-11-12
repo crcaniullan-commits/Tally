@@ -3,22 +3,22 @@ package users
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStorage(db)
-	svc := NewUserService(repo)
-	hdl := NewUserHandler(svc, err)
+	repo := NuevoAlmacenUsuarios(db)
+	svc := NuevoServicioUsuarios(repo)
+	hdl := NuevoHandlerUsuarios(svc, err)
 
-	r.Route("/users", func(r chi.Router) {
-		r.Patch("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Update))
-		r.Delete("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Delete))
-		r.Get("/municipal/{rut}", middl.CheckOwnership(util.UserRoleMunicipal, hdl.GetByRut))
+	r.Route("/usuarios", func(r chi.Router) {
+		r.Patch("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Actualizar))
+		r.Delete("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Eliminar))
+		r.Get("/municipal/{rut}", middl.VerificarRol(utilidades.RolMunicipal, hdl.ObtenerPorRUT))
 	})
 }

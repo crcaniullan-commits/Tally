@@ -8,32 +8,32 @@ import (
 	"testing"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 )
 
 const (
-	bodyCategoriaCreated = `{"data":{
+	bodyCategoriaCreated = `{"datos":{
 		"id": "b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d",
 		"nombre": "Comida",
 		"empresa_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
 	}}`
-	bodyNombreCambiado     = `{"data":"Nombre cambiado"}`
-	bodyCategoriaEliminada = `{"data":"Categoria b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d eliminada"}`
-	bodyNotFound           = `{"error":"not found"}`
+	bodyNombreCambiado     = `{"datos":"Nombre cambiado"}`
+	bodyCategoriaEliminada = `{"datos":"Categoría b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d eliminada"}`
+	bodyNotFound           = `{"error":"no encontrado"}`
 	bodyBadRequest         = `{"error":"La categoría ya existe"}`
 )
 
-// newTestHandler arma un CategoriesHandler con un service mockeado y el logger de
+// newTestHandler arma un HandlerCategorias con un service mockeado y el logger de
 // errorhandler apuntando a un noop.
-func newTestHandler(service ServiceCategories) *CategoriesHandler {
-	return NewCategoriesHandler(service, errorhandler.NewErrorResponse(zap.NewNop().Sugar()))
+func newTestHandler(service IServiceCategorias) *HandlerCategorias {
+	return NuevoHandlerCategorias(service, errores.NuevaRespuestaErrores(zap.NewNop().Sugar()))
 }
 
 // requestWithEmpresaContext inyecta usuario y empresa en el contexto.
@@ -45,11 +45,11 @@ func requestWithEmpresaContext(method, target, body string) *http.Request {
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 	}
 
-	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
 	empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
 
-	ctx := context.WithValue(r.Context(), util.UserCtx, usuario)
-	ctx = context.WithValue(ctx, util.EmpresaCtx, empresa)
+	ctx := context.WithValue(r.Context(), utilidades.ContextoUsuario, usuario)
+	ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
 
 	return r.WithContext(ctx)
 }
@@ -67,10 +67,10 @@ func requestWithCategoriaIDParam(method, target, categoriaID string, body string
 	}
 
 	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx)
-	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
 	empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
-	ctx = context.WithValue(ctx, util.UserCtx, usuario)
-	ctx = context.WithValue(ctx, util.EmpresaCtx, empresa)
+	ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+	ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
 
 	return r.WithContext(ctx)
 }
@@ -83,29 +83,29 @@ func requestWithCategoriaParam(method, target, categoria string) *http.Request {
 	r := httptest.NewRequest(method, target, nil)
 
 	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx)
-	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: util.UserRoleUsuario}
+	usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
 	empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
-	ctx = context.WithValue(ctx, util.UserCtx, usuario)
-	ctx = context.WithValue(ctx, util.EmpresaCtx, empresa)
+	ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+	ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
 
 	return r.WithContext(ctx)
 }
 
 func TestCategoriesHandler_Create(t *testing.T) {
 	t.Run("responde 201 con la categoria creada", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Comida"}`
 		empresaID := testEmpresaID
 
-		service.On("Create", mock.Anything, CategoriaPayload{Nombre: "Comida"}, &empresaID).
+		service.On("Crear", mock.Anything, PayloadCategoria{Nombre: "Comida"}, &empresaID).
 			Return(newTestCategoria(), nil).Once()
 
 		r := requestWithEmpresaContext(http.MethodPost, "/categories", body)
 
 		w := httptest.NewRecorder()
-		handler.Create(w, r)
+		handler.Crear(w, r)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyCategoriaCreated, w.Body.String())
@@ -113,19 +113,19 @@ func TestCategoriesHandler_Create(t *testing.T) {
 	})
 
 	t.Run("responde 400 si la categoria ya existe", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Comida"}`
 		empresaID := testEmpresaID
 
-		service.On("Create", mock.Anything, CategoriaPayload{Nombre: "Comida"}, &empresaID).
-			Return(model.Categorie{}, AlreadyExistError).Once()
+		service.On("Crear", mock.Anything, PayloadCategoria{Nombre: "Comida"}, &empresaID).
+			Return(model.Categorie{}, ErrorCategoriaDuplicada).Once()
 
 		r := requestWithEmpresaContext(http.MethodPost, "/categories", body)
 
 		w := httptest.NewRecorder()
-		handler.Create(w, r)
+		handler.Crear(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.JSONEq(t, bodyBadRequest, w.Body.String())
@@ -133,7 +133,7 @@ func TestCategoriesHandler_Create(t *testing.T) {
 	})
 
 	t.Run("responde 400 si el nombre esta vacio", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":""}`
@@ -141,14 +141,14 @@ func TestCategoriesHandler_Create(t *testing.T) {
 		r := requestWithEmpresaContext(http.MethodPost, "/categories", body)
 
 		w := httptest.NewRecorder()
-		handler.Create(w, r)
+		handler.Crear(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "Create", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si falta el nombre", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{}`
@@ -156,26 +156,26 @@ func TestCategoriesHandler_Create(t *testing.T) {
 		r := requestWithEmpresaContext(http.MethodPost, "/categories", body)
 
 		w := httptest.NewRecorder()
-		handler.Create(w, r)
+		handler.Crear(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "Create", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 500 en caso de error interno", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Comida"}`
 		empresaID := testEmpresaID
 
-		service.On("Create", mock.Anything, CategoriaPayload{Nombre: "Comida"}, &empresaID).
+		service.On("Crear", mock.Anything, PayloadCategoria{Nombre: "Comida"}, &empresaID).
 			Return(model.Categorie{}, assert.AnError).Once()
 
 		r := requestWithEmpresaContext(http.MethodPost, "/categories", body)
 
 		w := httptest.NewRecorder()
-		handler.Create(w, r)
+		handler.Crear(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		service.AssertExpectations(t)
@@ -184,7 +184,7 @@ func TestCategoriesHandler_Create(t *testing.T) {
 
 func TestCategoriesHandler_GetCategorias(t *testing.T) {
 	t.Run("responde 200 con las categorias de la empresa y las globales", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		global := model.Categorie{
@@ -192,16 +192,16 @@ func TestCategoriesHandler_GetCategorias(t *testing.T) {
 			Nombre: "Ventas",
 		}
 
-		service.On("GetCategorias", mock.Anything, testEmpresaID).
+		service.On("ObtenerCategorias", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{newTestCategoria(), global}, nil).Once()
 
 		r := requestWithEmpresaContext(http.MethodGet, "/categories", "")
 
 		w := httptest.NewRecorder()
-		handler.GetCategorias(w, r)
+		handler.ObtenerCategorias(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.JSONEq(t, `{"data":[
+		assert.JSONEq(t, `{"datos":[
 			{"id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","nombre":"Comida","empresa_id":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"},
 			{"id":"c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f","nombre":"Ventas","empresa_id":null}
 		]}`, w.Body.String())
@@ -209,16 +209,16 @@ func TestCategoriesHandler_GetCategorias(t *testing.T) {
 	})
 
 	t.Run("responde 500 en caso de error interno", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
-		service.On("GetCategorias", mock.Anything, testEmpresaID).
+		service.On("ObtenerCategorias", mock.Anything, testEmpresaID).
 			Return(nil, assert.AnError).Once()
 
 		r := requestWithEmpresaContext(http.MethodGet, "/categories", "")
 
 		w := httptest.NewRecorder()
-		handler.GetCategorias(w, r)
+		handler.ObtenerCategorias(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		service.AssertExpectations(t)
@@ -227,12 +227,12 @@ func TestCategoriesHandler_GetCategorias(t *testing.T) {
 
 func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 	t.Run("responde 200 cuando se cambia el nombre correctamente", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Bebidas"}`
 
-		service.On("CambiarNombre", mock.Anything, CategoriaPayload{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
+		service.On("CambiarNombre", mock.Anything, PayloadCategoria{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
 			Return(nil).Once()
 
 		r := requestWithCategoriaIDParam(http.MethodPatch, "/categories/"+testCategoriaID.String(), testCategoriaID.String(), body)
@@ -246,13 +246,13 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 	})
 
 	t.Run("responde 404 cuando la categoria no existe", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Bebidas"}`
 
-		service.On("CambiarNombre", mock.Anything, CategoriaPayload{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
-			Return(util.ErrNotFound).Once()
+		service.On("CambiarNombre", mock.Anything, PayloadCategoria{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
+			Return(utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithCategoriaIDParam(http.MethodPatch, "/categories/"+testCategoriaID.String(), testCategoriaID.String(), body)
 
@@ -265,13 +265,13 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 	})
 
 	t.Run("responde 400 si el nombre ya existe en la empresa", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Bebidas"}`
 
-		service.On("CambiarNombre", mock.Anything, CategoriaPayload{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
-			Return(AlreadyExistError).Once()
+		service.On("CambiarNombre", mock.Anything, PayloadCategoria{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
+			Return(ErrorCategoriaDuplicada).Once()
 
 		r := requestWithCategoriaIDParam(http.MethodPatch, "/categories/"+testCategoriaID.String(), testCategoriaID.String(), body)
 
@@ -284,7 +284,7 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 	})
 
 	t.Run("responde 400 si el categoriaID es invalido", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Bebidas"}`
@@ -299,12 +299,12 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 	})
 
 	t.Run("responde 500 en caso de error interno", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		body := `{"nombre":"Bebidas"}`
 
-		service.On("CambiarNombre", mock.Anything, CategoriaPayload{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
+		service.On("CambiarNombre", mock.Anything, PayloadCategoria{Nombre: "Bebidas"}, testCategoriaID, testEmpresaID).
 			Return(assert.AnError).Once()
 
 		r := requestWithCategoriaIDParam(http.MethodPatch, "/categories/"+testCategoriaID.String(), testCategoriaID.String(), body)
@@ -319,7 +319,7 @@ func TestCategoriesHandler_CambiarNombre(t *testing.T) {
 
 func TestCategoriesHandler_BorrarCategoria(t *testing.T) {
 	t.Run("responde 200 cuando se elimina correctamente", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		service.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(nil).Once()
@@ -335,10 +335,10 @@ func TestCategoriesHandler_BorrarCategoria(t *testing.T) {
 	})
 
 	t.Run("responde 404 cuando la categoria no existe", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
-		service.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(util.ErrNotFound).Once()
+		service.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithCategoriaParam(http.MethodDelete, "/categories/"+testCategoriaID.String(), testCategoriaID.String())
 
@@ -351,7 +351,7 @@ func TestCategoriesHandler_BorrarCategoria(t *testing.T) {
 	})
 
 	t.Run("responde 400 si el categoriaID es invalido", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithCategoriaParam(http.MethodDelete, "/categories/invalid", "invalid")
@@ -364,7 +364,7 @@ func TestCategoriesHandler_BorrarCategoria(t *testing.T) {
 	})
 
 	t.Run("responde 500 en caso de error interno", func(t *testing.T) {
-		service := new(ServiceCategoriesMock)
+		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)
 
 		service.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(assert.AnError).Once()

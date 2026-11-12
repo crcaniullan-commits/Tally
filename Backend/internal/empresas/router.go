@@ -3,9 +3,9 @@ package empresas
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/middleware"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
@@ -15,21 +15,21 @@ type Routes struct {
 	Item       func(r chi.Router)
 }
 
-func InitModule(db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) (Routes, middleware.EmpresaFinder) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) (Routes, intermediario.BuscadorEmpresa) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStorage(db)
-	svc := NewEmpresaService(repo)
-	hdl := NewEmpresasHandler(svc, err)
+	repo := NuevoAlmacenEmpresas(db)
+	svc := NuevoServicioEmpresas(repo)
+	hdl := NuevoHandlerEmpresas(svc, err)
 
 	return Routes{
 		Collection: func(r chi.Router) {
-			r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
-			r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetEmpresas))
+			r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Crear))
+			r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerEmpresas))
 		},
 		Item: func(r chi.Router) {
-			r.Patch("/{nombre}", middl.CheckOwnership(util.UserRoleUsuario, hdl.CambiarNombre))
-			r.Delete("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.BorrarEmpresa))
+			r.Patch("/{nombre}", middl.VerificarRol(utilidades.RolUsuario, hdl.CambiarNombre))
+			r.Delete("/", middl.VerificarRol(utilidades.RolUsuario, hdl.BorrarEmpresa))
 		},
 	}, repo
 }

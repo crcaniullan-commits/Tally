@@ -5,31 +5,31 @@ import (
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
-// StoreIncomesMock es un mock de la capa de persistencia (StoreIncomes) usado
-// para probar IncomeService sin tocar la base de datos.
-type StoreIncomesMock struct {
+// RepositorioIngresosMock es un mock de la capa de persistencia (RepositorioIngresos) usado
+// para probar ServicioIngresos sin tocar la base de datos.
+type RepositorioIngresosMock struct {
 	mock.Mock
 }
 
-func (m *StoreIncomesMock) AddIncome(ctx context.Context, income *model.Income) error {
+func (m *RepositorioIngresosMock) AgregarIngreso(ctx context.Context, income *model.Income) error {
 	args := m.Called(ctx, income)
 	return args.Error(0)
 }
 
-func (m *StoreIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, incomeID, empresaID)
+func (m *RepositorioIngresosMock) EliminarIngreso(ctx context.Context, ingresoID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, ingresoID, empresaID)
 	return args.Error(0)
 }
 
-// GetAllIncomesOfEmpresa pasa la paginación a m.Called como tercer argumento para
+// ObtenerIngresosDeEmpresa pasa la paginación a m.Called como tercer argumento para
 // que los tests puedan assertear los query params que llegaron al store.
-func (m *StoreIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+func (m *RepositorioIngresosMock) ObtenerIngresosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Income, error) {
 	args := m.Called(ctx, empresaID, fq)
 
 	incomes, _ := args.Get(0).([]model.Income)
@@ -37,9 +37,9 @@ func (m *StoreIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID
 	return incomes, args.Error(1)
 }
 
-// CategoryExists indica si la categoría es visible para la empresa. El mock
+// CategoriaExiste indica si la categoría es visible para la empresa. El mock
 // devuelve lo que le configure el test.
-func (m *StoreIncomesMock) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+func (m *RepositorioIngresosMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	args := m.Called(ctx, categoryID, empresaID)
 
 	existe, _ := args.Get(0).(bool)
@@ -47,13 +47,13 @@ func (m *StoreIncomesMock) CategoryExists(ctx context.Context, categoryID uuid.U
 	return existe, args.Error(1)
 }
 
-// ServiceIncomesMock es un mock de la capa de servicio (ServiceIncomes) usado
-// para probar IncomesHandler de forma aislada.
-type ServiceIncomesMock struct {
+// IServiceIncomesMock es un mock de la capa de servicio (IServiceIngresos) usado
+// para probar HandlerIngresos de forma aislada.
+type IServiceIncomesMock struct {
 	mock.Mock
 }
 
-func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayload, empresaID uuid.UUID) (model.Income, error) {
+func (m *IServiceIncomesMock) AgregarIngreso(ctx context.Context, payload PayloadIngreso, empresaID uuid.UUID) (model.Income, error) {
 	args := m.Called(ctx, payload, empresaID)
 
 	income, _ := args.Get(0).(model.Income)
@@ -61,12 +61,12 @@ func (m *ServiceIncomesMock) AddIncome(ctx context.Context, payload IncomePayloa
 	return income, args.Error(1)
 }
 
-func (m *ServiceIncomesMock) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, incomeID, empresaID)
+func (m *IServiceIncomesMock) EliminarIngreso(ctx context.Context, ingresoID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, ingresoID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceIncomesMock) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+func (m *IServiceIncomesMock) ObtenerIngresosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Income, error) {
 	args := m.Called(ctx, empresaID, fq)
 
 	incomes, _ := args.Get(0).([]model.Income)
@@ -91,7 +91,7 @@ func newTestIncome() model.Income {
 		ID:            testIncomeID,
 		EmpresaID:     testEmpresaID,
 		Monto:         1500,
-		PaymentMethod: util.PaymentMethodDebito,
+		PaymentMethod: utilidades.MetodoPagoDebito,
 		Descripcion:   &descripcion,
 		Fecha:         testFecha,
 		CreatedAt:     testFecha.Add(2 * time.Hour),
@@ -100,12 +100,12 @@ func newTestIncome() model.Income {
 }
 
 // newTestPayload arma el payload de alta con valores que pasan la validación.
-func newTestPayload() IncomePayload {
+func newTestPayload() PayloadIngreso {
 	descripcion := "Venta de almuerzo"
 
-	return IncomePayload{
+	return PayloadIngreso{
 		Monto:         1500,
-		PaymentMethod: util.PaymentMethodDebito,
+		PaymentMethod: utilidades.MetodoPagoDebito,
 		Descripcion:   &descripcion,
 		CategoryID:    &testCategoryID,
 	}
@@ -115,27 +115,27 @@ func newTestPayload() IncomePayload {
 // fechas ni categoría), que es lo que el handler manda cuando la query string
 // viene vacía. Los tests que agregan ?limit / ?offset / ?since / ?until /
 // ?category_id arman la suya a mano.
-func newTestFilterQuery() pagination.IncomePaginationQuery {
-	return pagination.NewIncomePaginationQuery()
+func newTestFilterQuery() paginacion.ConsultaPaginacionIngresos {
+	return paginacion.NuevaConsultaPaginacionIngresos()
 }
 
 // filterQueryWithRango es una paginación con filtros de fecha, para probar que
 // llegan intactos hasta el store.
-func filterQueryWithRango() pagination.IncomePaginationQuery {
-	return pagination.IncomePaginationQuery{
-		Limit:  5,
-		Offset: 10,
-		Since:  "2026-09-01",
-		Until:  "2026-09-30",
+func filterQueryWithRango() paginacion.ConsultaPaginacionIngresos {
+	return paginacion.ConsultaPaginacionIngresos{
+		Limite:         5,
+		Desplazamiento: 10,
+		Desde:          "2026-09-01",
+		Hasta:          "2026-09-30",
 	}
 }
 
 // filterQueryWithCategory es una paginación filtrando por categoría: el
 // category_id viaja como string porque así lo recibe el SELECT ($6 = ” OR
 // category_id = $6::uuid).
-func filterQueryWithCategory() pagination.IncomePaginationQuery {
-	return pagination.IncomePaginationQuery{
-		Limit:      pagination.DefaultLimit,
+func filterQueryWithCategory() paginacion.ConsultaPaginacionIngresos {
+	return paginacion.ConsultaPaginacionIngresos{
+		Limite:     paginacion.LimitePorDefecto,
 		CategoryID: testCategoryID.String(),
 	}
 }

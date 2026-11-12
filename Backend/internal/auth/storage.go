@@ -7,29 +7,29 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
+	"github.com/crcaniullan-commits/Tally/internal/bdtx"
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/users"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type StoreAuth struct {
+type AlmacenAuth struct {
 	db *sql.DB
 }
 
-func NewStorage(db *sql.DB) *StoreAuth {
-	return &StoreAuth{db}
+func NuevoAlmacenAuth(db *sql.DB) *AlmacenAuth {
+	return &AlmacenAuth{db}
 }
 
-func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (s *AlmacenAuth) ObtenerPorEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
 		SELECT id, email, nombre, rut, password_hash
 		FROM users
 		WHERE email = $1;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	user := &model.User{}
@@ -47,12 +47,12 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*model.User, 
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return nil, util.ErrNotFound
+			return nil, utilidades.ErrorNoEncontrado
 		}
 		return nil, err
 	}
 
-	parsedRut, err := util.ParseRUT(rawRut)
+	parsedRut, err := utilidades.ParseRUT(rawRut)
 
 	if err != nil {
 		return nil, err
@@ -63,13 +63,13 @@ func (s *StoreAuth) GetByEmail(ctx context.Context, email string) (*model.User, 
 	return user, nil
 }
 
-func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
+func (s *AlmacenAuth) Create(ctx context.Context, user *model.User) error {
 	query := `
 		INSERT INTO users (email, password_hash, nombre, role, rut)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at;
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	role := user.Role
@@ -77,7 +77,7 @@ func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
 		role = "usuario"
 	}
 
-	err := dbtx.FromContext(ctx, s.db).QueryRowContext(ctx, query,
+	err := bdtx.FromContext(ctx, s.db).QueryRowContext(ctx, query,
 		user.Email,
 		user.PasswordHash.GetHash(),
 		user.Nombre,
@@ -98,16 +98,16 @@ func (s *StoreAuth) Create(ctx context.Context, user *model.User) error {
 	return nil
 }
 
-func (s *StoreAuth) setExpire(ctx context.Context, expires_at time.Time, userID uuid.UUID) error {
+func (s *AlmacenAuth) establecerVencimiento(ctx context.Context, expires_at time.Time, userID uuid.UUID) error {
 	query := `
 		UPDATE users
 		SET plan_expires_at = $1
 		WHERE id = $2
 	`
 
-	exec := dbtx.FromContext(ctx, s.db)
+	exec := bdtx.FromContext(ctx, s.db)
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	_, err := exec.ExecContext(ctx, query, expires_at, userID)

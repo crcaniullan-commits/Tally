@@ -13,17 +13,17 @@ import (
 	"strings"
 	"time"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	"github.com/crcaniullan-commits/Tally/internal/bdtx"
 	"github.com/crcaniullan-commits/Tally/internal/categories"
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
+	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
 	"github.com/crcaniullan-commits/Tally/internal/debtors"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/expenses"
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
-	"github.com/crcaniullan-commits/Tally/internal/middleware"
+	"github.com/crcaniullan-commits/Tally/internal/intermediario"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
 	chimit "github.com/go-chi/chi/v5/middleware"
@@ -64,15 +64,15 @@ func newEnv() (*TestEnv, func(), error) {
 func buildRouter(db *sql.DB) http.Handler {
 	logger := zap.NewNop().Sugar()
 
-	middl := middleware.NewAuthMiddleware(
-		errorhandler.NewErrorResponse(logger),
+	middl := intermediario.NuevoMiddlewareAutenticacion(
+		errores.NuevaRespuestaErrores(logger),
 		auth.NewJWTAuthenticator(jwtSecret, jwtIssuer, jwtIssuer),
-		users.NewStorage(db),
+		users.NuevoAlmacenUsuarios(db),
 	)
 
 	empresaRoute, finder := empresas.InitModule(db, logger, middl)
-	emMiddl := middleware.NewEmpresaMiddleware(logger, finder)
-	transactor := dbtx.NewTransactor(db)
+	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, finder)
+	transactor := bdtx.NewTransactor(db)
 
 	r := chi.NewRouter()
 	r.Use(
@@ -84,17 +84,17 @@ func buildRouter(db *sql.DB) http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		auth.InitModule(r, db, logger, transactor, jwtSecret, jwtIssuer, jwtExp)
 
-		r.Route("/app", func(r chi.Router) {
-			r.Use(middl.AuthTokenMiddleware)
+		r.Route("/aplicacion", func(r chi.Router) {
+			r.Use(middl.MiddlewareTokenAutenticacion)
 
 			users.InitModule(r, db, logger, middl)
-			accesskeys.InitModule(r, db, logger, middl, noopSender{})
+			clavesacceso.InitModule(r, db, logger, middl, noopSender{})
 
 			r.Route("/empresas", func(r chi.Router) {
 				empresaRoute.Collection(r)
 
 				r.Route("/{empresaID}", func(r chi.Router) {
-					r.Use(emMiddl.EmpresaOfUser)
+					r.Use(emMiddl.EmpresaDelUsuario)
 
 					empresaRoute.Item(r)
 					incomes.InitModule(r, db, logger, middl)

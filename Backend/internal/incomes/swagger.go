@@ -1,52 +1,52 @@
 package incomes
 
-// AddIncome
+// AgregarIngreso
 //
 //	@Summary		Registrar ingreso
-//	@Description	Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "category_id" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.
-//	@Tags			Incomes
+//	@Description	Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria_id" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.
+//	@Tags			Ingresos
 //	@Accept			json
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		IncomePayload		true	"payload"
+//	@Param			payload		body		PayloadIngreso		true	"payload"
 //	@Success		201			{object}	model.Income		"ingreso creado"
-//	@Failure		400			{object}	map[string]string	"payload del ingreso erroneo"
+//	@Failure		400			{object}	map[string]string	"payload del ingreso erróneo"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/incomes	[post]
-func AddIncome() {}
+//	@Router			/aplicacion/empresas/{empresaID}/ingresos	[post]
+func AgregarIngreso() {}
 
-// DeleteIncome
+// EliminarIngreso
 //
 //	@Summary		Eliminar ingreso
-//	@Description	Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"data": ...} con el mensaje de confirmación.
-//	@Tags			Incomes
+//	@Description	Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Tags			Ingresos
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			incomeID	path		string				true	"ID del ingreso"
+//	@Param			ingresoID	path		string				true	"ID del ingreso"
 //	@Success		200			{object}	string				"ingreso eliminado"
-//	@Failure		400			{object}	map[string]string	"incomeID invalido"
+//	@Failure		400			{object}	map[string]string	"ingresoID invalido"
 //	@Failure		404			{object}	map[string]string	"ingreso no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/incomes/{incomeID}	[delete]
-func Delete() {}
+//	@Router			/aplicacion/empresas/{empresaID}/ingresos/{ingresoID}	[delete]
+func Eliminar() {}
 
-// GetIncomesOfUser
+// ObtenerIngresosDeEmpresa
 //
 //	@Summary		Listar ingresos de la empresa
-//	@Description	Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {"data": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).
-//	@Tags			Incomes
+//	@Description	Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {"datos": [...]}. Paginá con limite (entre 1 y 30, por defecto 30) y desplazamiento; el rango se acota con desde y hasta en formato AAAA-MM-DD, y por categoría con categoria_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).
+//	@Tags			Ingresos
 //	@Produce		json
-//	@Param			empresaID	path		string						true	"ID de la empresa"
-//	@Param			limit		query		int							false	"cantidad maxima de ingresos a devolver (1-30, default 30)"
-//	@Param			offset		query		int							false	"ingresos a saltar, para pedir la pagina siguiente"
-//	@Param			since		query		string						false	"fecha minima del rango (AAAA-MM-DD)"
-//	@Param			until		query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
-//	@Param			category_id	query		string						false	"UUID de la categoria por la que filtrar"
-//	@Success		200			{object}	map[string][]model.Income	"pagina de ingresos"
-//	@Failure		400			{object}	map[string]string			"parametros de paginacion erroneos"
-//	@Failure		500			{object}	map[string]string			"error interno del servidor"
+//	@Param			empresaID		path		string						true	"ID de la empresa"
+//	@Param			limite			query		int							false	"cantidad maxima de ingresos a devolver (1-30, default 30)"
+//	@Param			desplazamiento	query		int							false	"ingresos a saltar, para pedir la pagina siguiente"
+//	@Param			desde			query		string						false	"fecha minima del rango (AAAA-MM-DD)"
+//	@Param			hasta			query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
+//	@Param			categoria_id	query		string						false	"UUID de la categoria por la que filtrar"
+//	@Success		200				{object}	map[string][]model.Income	"pagina de ingresos"
+//	@Failure		400				{object}	map[string]string			"parametros de paginacion erroneos"
+//	@Failure		500				{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
-//	@Router			/app/empresas/{empresaID}/incomes	[get]
-func GetIncomesOfUser() {}
+//	@Router			/aplicacion/empresas/{empresaID}/ingresos	[get]
+func ObtenerIngresosDeEmpresa() {}

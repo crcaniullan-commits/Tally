@@ -24,14 +24,205 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/app/empresas": {
+        "/aplicacion/claves": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Genera un código de acceso, lo guarda asociado al municipal autenticado (created_by) con un año de vencimiento y lo envía por correo al destinatario del payload. La respuesta viene envuelta en {\"datos\": ...} con la llave creada; el código también viaja en el correo. Emitir es independiente de canjear: el emprendedor lo canjea después en POST /aplicacion/autenticacion.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ClavesAcceso"
+                ],
+                "summary": "Emitir un código de acceso",
+                "parameters": [
+                    {
+                        "description": "correo del destinatario",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/clavesacceso.PayloadCorreo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "código creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.AccessKey"
+                        }
+                    },
+                    "400": {
+                        "description": "payload inválido o email mal formado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/claves/IDAcceso/{claveID}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación. Un claveID que no sea un UUID responde 400 y una llave inexistente, 404.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ClavesAcceso"
+                ],
+                "summary": "Reenviar el código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la llave de acceso",
+                        "name": "claveID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "correo del destinatario",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/clavesacceso.PayloadCorreo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "correo reenviado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "claveID inválido o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "llave de acceso inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/claves/revocar/{codigo}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Revoca una llave por su código, dejando registro de quién la revocó (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer: deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación. Un código que no existe responde 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ClavesAcceso"
+                ],
+                "summary": "Revocar un código de acceso",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "código de acceso a revocar",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "código revocado",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "código vacío",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "código inexistente",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/empresas": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve todas las empresas asociadas al usuario autenticado. La respuesta viene envuelta en {\"data\": ...}.",
+                "description": "Devuelve todas las empresas asociadas al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...}.",
                 "produces": [
                     "application/json"
                 ],
@@ -75,7 +266,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Crea una nueva empresa asociada al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con la empresa creada.",
+                "description": "Crea una nueva empresa asociada al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...} con la empresa creada.",
                 "consumes": [
                     "application/json"
                 ],
@@ -93,12 +284,12 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/empresas.empresaPayload"
+                            "$ref": "#/definitions/empresas.PayloadEmpresa"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "empresa creada",
                         "schema": {
                             "$ref": "#/definitions/model.Empresa"
@@ -125,14 +316,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}": {
+        "/aplicacion/empresas/{empresaID}": {
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Elimina una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -177,19 +368,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/categories": {
+        "/aplicacion/empresas/{empresaID}/categorias": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque \"empresa_id\" viene null. La respuesta viene envuelta en {\"data\": [...]} con las categorías propias primero, ordenadas por nombre.",
+                "description": "Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque \"empresa_id\" viene null. La respuesta viene envuelta en {\"datos\": [...]} con las categorías propias primero, ordenadas por nombre.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Categorias"
                 ],
                 "summary": "Listar categorías",
                 "parameters": [
@@ -228,7 +419,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con la categoría creada.",
+                "description": "Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con la categoría creada.",
                 "consumes": [
                     "application/json"
                 ],
@@ -236,7 +427,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Categorias"
                 ],
                 "summary": "Crear categoría",
                 "parameters": [
@@ -253,7 +444,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/categories.CategoriaPayload"
+                            "$ref": "#/definitions/categories.PayloadCategoria"
                         }
                     }
                 ],
@@ -265,7 +456,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload de la categoría erroneo o la categoría ya existe",
+                        "description": "payload de la categoría erróneo o la categoría ya existe",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -285,19 +476,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/categories/{categoriaID}": {
+        "/aplicacion/empresas/{empresaID}/categorias/{categoriaID}": {
             "patch": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Categorias"
                 ],
                 "summary": "Cambiar nombre de categoría",
                 "parameters": [
@@ -321,7 +512,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/categories.CategoriaPayload"
+                            "$ref": "#/definitions/categories.PayloadCategoria"
                         }
                     }
                 ],
@@ -333,7 +524,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "categoriaID invalido o payload erroneo",
+                        "description": "categoriaID inválido o payload erróneo",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -362,19 +553,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/categories/{categoria}": {
+        "/aplicacion/empresas/{empresaID}/categorias/{categoria}": {
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Categories"
+                    "Categorias"
                 ],
                 "summary": "Eliminar categoría",
                 "parameters": [
@@ -430,19 +621,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/debtors": {
+        "/aplicacion/empresas/{empresaID}/deudas": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve todas las deudas de la empresa autenticada, ordenadas de la más nueva a la más antigua. La respuesta viene envuelta en {\"data\": [...]}. Si no hay deudas devuelve una lista vacía.",
+                "description": "Devuelve todas las deudas de la empresa autenticada, ordenadas de la más nueva a la más antigua. La respuesta viene envuelta en {\"datos\": [...]}. Si no hay deudas devuelve una lista vacía.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Debtors"
+                    "Deudas"
                 ],
                 "summary": "Listar deudas",
                 "parameters": [
@@ -484,7 +675,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Crea una deuda asociada a la empresa autenticada. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. \"fecha_limite\" se envía como fecha-hora RFC3339. La respuesta viene envuelta en {\"data\": ...} con la deuda creada.",
+                "description": "Crea una deuda asociada a la empresa autenticada. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. \"fecha_limite\" se envía como fecha-hora RFC3339. La respuesta viene envuelta en {\"datos\": ...} con la deuda creada.",
                 "consumes": [
                     "application/json"
                 ],
@@ -492,7 +683,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Debtors"
+                    "Deudas"
                 ],
                 "summary": "Crear deuda",
                 "parameters": [
@@ -509,7 +700,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/debtors.DebtorPayload"
+                            "$ref": "#/definitions/debtors.PayloadDeudor"
                         }
                     }
                 ],
@@ -521,7 +712,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload invalido",
+                        "description": "payload inválido",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -541,14 +732,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/debtors/{debtorID}": {
+        "/aplicacion/empresas/{empresaID}/deudas/{deudorID}": {
             "patch": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Actualiza \"nombre\", \"monto\" y \"fecha_limite\" de una deuda de la empresa autenticada. La descripción no se modifica. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"data\": ...}.",
+                "description": "Actualiza \"nombre\", \"monto\" y \"fecha_limite\" de una deuda de la empresa autenticada. La descripción no se modifica. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"datos\": ...}.",
                 "consumes": [
                     "application/json"
                 ],
@@ -556,7 +747,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Debtors"
+                    "Deudas"
                 ],
                 "summary": "Actualizar deuda",
                 "parameters": [
@@ -570,7 +761,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "ID de la deuda",
-                        "name": "debtorID",
+                        "name": "deudorID",
                         "in": "path",
                         "required": true
                     },
@@ -580,7 +771,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/debtors.UpdatePayload"
+                            "$ref": "#/definitions/debtors.PayloadActualizacionDeudor"
                         }
                     }
                 ],
@@ -592,7 +783,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "debtorID o payload invalido",
+                        "description": "deudorID o payload inválido",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -621,19 +812,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/debtors/{debtorID}/paid": {
+        "/aplicacion/empresas/{empresaID}/deudas/{deudorID}/pagada": {
             "patch": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Marca como pagada una deuda de la empresa autenticada. La operación es idempotente. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Marca como pagada una deuda de la empresa autenticada. La operación es idempotente. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Debtors"
+                    "Deudas"
                 ],
                 "summary": "Marcar deuda como pagada",
                 "parameters": [
@@ -647,7 +838,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "ID de la deuda",
-                        "name": "debtorID",
+                        "name": "deudorID",
                         "in": "path",
                         "required": true
                     }
@@ -660,7 +851,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "debtorID invalido",
+                        "description": "deudorID invalido",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -689,19 +880,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/expenses": {
+        "/aplicacion/empresas/{empresaID}/gastos": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve una página de los gastos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "description": "Devuelve una página de los gastos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"datos\": [...]}. Paginá con limite (entre 1 y 30, por defecto 30) y desplazamiento; el rango se acota con desde y hasta en formato AAAA-MM-DD, y por categoría con categoria_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Expenses"
+                    "Gastos"
                 ],
                 "summary": "Listar gastos de la empresa",
                 "parameters": [
@@ -715,31 +906,31 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "cantidad maxima de gastos a devolver (1-30, default 30)",
-                        "name": "limit",
+                        "name": "limite",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "description": "gastos a saltar, para pedir la pagina siguiente",
-                        "name": "offset",
+                        "name": "desplazamiento",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "fecha minima del rango (AAAA-MM-DD)",
-                        "name": "since",
+                        "name": "desde",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "fecha maxima del rango (AAAA-MM-DD)",
-                        "name": "until",
+                        "name": "hasta",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "UUID de la categoria por la que filtrar",
-                        "name": "category_id",
+                        "name": "categoria_id",
                         "in": "query"
                     }
                 ],
@@ -782,7 +973,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
                 "consumes": [
                     "application/json"
                 ],
@@ -790,7 +981,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Expenses"
+                    "Gastos"
                 ],
                 "summary": "Registrar gasto",
                 "parameters": [
@@ -807,7 +998,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/expenses.ExpensePayload"
+                            "$ref": "#/definitions/expenses.PayloadGasto"
                         }
                     }
                 ],
@@ -819,7 +1010,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload del gasto erroneo",
+                        "description": "payload del gasto erróneo",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -839,19 +1030,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/expenses/{expenseID}": {
+        "/aplicacion/empresas/{empresaID}/gastos/{gastoID}": {
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina un gasto por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Elimina un gasto por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Expenses"
+                    "Gastos"
                 ],
                 "summary": "Eliminar gasto",
                 "parameters": [
@@ -865,7 +1056,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "ID del gasto",
-                        "name": "expenseID",
+                        "name": "gastoID",
                         "in": "path",
                         "required": true
                     }
@@ -878,7 +1069,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "expenseID invalido",
+                        "description": "gastoID invalido",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -907,332 +1098,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/goal": {
+        "/aplicacion/empresas/{empresaID}/ingresos": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve todos los objetivos de la empresa autenticada. La respuesta viene envuelta en {\"data\": [...]}. Un objetivo no tiene estado: su progreso se calcula contra los ingresos del periodo actual y se reinicia con cada dia, semana o mes.",
+                "description": "Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"datos\": [...]}. Paginá con limite (entre 1 y 30, por defecto 30) y desplazamiento; el rango se acota con desde y hasta en formato AAAA-MM-DD, y por categoría con categoria_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Goals"
-                ],
-                "summary": "Listar objetivos",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la empresa",
-                        "name": "empresaID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "objetivos de la empresa",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/definitions/model.Goal"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Crea un objetivo asociado a la empresa autenticada. \"periodo\" acepta dia, semana o mes. \"monto_meta\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"data\": ...} con el objetivo creado.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Goals"
-                ],
-                "summary": "Crear objetivo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la empresa",
-                        "name": "empresaID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "payload",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/goals.CreateGoalPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "objetivo creado",
-                        "schema": {
-                            "$ref": "#/definitions/model.Goal"
-                        }
-                    },
-                    "400": {
-                        "description": "payload invalido o falta la empresa en el contexto",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/empresas/{empresaID}/goal/{goalID}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Devuelve un objetivo de la empresa autenticada por su ID. La respuesta viene envuelta en {\"data\": ...}.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Goals"
-                ],
-                "summary": "Obtener objetivo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la empresa",
-                        "name": "empresaID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ID del objetivo",
-                        "name": "goalID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "objetivo encontrado",
-                        "schema": {
-                            "$ref": "#/definitions/model.Goal"
-                        }
-                    },
-                    "400": {
-                        "description": "goalID invalido",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "objetivo no encontrado",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Elimina un objetivo de la empresa autenticada por su ID. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmacion.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Goals"
-                ],
-                "summary": "Eliminar objetivo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la empresa",
-                        "name": "empresaID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ID del objetivo",
-                        "name": "goalID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "objetivo eliminado",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "goalID invalido",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "objetivo no encontrado",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/empresas/{empresaID}/goal/{goalID}/state": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Suma los ingresos de la empresa en el periodo actual (dia, semana desde el lunes, o mes) y calcula el avance contra \"monto_meta\". La respuesta viene envuelta en {\"data\": ...} con monto_actual, porcentaje_actual, monto_pendiente y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Goals"
-                ],
-                "summary": "Estado del objetivo",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la empresa",
-                        "name": "empresaID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ID del objetivo",
-                        "name": "goalID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "estado del objetivo",
-                        "schema": {
-                            "$ref": "#/definitions/goals.GoalState"
-                        }
-                    },
-                    "400": {
-                        "description": "goalID invalido",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "objetivo no encontrado",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/empresas/{empresaID}/incomes": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Devuelve una página de los ingresos de la empresa autenticada, ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"data\": [...]}. Paginá con limit (entre 1 y 30, por defecto 30) y offset; el rango se acota con since y until en formato AAAA-MM-DD, y por categoría con category_id (el UUID de la categoría, no su nombre). Un parámetro mal formado responde 400. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Incomes"
+                    "Ingresos"
                 ],
                 "summary": "Listar ingresos de la empresa",
                 "parameters": [
@@ -1246,31 +1124,31 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "cantidad maxima de ingresos a devolver (1-30, default 30)",
-                        "name": "limit",
+                        "name": "limite",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "description": "ingresos a saltar, para pedir la pagina siguiente",
-                        "name": "offset",
+                        "name": "desplazamiento",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "fecha minima del rango (AAAA-MM-DD)",
-                        "name": "since",
+                        "name": "desde",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "fecha maxima del rango (AAAA-MM-DD)",
-                        "name": "until",
+                        "name": "hasta",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "UUID de la categoria por la que filtrar",
-                        "name": "category_id",
+                        "name": "categoria_id",
                         "in": "query"
                     }
                 ],
@@ -1313,7 +1191,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"category_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
+                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1321,7 +1199,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Incomes"
+                    "Ingresos"
                 ],
                 "summary": "Registrar ingreso",
                 "parameters": [
@@ -1338,7 +1216,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/incomes.IncomePayload"
+                            "$ref": "#/definitions/incomes.PayloadIngreso"
                         }
                     }
                 ],
@@ -1350,7 +1228,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload del ingreso erroneo",
+                        "description": "payload del ingreso erróneo",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1370,19 +1248,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/incomes/{incomeID}": {
+        "/aplicacion/empresas/{empresaID}/ingresos/{ingresoID}": {
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Elimina un ingreso por su ID, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Incomes"
+                    "Ingresos"
                 ],
                 "summary": "Eliminar ingreso",
                 "parameters": [
@@ -1396,7 +1274,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "ID del ingreso",
-                        "name": "incomeID",
+                        "name": "ingresoID",
                         "in": "path",
                         "required": true
                     }
@@ -1409,7 +1287,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "incomeID invalido",
+                        "description": "ingresoID invalido",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1438,14 +1316,327 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/empresas/{empresaID}/{nombre}": {
+        "/aplicacion/empresas/{empresaID}/metas": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve todas las metas de la empresa autenticada. La respuesta viene envuelta en {\"datos\": [...]}. Una meta no tiene estado: su progreso se calcula contra los ingresos del periodo actual y se reinicia con cada dia, semana o mes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metas"
+                ],
+                "summary": "Listar metas",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "metas de la empresa",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Goal"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Crea un meta asociada a la empresa autenticada. \"periodo\" acepta dia, semana o mes. \"monto_meta\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"datos\": ...} con la meta creada.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metas"
+                ],
+                "summary": "Crear meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/goals.PayloadCrearMeta"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "objetivo creado",
+                        "schema": {
+                            "$ref": "#/definitions/model.Goal"
+                        }
+                    },
+                    "400": {
+                        "description": "payload inválido o falta la empresa en el contexto",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/empresas/{empresaID}/metas/{metaID}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve una meta de la empresa autenticada por su ID. La respuesta viene envuelta en {\"datos\": ...}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metas"
+                ],
+                "summary": "Obtener meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la meta",
+                        "name": "metaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "meta encontrada",
+                        "schema": {
+                            "$ref": "#/definitions/model.Goal"
+                        }
+                    },
+                    "400": {
+                        "description": "metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "meta no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina una meta de la empresa autenticada por su ID. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmacion.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metas"
+                ],
+                "summary": "Eliminar meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la meta",
+                        "name": "metaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "meta eliminada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "meta no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/empresas/{empresaID}/metas/{metaID}/estado": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Suma los ingresos de la empresa en el periodo actual (dia, semana desde el lunes, o mes) y calcula el avance contra \"monto_meta\". La respuesta viene envuelta en {\"datos\": ...} con monto_actual, porcentaje_actual, monto_pendiente y porcentaje_faltante. Los montos son enteros en pesos chilenos (CLP, sin decimales).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Metas"
+                ],
+                "summary": "Estado de la meta",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la meta",
+                        "name": "metaID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "estado del objetivo",
+                        "schema": {
+                            "$ref": "#/definitions/goals.EstadoMeta"
+                        }
+                    },
+                    "400": {
+                        "description": "metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "meta no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/empresas/{empresaID}/{nombre}": {
             "patch": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cambia el nombre de una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación.",
+                "description": "Cambia el nombre de una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -1506,198 +1697,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/key": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Genera un código de acceso, lo guarda asociado al municipal autenticado (created_by) con un año de vencimiento y lo envía por correo al destinatario del payload. La respuesta viene envuelta en {\"data\": ...} con la llave creada; el código también viaja en el correo. Emitir es independiente de canjear: el emprendedor lo canjea después en POST /app/users/exchange/{code}.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AccessKeys"
-                ],
-                "summary": "Emitir un código de acceso",
-                "parameters": [
-                    {
-                        "description": "correo del destinatario",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/accesskeys.EmailPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "código creado",
-                        "schema": {
-                            "$ref": "#/definitions/model.AccessKey"
-                        }
-                    },
-                    "400": {
-                        "description": "payload inválido o email mal formado",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/key/AccessID/{keyID}": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Vuelve a mandar por correo el código de una llave existente, sin crear una llave nueva ni mover su vencimiento: si el correo se perdió, el código sigue siendo el mismo. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un keyID que no sea un UUID responde 400 y una llave inexistente, 404.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AccessKeys"
-                ],
-                "summary": "Reenviar el código de acceso",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ID de la llave de acceso",
-                        "name": "keyID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "correo del destinatario",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/accesskeys.EmailPayload"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "correo reenviado",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "keyID inválido o payload inválido",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "llave de acceso inexistente",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/key/revoke/{code}": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Revoca una llave por su código, dejando registro de quién la revocó (revoked_by) y cuándo (revoked_at). Revocar es ortogonal a canjear y a vencer: deja la llave inútil aunque siga vigente. La respuesta viene envuelta en {\"data\": ...} con el mensaje de confirmación. Un código que no existe responde 404.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AccessKeys"
-                ],
-                "summary": "Revocar un código de acceso",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "código de acceso a revocar",
-                        "name": "code",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "código revocado",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "código vacío",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "código inexistente",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/app/users": {
+        "/aplicacion/usuarios": {
             "delete": {
                 "security": [
                     {
@@ -1706,7 +1706,7 @@ const docTemplate = `{
                 ],
                 "description": "Elimina un usuario de la base de datos",
                 "tags": [
-                    "Users"
+                    "Usuarios"
                 ],
                 "summary": "Eliminar usuario",
                 "responses": {
@@ -1718,15 +1718,30 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "userID invalido",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "404": {
                         "description": "usuario no encontrado",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             },
@@ -1744,7 +1759,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Users"
+                    "Usuarios"
                 ],
                 "summary": "Actualizar usuario",
                 "parameters": [
@@ -1754,7 +1769,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/users.UpdateUserPayload"
+                            "$ref": "#/definitions/users.PayloadActualizarUsuario"
                         }
                     }
                 ],
@@ -1766,62 +1781,16 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload del usuario erroneo",
-                        "schema": {}
+                        "description": "payload del usuario erróneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "404": {
                         "description": "usuario no encontrado",
-                        "schema": {}
-                    },
-                    "500": {
-                        "description": "error interno del servidor",
-                        "schema": {}
-                    }
-                }
-            }
-        },
-        "/app/users/exchange/{code}": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Canjea un código de acceso y extiende el plan del usuario autenticado hasta el vencimiento de la llave. Un código ya canjeado, vencido o revocado se responde 400; uno inexistente, 404.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Users"
-                ],
-                "summary": "Canjear un código de acceso",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "codigo de acceso",
-                        "name": "code",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "202": {
-                        "description": "codigo canjeado",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "codigo invalido, vencido, revocado o ya canjeado",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "codigo inexistente",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1841,7 +1810,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/app/users/municipal/{rut}": {
+        "/aplicacion/usuarios/municipal/{rut}": {
             "get": {
                 "security": [
                     {
@@ -1853,7 +1822,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Users"
+                    "Usuarios"
                 ],
                 "summary": "Buscar usuario por rut",
                 "parameters": [
@@ -1874,20 +1843,35 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "rut invalido",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "404": {
                         "description": "usuario no encontrado",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
-        "/auth": {
+        "/autenticacion": {
             "post": {
                 "description": "Registra un nuevo usuario y devuelve un token de autenticación",
                 "consumes": [
@@ -1897,7 +1881,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Auth"
+                    "Autenticacion"
                 ],
                 "summary": "Registrar usuario",
                 "parameters": [
@@ -1907,7 +1891,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.CreateUserPayload"
+                            "$ref": "#/definitions/auth.PayloadCrearUsuario"
                         }
                     }
                 ],
@@ -1919,17 +1903,27 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erroneo o datos duplicados",
-                        "schema": {}
+                        "description": "payload erróneo o datos duplicados",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
-        "/auth/login": {
+        "/autenticacion/inicio-sesion": {
             "post": {
                 "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación",
                 "consumes": [
@@ -1939,7 +1933,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Auth"
+                    "Autenticacion"
                 ],
                 "summary": "Iniciar sesión",
                 "parameters": [
@@ -1949,7 +1943,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.LoginUserPayload"
+                            "$ref": "#/definitions/auth.PayloadInicioSesion"
                         }
                     }
                 ],
@@ -1962,16 +1956,26 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "credenciales invalidas",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         },
-        "/auth/municipal": {
+        "/autenticacion/municipal": {
             "post": {
                 "description": "Registra un usuario con rol municipal y devuelve un token de autenticación",
                 "consumes": [
@@ -1981,7 +1985,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Auth"
+                    "Autenticacion"
                 ],
                 "summary": "Registrar usuario municipal",
                 "parameters": [
@@ -1991,7 +1995,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.CreateMunicipalPayload"
+                            "$ref": "#/definitions/auth.PayloadCrearMunicipal"
                         }
                     }
                 ],
@@ -2003,30 +2007,29 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erroneo o datos duplicados",
-                        "schema": {}
+                        "description": "payload erróneo o datos duplicados",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     },
                     "500": {
                         "description": "error interno del servidor",
-                        "schema": {}
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
         }
     },
     "definitions": {
-        "accesskeys.EmailPayload": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.CreateMunicipalPayload": {
+        "auth.PayloadCrearMunicipal": {
             "type": "object",
             "required": [
                 "email",
@@ -2055,7 +2058,7 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.CreateUserPayload": {
+        "auth.PayloadCrearUsuario": {
             "type": "object",
             "required": [
                 "code",
@@ -2087,7 +2090,7 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.LoginUserPayload": {
+        "auth.PayloadInicioSesion": {
             "type": "object",
             "required": [
                 "email",
@@ -2105,7 +2108,7 @@ const docTemplate = `{
                 }
             }
         },
-        "categories.CategoriaPayload": {
+        "categories.PayloadCategoria": {
             "type": "object",
             "required": [
                 "nombre"
@@ -2117,7 +2120,38 @@ const docTemplate = `{
                 }
             }
         },
-        "debtors.DebtorPayload": {
+        "clavesacceso.PayloadCorreo": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "debtors.PayloadActualizacionDeudor": {
+            "type": "object",
+            "required": [
+                "fecha_limite",
+                "monto",
+                "nombre"
+            ],
+            "properties": {
+                "fecha_limite": {
+                    "type": "string"
+                },
+                "monto": {
+                    "type": "integer"
+                },
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                }
+            }
+        },
+        "debtors.PayloadDeudor": {
             "type": "object",
             "required": [
                 "descripcion",
@@ -2142,27 +2176,7 @@ const docTemplate = `{
                 }
             }
         },
-        "debtors.UpdatePayload": {
-            "type": "object",
-            "required": [
-                "fecha_limite",
-                "monto",
-                "nombre"
-            ],
-            "properties": {
-                "fecha_limite": {
-                    "type": "string"
-                },
-                "monto": {
-                    "type": "integer"
-                },
-                "nombre": {
-                    "type": "string",
-                    "maxLength": 30
-                }
-            }
-        },
-        "empresas.empresaPayload": {
+        "empresas.PayloadEmpresa": {
             "type": "object",
             "required": [
                 "nombre_empresa"
@@ -2174,7 +2188,7 @@ const docTemplate = `{
                 }
             }
         },
-        "expenses.ExpensePayload": {
+        "expenses.PayloadGasto": {
             "type": "object",
             "required": [
                 "category_id",
@@ -2193,7 +2207,24 @@ const docTemplate = `{
                 }
             }
         },
-        "goals.CreateGoalPayload": {
+        "goals.EstadoMeta": {
+            "type": "object",
+            "properties": {
+                "monto_actual": {
+                    "type": "integer"
+                },
+                "monto_pendiente": {
+                    "type": "integer"
+                },
+                "porcentaje_actual": {
+                    "type": "number"
+                },
+                "porcentaje_faltante": {
+                    "type": "number"
+                }
+            }
+        },
+        "goals.PayloadCrearMeta": {
             "type": "object",
             "required": [
                 "monto_meta",
@@ -2216,30 +2247,13 @@ const docTemplate = `{
                     ],
                     "allOf": [
                         {
-                            "$ref": "#/definitions/util.GoalPeriod"
+                            "$ref": "#/definitions/utilidades.PeriodoMeta"
                         }
                     ]
                 }
             }
         },
-        "goals.GoalState": {
-            "type": "object",
-            "properties": {
-                "monto_actual": {
-                    "type": "integer"
-                },
-                "monto_pendiente": {
-                    "type": "integer"
-                },
-                "porcentaje_actual": {
-                    "type": "number"
-                },
-                "porcentaje_faltante": {
-                    "type": "number"
-                }
-            }
-        },
-        "incomes.IncomePayload": {
+        "incomes.PayloadIngreso": {
             "type": "object",
             "required": [
                 "monto",
@@ -2519,7 +2533,7 @@ const docTemplate = `{
                 "UserRoleMunicipal"
             ]
         },
-        "users.UpdateUserPayload": {
+        "users.PayloadActualizarUsuario": {
             "type": "object",
             "properties": {
                 "nombre": {
@@ -2533,7 +2547,7 @@ const docTemplate = `{
                 }
             }
         },
-        "util.GoalPeriod": {
+        "utilidades.PeriodoMeta": {
             "type": "string",
             "enum": [
                 "dia",

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -15,8 +15,8 @@ import (
 
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
-func newService(store CategoriaStore) *CategorieService {
-	return NewCategorieService(store)
+func newService(store RepositorioCategorias) *ServicioCategorias {
+	return NuevoServicioCategorias(store)
 }
 
 func TestNormalizarNombre(t *testing.T) {
@@ -51,16 +51,16 @@ func TestCategorieService_Create(t *testing.T) {
 		empresaID := testEmpresaID
 		categoria := newTestCategoria()
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, nil).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, nil).Once()
 
-		store.On("Create", mock.Anything, mock.MatchedBy(func(c *model.Categorie) bool {
+		store.On("Crear", mock.Anything, mock.MatchedBy(func(c *model.Categorie) bool {
 			return c.Nombre == payload.Nombre && c.EmpresaID != nil && *c.EmpresaID == empresaID
 		})).Return(nil).Run(func(args mock.Arguments) {
 			c := args.Get(1).(*model.Categorie)
 			c.ID = categoria.ID
 		}).Once()
 
-		result, err := service.Create(context.Background(), payload, &empresaID)
+		result, err := service.Crear(context.Background(), payload, &empresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, categoria.ID, result.ID)
@@ -75,14 +75,14 @@ func TestCategorieService_Create(t *testing.T) {
 		payload := newTestPayloadCategoria()
 		empresaID := testEmpresaID
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, empresaID).
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).
 			Return([]model.Categorie{newTestCategoria()}, nil).Once()
 
-		result, err := service.Create(context.Background(), payload, &empresaID)
+		result, err := service.Crear(context.Background(), payload, &empresaID)
 
-		require.ErrorIs(t, err, AlreadyExistError)
+		require.ErrorIs(t, err, ErrorCategoriaDuplicada)
 		assert.Equal(t, uuid.Nil, result.ID)
-		store.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -90,17 +90,17 @@ func TestCategorieService_Create(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "CAFE"}
+		payload := PayloadCategoria{Nombre: "CAFE"}
 		empresaID := testEmpresaID
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, empresaID).
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).
 			Return([]model.Categorie{{ID: uuid.New(), Nombre: "Café", EmpresaID: &empresaID}}, nil).Once()
 
-		result, err := service.Create(context.Background(), payload, &empresaID)
+		result, err := service.Crear(context.Background(), payload, &empresaID)
 
-		require.ErrorIs(t, err, AlreadyExistError)
+		require.ErrorIs(t, err, ErrorCategoriaDuplicada)
 		assert.Equal(t, uuid.Nil, result.ID)
-		store.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -111,13 +111,13 @@ func TestCategorieService_Create(t *testing.T) {
 		payload := newTestPayloadCategoria()
 		empresaID := testEmpresaID
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, errStoreBoom).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, errStoreBoom).Once()
 
-		result, err := service.Create(context.Background(), payload, &empresaID)
+		result, err := service.Crear(context.Background(), payload, &empresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Equal(t, uuid.Nil, result.ID)
-		store.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -128,10 +128,10 @@ func TestCategorieService_Create(t *testing.T) {
 		payload := newTestPayloadCategoria()
 		empresaID := testEmpresaID
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, nil).Once()
-		store.On("Create", mock.Anything, mock.Anything).Return(errStoreBoom).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, nil).Once()
+		store.On("Crear", mock.Anything, mock.Anything).Return(errStoreBoom).Once()
 
-		result, err := service.Create(context.Background(), payload, &empresaID)
+		result, err := service.Crear(context.Background(), payload, &empresaID)
 
 		require.Error(t, err)
 		assert.Equal(t, uuid.Nil, result.ID)
@@ -145,9 +145,9 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "Bebidas"}
+		payload := PayloadCategoria{Nombre: "Bebidas"}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{newTestCategoria()}, nil).Once()
 		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(nil).Once()
 
@@ -161,15 +161,15 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "Bebidas"}
+		payload := PayloadCategoria{Nombre: "Bebidas"}
 		existente := model.Categorie{ID: uuid.New(), Nombre: "bebidas", EmpresaID: &testEmpresaID}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{existente}, nil).Once()
 
 		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
 
-		require.ErrorIs(t, err, AlreadyExistError)
+		require.ErrorIs(t, err, ErrorCategoriaDuplicada)
 		store.AssertNotCalled(t, "CambiarNombre", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
@@ -178,9 +178,9 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "COMIDA"}
+		payload := PayloadCategoria{Nombre: "COMIDA"}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{newTestCategoria()}, nil).Once()
 		store.On("CambiarNombre", mock.Anything, "COMIDA", testCategoriaID, testEmpresaID).Return(nil).Once()
 
@@ -190,19 +190,19 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("propaga util.ErrNotFound cuando la categoria no existe", func(t *testing.T) {
+	t.Run("propaga utilidades.ErrorNoEncontrado cuando la categoria no existe", func(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "Bebidas"}
+		payload := PayloadCategoria{Nombre: "Bebidas"}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
-		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(util.ErrNotFound).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
+		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotFound)
+		assert.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		store.AssertExpectations(t)
 	})
 
@@ -210,9 +210,9 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "Bebidas"}
+		payload := PayloadCategoria{Nombre: "Bebidas"}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, errStoreBoom).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, errStoreBoom).Once()
 
 		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
 
@@ -225,9 +225,9 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := CategoriaPayload{Nombre: "Bebidas"}
+		payload := PayloadCategoria{Nombre: "Bebidas"}
 
-		store.On("GetCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
 		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(errStoreBoom).Once()
 
 		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
@@ -249,10 +249,10 @@ func TestCategorieService_GetCategorias(t *testing.T) {
 		}
 		esperadas := []model.Categorie{newTestCategoria(), global}
 
-		store.On("GetCategoriasVisibles", mock.Anything, testEmpresaID).
+		store.On("ObtenerCategoriasVisibles", mock.Anything, testEmpresaID).
 			Return(esperadas, nil).Once()
 
-		categorias, err := service.GetCategorias(context.Background(), testEmpresaID)
+		categorias, err := service.ObtenerCategorias(context.Background(), testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, esperadas, categorias)
@@ -263,10 +263,10 @@ func TestCategorieService_GetCategorias(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		store.On("GetCategoriasVisibles", mock.Anything, testEmpresaID).
+		store.On("ObtenerCategoriasVisibles", mock.Anything, testEmpresaID).
 			Return(nil, errStoreBoom).Once()
 
-		categorias, err := service.GetCategorias(context.Background(), testEmpresaID)
+		categorias, err := service.ObtenerCategorias(context.Background(), testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, categorias)
@@ -287,16 +287,16 @@ func TestCategorieService_BorrarCategoria(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("propaga util.ErrNotFound cuando la categoria no existe", func(t *testing.T) {
+	t.Run("propaga utilidades.ErrorNoEncontrado cuando la categoria no existe", func(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		store.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(util.ErrNotFound).Once()
+		store.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotFound)
+		assert.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		store.AssertExpectations(t)
 	})
 

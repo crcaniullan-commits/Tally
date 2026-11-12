@@ -19,7 +19,7 @@ func TestExpensesFlow(t *testing.T) {
 	var conCategoria, conGlobal model.Expense
 
 	t.Run("crea un gasto con categoría y descripción", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       15000,
 			"category_id": catA.ID.String(),
 			"descripcion": "compra de prueba",
@@ -37,7 +37,7 @@ func TestExpensesFlow(t *testing.T) {
 	})
 
 	t.Run("crea un gasto con una categoría global", func(t *testing.T) {
-		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categories"), user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
 		categorias := testutil.DecodeData[[]model.Categorie](t, list)
 
 		var global model.Categorie
@@ -49,7 +49,7 @@ func TestExpensesFlow(t *testing.T) {
 		}
 		require.NotEqual(t, uuid.Nil, global.ID)
 
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       7000,
 			"category_id": global.ID.String(),
 		})
@@ -60,7 +60,7 @@ func TestExpensesFlow(t *testing.T) {
 	})
 
 	t.Run("lista los gastos de la empresa", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		expenses := testutil.DecodeData[[]model.Expense](t, res)
@@ -81,7 +81,7 @@ func TestExpensesFlow(t *testing.T) {
 		withX := testutil.CreateExpense(t, user, otherEmpresa.ID, 1000, catX.ID)
 		testutil.CreateExpense(t, user, otherEmpresa.ID, 2000, catY.ID)
 
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?category_id="+catX.ID.String()), user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?categoria_id="+catX.ID.String()), user.Token, nil)
 		testutil.RequireStatus(t, res, http.StatusOK)
 		expenses := testutil.DecodeData[[]model.Expense](t, res)
 
@@ -94,17 +94,17 @@ func TestExpensesFlow(t *testing.T) {
 		cat := testutil.CreateCategory(t, user, otherEmpresa.ID)
 		created := testutil.CreateExpense(t, user, otherEmpresa.ID, 3000, cat.ID)
 
-		todayRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?since="+dbDate(t, 0)+"&until="+dbDate(t, 0)), user.Token, nil)
+		todayRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?desde="+dbDate(t, 0)+"&hasta="+dbDate(t, 0)), user.Token, nil)
 		testutil.RequireStatus(t, todayRes, http.StatusOK)
 		todayExpenses := testutil.DecodeData[[]model.Expense](t, todayRes)
 		require.Len(t, todayExpenses, 1)
 		require.Equal(t, created.ID, todayExpenses[0].ID)
 
-		futureRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?since="+dbDate(t, 1)), user.Token, nil)
+		futureRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?desde="+dbDate(t, 1)), user.Token, nil)
 		testutil.RequireStatus(t, futureRes, http.StatusOK)
 		require.Empty(t, testutil.DecodeData[[]model.Expense](t, futureRes))
 
-		pastRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?until="+dbDate(t, -1)), user.Token, nil)
+		pastRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?hasta="+dbDate(t, -1)), user.Token, nil)
 		testutil.RequireStatus(t, pastRes, http.StatusOK)
 		require.Empty(t, testutil.DecodeData[[]model.Expense](t, pastRes))
 	})
@@ -116,19 +116,19 @@ func TestExpensesFlow(t *testing.T) {
 			testutil.CreateExpense(t, user, otherEmpresa.ID, int64(1000*(i+1)), cat.ID)
 		}
 
-		first := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?limit=2"), user.Token, nil)
+		first := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?limite=2"), user.Token, nil)
 		testutil.RequireStatus(t, first, http.StatusOK)
 		require.Len(t, testutil.DecodeData[[]model.Expense](t, first), 2)
 
-		second := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?limit=2&offset=2"), user.Token, nil)
+		second := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?limite=2&desplazamiento=2"), user.Token, nil)
 		testutil.RequireStatus(t, second, http.StatusOK)
 		require.Len(t, testutil.DecodeData[[]model.Expense](t, second), 1)
 
-		all := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses"), user.Token, nil)
+		all := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos"), user.Token, nil)
 		testutil.RequireStatus(t, all, http.StatusOK)
 		require.Len(t, testutil.DecodeData[[]model.Expense](t, all), 3)
 
-		beyond := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses?offset=10"), user.Token, nil)
+		beyond := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?desplazamiento=10"), user.Token, nil)
 		testutil.RequireStatus(t, beyond, http.StatusOK)
 		require.Empty(t, testutil.DecodeData[[]model.Expense](t, beyond))
 	})
@@ -136,18 +136,18 @@ func TestExpensesFlow(t *testing.T) {
 	t.Run("borra un gasto", func(t *testing.T) {
 		toDelete := testutil.CreateExpense(t, user, empresa.ID, 1234, catB.ID)
 
-		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/expenses/"+toDelete.ID.String()), user.Token, nil)
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/gastos/"+toDelete.ID.String()), user.Token, nil)
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "expense eliminado", testutil.DecodeData[string](t, res))
+		require.Equal(t, "gasto eliminado", testutil.DecodeData[string](t, res))
 
-		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, nil)
 		expenses := testutil.DecodeData[[]model.Expense](t, list)
 		for _, expense := range expenses {
 			require.NotEqual(t, toDelete.ID, expense.ID)
 		}
 
-		again := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/expenses/"+toDelete.ID.String()), user.Token, nil)
-		testutil.RequireError(t, again, http.StatusNotFound, "not found")
+		again := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/gastos/"+toDelete.ID.String()), user.Token, nil)
+		testutil.RequireError(t, again, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("creación valida el payload", func(t *testing.T) {
@@ -159,32 +159,32 @@ func TestExpensesFlow(t *testing.T) {
 			{
 				name:    "monto faltante",
 				body:    map[string]any{"category_id": catA.ID.String()},
-				message: "Key: 'ExpensePayload.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
+				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto cero",
 				body:    map[string]any{"monto": 0, "category_id": catA.ID.String()},
-				message: "Key: 'ExpensePayload.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
+				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto negativo",
 				body:    map[string]any{"monto": -5, "category_id": catA.ID.String()},
-				message: "Key: 'ExpensePayload.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
+				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
 			},
 			{
 				name:    "monto string",
 				body:    `{"monto":"1000","category_id":"` + catA.ID.String() + `"}`,
-				message: "json: cannot unmarshal string into Go struct field ExpensePayload.monto of type int64",
+				message: "json: cannot unmarshal string into Go struct field PayloadGasto.monto of type int64",
 			},
 			{
 				name:    "monto decimal",
 				body:    `{"monto":1000.5,"category_id":"` + catA.ID.String() + `"}`,
-				message: "json: cannot unmarshal number 1000.5 into Go struct field ExpensePayload.monto of type int64",
+				message: "json: cannot unmarshal number 1000.5 into Go struct field PayloadGasto.monto of type int64",
 			},
 			{
 				name:    "categoría faltante",
 				body:    map[string]any{"monto": 1000},
-				message: "Key: 'ExpensePayload.CategoryID' Error:Field validation for 'CategoryID' failed on the 'required' tag",
+				message: "Key: 'PayloadGasto.CategoryID' Error:Field validation for 'CategoryID' failed on the 'required' tag",
 			},
 			{
 				name:    "categoría inválida",
@@ -194,7 +194,7 @@ func TestExpensesFlow(t *testing.T) {
 			{
 				name:    "descripción demasiado larga",
 				body:    map[string]any{"monto": 1000, "category_id": catA.ID.String(), "descripcion": string(make([]byte, 101))},
-				message: "Key: 'ExpensePayload.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
+				message: "Key: 'PayloadGasto.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
 			},
 			{
 				name:    "campo fecha no permitido",
@@ -205,18 +205,18 @@ func TestExpensesFlow(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, tc.body)
+				res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
 	})
 
 	t.Run("rechaza una categoría inexistente", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       1000,
 			"category_id": uuid.NewString(),
 		})
-		testutil.RequireError(t, res, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
 
 	t.Run("rechaza una categoría de otra empresa", func(t *testing.T) {
@@ -224,11 +224,11 @@ func TestExpensesFlow(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
 		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
 
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       1000,
 			"category_id": otherCategory.ID.String(),
 		})
-		testutil.RequireError(t, res, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
 
 	t.Run("valida los query params de paginación", func(t *testing.T) {
@@ -239,49 +239,49 @@ func TestExpensesFlow(t *testing.T) {
 		}{
 			{
 				name:    "limit 0",
-				query:   "limit=0",
-				message: "Key: 'IncomePaginationQuery.Limit' Error:Field validation for 'Limit' failed on the 'gte' tag",
+				query:   "limite=0",
+				message: "Key: 'ConsultaPaginacionIngresos.Limite' Error:Field validation for 'Limite' failed on the 'gte' tag",
 			},
 			{
 				name:    "limit 31",
-				query:   "limit=31",
-				message: "Key: 'IncomePaginationQuery.Limit' Error:Field validation for 'Limit' failed on the 'lte' tag",
+				query:   "limite=31",
+				message: "Key: 'ConsultaPaginacionIngresos.Limite' Error:Field validation for 'Limite' failed on the 'lte' tag",
 			},
 			{
 				name:    "limit no entero",
-				query:   "limit=abc",
-				message: `limit inválido: "abc" no es un entero`,
+				query:   "limite=abc",
+				message: `limite inválido: "abc" no es un entero`,
 			},
 			{
 				name:    "offset negativo",
-				query:   "offset=-1",
-				message: "Key: 'IncomePaginationQuery.Offset' Error:Field validation for 'Offset' failed on the 'gte' tag",
+				query:   "desplazamiento=-1",
+				message: "Key: 'ConsultaPaginacionIngresos.Desplazamiento' Error:Field validation for 'Desplazamiento' failed on the 'gte' tag",
 			},
 			{
 				name:    "offset no entero",
-				query:   "offset=abc",
-				message: `offset inválido: "abc" no es un entero`,
+				query:   "desplazamiento=abc",
+				message: `desplazamiento inválido: "abc" no es un entero`,
 			},
 			{
-				name:    "since inválido",
-				query:   "since=2026-13-01",
-				message: `since inválido: "2026-13-01" no es una fecha AAAA-MM-DD`,
+				name:    "desde inválido",
+				query:   "desde=2026-13-01",
+				message: `desde inválido: "2026-13-01" no es una fecha AAAA-MM-DD`,
 			},
 			{
-				name:    "until inválido",
-				query:   "until=01-01-2026",
-				message: `until inválido: "01-01-2026" no es una fecha AAAA-MM-DD`,
+				name:    "hasta inválido",
+				query:   "hasta=01-01-2026",
+				message: `hasta inválido: "01-01-2026" no es una fecha AAAA-MM-DD`,
 			},
 			{
-				name:    "category_id inválido",
-				query:   "category_id=nope",
-				message: `category_id inválido: "nope" no es un UUID`,
+				name:    "categoria_id inválido",
+				query:   "categoria_id=nope",
+				message: `categoria_id inválido: "nope" no es un UUID`,
 			},
 		}
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/expenses?"+tc.query), user.Token, nil)
+				res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos?"+tc.query), user.Token, nil)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
@@ -298,16 +298,16 @@ func TestExpensesFlow(t *testing.T) {
 			{
 				name:    "delete con uuid inválido",
 				method:  http.MethodDelete,
-				path:    testutil.EmpresaPath(empresa.ID, "/expenses/no-uuid"),
+				path:    testutil.EmpresaPath(empresa.ID, "/gastos/no-uuid"),
 				status:  http.StatusBadRequest,
 				message: "invalid UUID length: 7",
 			},
 			{
 				name:    "delete inexistente",
 				method:  http.MethodDelete,
-				path:    testutil.EmpresaPath(empresa.ID, "/expenses/"+uuid.NewString()),
+				path:    testutil.EmpresaPath(empresa.ID, "/gastos/"+uuid.NewString()),
 				status:  http.StatusNotFound,
-				message: "not found",
+				message: "no encontrado",
 			},
 		}
 
@@ -323,22 +323,22 @@ func TestExpensesFlow(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
 
-		get := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/expenses"), user.Token, nil)
-		testutil.RequireError(t, get, http.StatusNotFound, "not found")
+		get := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos"), user.Token, nil)
+		testutil.RequireError(t, get, http.StatusNotFound, "no encontrado")
 
-		post := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(otherEmpresa.ID, "/expenses"), user.Token, map[string]any{
+		post := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(otherEmpresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       1000,
 			"category_id": catA.ID.String(),
 		})
-		testutil.RequireError(t, post, http.StatusNotFound, "not found")
+		testutil.RequireError(t, post, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("un municipal no puede acceder a los gastos", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/expenses"), testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"), testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
-	requireProtected(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/expenses"))
-	requireProtected(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/expenses"))
-	requireProtected(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/expenses/"+uuid.NewString()))
+	requireProtected(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"))
+	requireProtected(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"))
+	requireProtected(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/gastos/"+uuid.NewString()))
 }

@@ -8,13 +8,13 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// CategoriaStoreMock es un mock de la capa de persistencia (CategoriaStore) usado
-// para probar CategorieService sin tocar la base de datos.
+// CategoriaStoreMock es un mock de la capa de persistencia (RepositorioCategorias) usado
+// para probar ServicioCategorias sin tocar la base de datos.
 type CategoriaStoreMock struct {
 	mock.Mock
 }
 
-func (m *CategoriaStoreMock) Create(ctx context.Context, categoria *model.Categorie) error {
+func (m *CategoriaStoreMock) Crear(ctx context.Context, categoria *model.Categorie) error {
 	args := m.Called(ctx, categoria)
 	return args.Error(0)
 }
@@ -29,41 +29,41 @@ func (m *CategoriaStoreMock) BorrarCategoria(ctx context.Context, categoriaID uu
 	return args.Error(0)
 }
 
-func (m *CategoriaStoreMock) GetCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+func (m *CategoriaStoreMock) ObtenerCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	args := m.Called(ctx, empresaID)
 	categorias, _ := args.Get(0).([]model.Categorie)
 	return categorias, args.Error(1)
 }
 
-func (m *CategoriaStoreMock) GetCategoriasVisibles(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+func (m *CategoriaStoreMock) ObtenerCategoriasVisibles(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	args := m.Called(ctx, empresaID)
 	categorias, _ := args.Get(0).([]model.Categorie)
 	return categorias, args.Error(1)
 }
 
-// ServiceCategoriesMock es un mock de la capa de servicio (ServiceCategories) usado
-// para probar CategoriesHandler de forma aislada.
-type ServiceCategoriesMock struct {
+// IServiceCategoriesMock es un mock de la capa de servicio (IServiceCategorias) usado
+// para probar HandlerCategorias de forma aislada.
+type IServiceCategoriesMock struct {
 	mock.Mock
 }
 
-func (m *ServiceCategoriesMock) Create(ctx context.Context, payload CategoriaPayload, empresaID *uuid.UUID) (model.Categorie, error) {
+func (m *IServiceCategoriesMock) Crear(ctx context.Context, payload PayloadCategoria, empresaID *uuid.UUID) (model.Categorie, error) {
 	args := m.Called(ctx, payload, empresaID)
 	categoria, _ := args.Get(0).(model.Categorie)
 	return categoria, args.Error(1)
 }
 
-func (m *ServiceCategoriesMock) CambiarNombre(ctx context.Context, payload CategoriaPayload, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+func (m *IServiceCategoriesMock) CambiarNombre(ctx context.Context, payload PayloadCategoria, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, payload, categoriaID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceCategoriesMock) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+func (m *IServiceCategoriesMock) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, categoriaID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceCategoriesMock) GetCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
+func (m *IServiceCategoriesMock) ObtenerCategorias(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	args := m.Called(ctx, empresaID)
 	categorias, _ := args.Get(0).([]model.Categorie)
 	return categorias, args.Error(1)
@@ -86,8 +86,8 @@ func newTestCategoria() model.Categorie {
 }
 
 // newTestPayloadCategoria arma el payload de alta con valores que pasan la validación.
-func newTestPayloadCategoria() CategoriaPayload {
-	return CategoriaPayload{
+func newTestPayloadCategoria() PayloadCategoria {
+	return PayloadCategoria{
 		Nombre: "Comida",
 	}
 }

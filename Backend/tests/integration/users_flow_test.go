@@ -16,17 +16,17 @@ func TestUsersFlow(t *testing.T) {
 	updatedName := "Usuario Renombrado"
 
 	t.Run("actualiza nombre y contraseña", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
 			"nombre":   updatedName,
 			"password": updatedPassword,
 		})
 
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Usuario actualizado con exito", testutil.DecodeData[string](t, res))
+		require.Equal(t, "Usuario actualizado con éxito", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("inicia sesión con la contraseña nueva", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    user.Email,
 			"password": updatedPassword,
 		})
@@ -36,7 +36,7 @@ func TestUsersFlow(t *testing.T) {
 	})
 
 	t.Run("la contraseña anterior ya no sirve", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    user.Email,
 			"password": user.Password,
 		})
@@ -45,16 +45,16 @@ func TestUsersFlow(t *testing.T) {
 	})
 
 	t.Run("actualiza solo la contraseña", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
 			"password": secondPassword,
 		})
 
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Usuario actualizado con exito", testutil.DecodeData[string](t, res))
+		require.Equal(t, "Usuario actualizado con éxito", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("inicia sesión con la segunda contraseña", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    user.Email,
 			"password": secondPassword,
 		})
@@ -64,27 +64,28 @@ func TestUsersFlow(t *testing.T) {
 	})
 
 	t.Run("actualizar solo el nombre falla con 500", func(t *testing.T) {
-		// BUG: AuthTokenMiddleware carga el usuario con UserStore.GetByID, que
-		// no selecciona password_hash. Update escribe user.PasswordHash.Hash
+		// BUG: MiddlewareTokenAutenticacion carga el usuario con
+		// AlmacenUsuarios.ObtenerPorID, que no selecciona password_hash.
+		// Actualizar escribe user.PasswordHash.Hash
 		// (nil) en una columna NOT NULL y PostgreSQL rechaza el UPDATE. El
 		// nombre no se actualiza y el handler responde 500.
-		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
 			"nombre": "Solo Nombre",
 		})
 
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("un payload vacío también falla con 500", func(t *testing.T) {
 		// Mismo bug: con ambos campos vacíos el service igual llama al store,
 		// que intenta escribir password_hash NULL.
-		res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, map[string]any{})
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]any{})
 
-		testutil.RequireError(t, res, http.StatusInternalServerError, "the server encountered a problem")
+		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
 	})
 
 	t.Run("un municipal consulta un usuario por RUT", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/"+user.RUT, testutil.MunicipalToken(t), nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/usuarios/municipal/"+user.RUT, testutil.MunicipalToken(t), nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 
@@ -104,38 +105,38 @@ func TestUsersFlow(t *testing.T) {
 		require.NotContains(t, rut, "cuerpo")
 		require.NotContains(t, rut, "dv")
 
-		// BUG: GetByRut no selecciona created_at ni updated_at, así que salen
+		// BUG: ObtenerPorRUT no selecciona created_at ni updated_at, así que salen
 		// en el zero value de time.Time.
 		require.Equal(t, "0001-01-01T00:00:00Z", data["created_at"])
 		require.Equal(t, "0001-01-01T00:00:00Z", data["updated_at"])
 	})
 
 	t.Run("consulta por RUT con formato inválido", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/abc", testutil.MunicipalToken(t), nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/usuarios/municipal/abc", testutil.MunicipalToken(t), nil)
 
 		testutil.RequireError(t, res, http.StatusBadRequest, "el formato del RUT no es válido")
 	})
 
 	t.Run("consulta por RUT inexistente", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/99999999-9", testutil.MunicipalToken(t), nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/usuarios/municipal/99999999-9", testutil.MunicipalToken(t), nil)
 
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("un usuario común no puede consultar por RUT", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/users/municipal/"+user.RUT, user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/usuarios/municipal/"+user.RUT, user.Token, nil)
 
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("un municipal no puede actualizar ni borrar usuarios", func(t *testing.T) {
-		patch := testutil.Request(t, http.MethodPatch, "/v1/app/users", testutil.MunicipalToken(t), map[string]string{
+		patch := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", testutil.MunicipalToken(t), map[string]string{
 			"nombre": "Municipal Intruso",
 		})
-		testutil.RequireError(t, patch, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, patch, http.StatusForbidden, "prohibido")
 
-		del := testutil.Request(t, http.MethodDelete, "/v1/app/users", testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, del, http.StatusForbidden, "forbidden")
+		del := testutil.Request(t, http.MethodDelete, "/v1/aplicacion/usuarios", testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, del, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("validación del payload", func(t *testing.T) {
@@ -147,17 +148,17 @@ func TestUsersFlow(t *testing.T) {
 			{
 				name:    "contraseña corta",
 				body:    map[string]string{"password": "short"},
-				message: "Key: 'UpdateUserPayload.Password' Error:Field validation for 'Password' failed on the 'min' tag",
+				message: "Key: 'PayloadActualizarUsuario.Password' Error:Field validation for 'Password' failed on the 'min' tag",
 			},
 			{
 				name:    "contraseña demasiado larga",
 				body:    map[string]string{"password": strings.Repeat("a", 73)},
-				message: "Key: 'UpdateUserPayload.Password' Error:Field validation for 'Password' failed on the 'max' tag",
+				message: "Key: 'PayloadActualizarUsuario.Password' Error:Field validation for 'Password' failed on the 'max' tag",
 			},
 			{
 				name:    "nombre demasiado largo",
 				body:    map[string]string{"nombre": strings.Repeat("n", 101)},
-				message: "Key: 'UpdateUserPayload.Name' Error:Field validation for 'Name' failed on the 'max' tag",
+				message: "Key: 'PayloadActualizarUsuario.Nombre' Error:Field validation for 'Nombre' failed on the 'max' tag",
 			},
 			{
 				name:    "campo desconocido",
@@ -168,35 +169,35 @@ func TestUsersFlow(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPatch, "/v1/app/users", user.Token, tc.body)
+				res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
 	})
 
 	t.Run("elimina su propia cuenta", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodDelete, "/v1/app/users", user.Token, nil)
+		res := testutil.Request(t, http.MethodDelete, "/v1/aplicacion/usuarios", user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		require.Equal(t, "Usuario eliminado", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("el token deja de servir tras borrar la cuenta", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", user.Token, nil)
 
-		testutil.RequireError(t, res, http.StatusUnauthorized, "unauthorized")
+		testutil.RequireError(t, res, http.StatusUnauthorized, "no autorizado")
 	})
 
 	t.Run("no se puede volver a iniciar sesión", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth/login", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
 			"email":    user.Email,
 			"password": secondPassword,
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
 
-	requireProtected(t, http.MethodPatch, "/v1/app/users")
-	requireProtected(t, http.MethodDelete, "/v1/app/users")
-	requireProtected(t, http.MethodGet, "/v1/app/users/municipal/99999999-9")
+	requireProtected(t, http.MethodPatch, "/v1/aplicacion/usuarios")
+	requireProtected(t, http.MethodDelete, "/v1/aplicacion/usuarios")
+	requireProtected(t, http.MethodGet, "/v1/aplicacion/usuarios/municipal/99999999-9")
 }

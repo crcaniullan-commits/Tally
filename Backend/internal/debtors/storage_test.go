@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,11 +16,11 @@ import (
 
 var errDBBoom = errors.New("boom: fallo de la base de datos")
 
-// mockStore envuelve un StoreDebtor sobre sqlmock y guarda el SQL que el
+// mockStore envuelve un AlmacenDeudores sobre sqlmock y guarda el SQL que el
 // código realmente mandó a la base. sqlmock no parsea SQL, así que además
 // auditamos el texto capturado a mano.
 type mockStore struct {
-	store *StoreDebtor
+	store *AlmacenDeudores
 	mock  sqlmock.Sqlmock
 	sql   string
 }
@@ -46,7 +46,7 @@ func newMockStore(t *testing.T) *mockStore {
 		_ = db.Close()
 	})
 
-	ms.store = NewStorage(db)
+	ms.store = NuevoAlmacenDeudores(db)
 	ms.mock = mock
 
 	return ms
@@ -86,7 +86,7 @@ func TestStoreDebtor_GetDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"pagado"}).AddRow(true))
 
-		pagado, err := ms.store.GetDebtor(context.Background(), testDebtorID, testEmpresaID)
+		pagado, err := ms.store.ObtenerDeudor(context.Background(), testDebtorID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.True(t, pagado)
@@ -101,22 +101,22 @@ func TestStoreDebtor_GetDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnRows(sqlmock.NewRows([]string{"pagado"}).AddRow(false))
 
-		pagado, err := ms.store.GetDebtor(context.Background(), testDebtorID, testEmpresaID)
+		pagado, err := ms.store.ObtenerDeudor(context.Background(), testDebtorID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.False(t, pagado)
 	})
 
-	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
+	t.Run("traduce sql.ErrNoRows a utilidades.ErrorNoEncontrado", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnError(sql.ErrNoRows)
 
-		pagado, err := ms.store.GetDebtor(context.Background(), testDebtorID, testEmpresaID)
+		pagado, err := ms.store.ObtenerDeudor(context.Background(), testDebtorID, testEmpresaID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		assert.False(t, pagado)
 	})
 
@@ -127,7 +127,7 @@ func TestStoreDebtor_GetDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		pagado, err := ms.store.GetDebtor(context.Background(), testDebtorID, testEmpresaID)
+		pagado, err := ms.store.ObtenerDeudor(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.False(t, pagado)
@@ -152,7 +152,7 @@ func TestStoreDebtor_Create(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"id", "pagado", "created_at"}).
 				AddRow(testDebtorID, false, testDebtorCreatedAt))
 
-		err := ms.store.Create(context.Background(), &debtor)
+		err := ms.store.Crear(context.Background(), &debtor)
 
 		require.NoError(t, err)
 		assert.Equal(t, testDebtorID, debtor.ID)
@@ -177,7 +177,7 @@ func TestStoreDebtor_Create(t *testing.T) {
 			).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.Create(context.Background(), &debtor)
+		err := ms.store.Crear(context.Background(), &debtor)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Equal(t, uuid.Nil, debtor.ID)
@@ -200,7 +200,7 @@ func TestStoreDebtor_Update(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := ms.store.Update(context.Background(), testDebtorID, testEmpresaID, debtor)
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "UPDATE debtors")
@@ -208,7 +208,7 @@ func TestStoreDebtor_Update(t *testing.T) {
 		assert.Contains(t, ms.sql, "WHERE id = $4 and empresa_id = $5")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no actualizo ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no actualizo ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier UPDATE").
@@ -221,9 +221,9 @@ func TestStoreDebtor_Update(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := ms.store.Update(context.Background(), testDebtorID, testEmpresaID, debtor)
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base de datos", func(t *testing.T) {
@@ -239,7 +239,7 @@ func TestStoreDebtor_Update(t *testing.T) {
 			).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.Update(context.Background(), testDebtorID, testEmpresaID, debtor)
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -257,7 +257,7 @@ func TestStoreDebtor_Update(t *testing.T) {
 			).
 			WillReturnResult(sqlmock.NewErrorResult(errDBBoom))
 
-		err := ms.store.Update(context.Background(), testDebtorID, testEmpresaID, debtor)
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -271,7 +271,7 @@ func TestStoreDebtor_PaidDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := ms.store.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := ms.store.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "UPDATE debtors")
@@ -279,16 +279,16 @@ func TestStoreDebtor_PaidDebtor(t *testing.T) {
 		assert.Contains(t, ms.sql, "WHERE id = $1 and empresa_id = $2")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no actualizo ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no actualizo ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier UPDATE").
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := ms.store.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := ms.store.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base de datos", func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestStoreDebtor_PaidDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := ms.store.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -310,7 +310,7 @@ func TestStoreDebtor_PaidDebtor(t *testing.T) {
 			WithArgs(testDebtorID, testEmpresaID).
 			WillReturnResult(sqlmock.NewErrorResult(errDBBoom))
 
-		err := ms.store.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := ms.store.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -337,7 +337,7 @@ func TestStoreDebtor_GetDebtors(t *testing.T) {
 				AddRow(debtorRow()...).
 				AddRow(segunda...))
 
-		debtors, err := ms.store.GetDebtors(context.Background(), testEmpresaID)
+		debtors, err := ms.store.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.NoError(t, err)
 		require.Len(t, debtors, 2)
@@ -365,7 +365,7 @@ func TestStoreDebtor_GetDebtors(t *testing.T) {
 			WithArgs(testEmpresaID).
 			WillReturnRows(sqlmock.NewRows(debtorColumns()))
 
-		debtors, err := ms.store.GetDebtors(context.Background(), testEmpresaID)
+		debtors, err := ms.store.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.NoError(t, err)
 		assert.NotNil(t, debtors)
@@ -379,7 +379,7 @@ func TestStoreDebtor_GetDebtors(t *testing.T) {
 			WithArgs(testEmpresaID).
 			WillReturnError(errDBBoom)
 
-		debtors, err := ms.store.GetDebtors(context.Background(), testEmpresaID)
+		debtors, err := ms.store.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, debtors)
@@ -394,7 +394,7 @@ func TestStoreDebtor_GetDebtors(t *testing.T) {
 				AddRow(debtorRow()...).
 				RowError(0, errDBBoom))
 
-		debtors, err := ms.store.GetDebtors(context.Background(), testEmpresaID)
+		debtors, err := ms.store.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, debtors)

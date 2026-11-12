@@ -5,27 +5,27 @@ import (
 	"database/sql"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 )
 
-type StoreIncome struct {
+type AlmacenIngresos struct {
 	db *sql.DB
 }
 
-func NewStorage(db *sql.DB) *StoreIncome {
-	return &StoreIncome{db}
+func NuevoAlmacenIngresos(db *sql.DB) *AlmacenIngresos {
+	return &AlmacenIngresos{db}
 }
 
-func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error {
+func (s *AlmacenIngresos) AgregarIngreso(ctx context.Context, income *model.Income) error {
 	query := `
 		INSERT INTO incomes (empresa_id, monto, payment_method, descripcion, category_id)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, fecha, created_at
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	// income.CategoryID es un *uuid.UUID porque la columna es nullable: un nil
@@ -50,10 +50,10 @@ func (s *StoreIncome) AddIncome(ctx context.Context, income *model.Income) error
 	return nil
 }
 
-// CategoryExists verifica que la categoría exista y sea visible para la
+// CategoriaExiste verifica que la categoría exista y sea visible para la
 // empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
 // no pasa el filtro y el service la trata como inexistente.
-func (s *StoreIncome) CategoryExists(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+func (s *AlmacenIngresos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1
@@ -62,7 +62,7 @@ func (s *StoreIncome) CategoryExists(ctx context.Context, categoryID uuid.UUID, 
 		)
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	var existe bool
@@ -74,16 +74,16 @@ func (s *StoreIncome) CategoryExists(ctx context.Context, categoryID uuid.UUID, 
 	return existe, nil
 }
 
-func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empresaID uuid.UUID) error {
+func (s *AlmacenIngresos) EliminarIngreso(ctx context.Context, ingresoID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM incomes
 		WHERE id = $1 and empresa_id = $2
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, incomeID, empresaID)
+	res, err := s.db.ExecContext(ctx, query, ingresoID, empresaID)
 
 	if err != nil {
 		return err
@@ -96,21 +96,21 @@ func (s *StoreIncome) DeleteIncome(ctx context.Context, incomeID uuid.UUID, empr
 	}
 
 	if rows == 0 {
-		return util.ErrNotFound
+		return utilidades.ErrorNoEncontrado
 	}
 
 	return nil
 }
 
-func (s *StoreIncome) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid.UUID, fq pagination.IncomePaginationQuery) ([]model.Income, error) {
+func (s *AlmacenIngresos) ObtenerIngresosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Income, error) {
 	// El store es la última línea de defensa de la paginación: un
 	// IncomePaginationQuery{} (valor cero) pondría LIMIT 0 y devolvería siempre
 	// lista vacía, y un offset negativo hace fallar la query en Postgres.
-	if fq.Limit <= 0 {
-		fq.Limit = pagination.DefaultLimit
+	if fq.Limite <= 0 {
+		fq.Limite = paginacion.LimitePorDefecto
 	}
-	if fq.Offset < 0 {
-		fq.Offset = 0
+	if fq.Desplazamiento < 0 {
+		fq.Desplazamiento = 0
 	}
 
 	// El ORDER BY no es cosmético: sin un orden determinista el LIMIT/OFFSET
@@ -130,15 +130,15 @@ func (s *StoreIncome) GetAllIncomesOfEmpresa(ctx context.Context, empresaID uuid
 		LIMIT $2 OFFSET $3
 	`
 
-	ctx, cancel := context.WithTimeout(ctx, util.QueryTimeoutDuration)
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	rows, err := s.db.QueryContext(ctx, query,
 		empresaID,
-		fq.Limit,
-		fq.Offset,
-		fq.Since,
-		fq.Until,
+		fq.Limite,
+		fq.Desplazamiento,
+		fq.Desde,
+		fq.Hasta,
 		fq.CategoryID,
 	)
 
