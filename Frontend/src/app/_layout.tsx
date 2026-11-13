@@ -10,10 +10,13 @@ import { Stack } from 'expo-router';
 import { SesionProvider, useSesion } from '../features/auth/SesionContext';
 
 function Navegacion() {
-  const { token, cargando } = useSesion();
+  const { token, rol, cargando } = useSesion();
 
   // Mientras se revisa si hay una sesión guardada, no mostramos nada
   if (cargando) return null;
+
+  const esEmprendedor = !!token && rol === 'usuario';
+  const esMunicipal = !!token && rol === 'municipal';
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -22,9 +25,14 @@ function Navegacion() {
         <Stack.Screen name="index" />
       </Stack.Protected>
 
-      {/* Pantallas privadas: solo con sesión iniciada (DoD Historia 010) */}
-      <Stack.Protected guard={!!token}>
-            <Stack.Screen name="(tabs)" />
+      {/* Emprendedor: pestañas Inicio, Dashboard, Registros y Configuración (DoD Historia 010) */}
+      <Stack.Protected guard={esEmprendedor}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+
+      {/* Funcionario municipal: backoffice de claves (Historia 009) */}
+      <Stack.Protected guard={esMunicipal}>
+        <Stack.Screen name="municipal" />
       </Stack.Protected>
     </Stack>
   );

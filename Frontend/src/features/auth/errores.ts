@@ -12,6 +12,11 @@ const traducciones: Record<string, string> = {
     "The code can't be Redeemed": 'La clave no es válida o ya fue utilizada',
     'the server encountered a problem': 'Ocurrió un problema en el servidor. Intenta nuevamente en unos minutos',
     unauthorized: 'Tu sesión expiró. Vuelve a intentarlo',
+    'La categoría ya existe': 'Ya existe una categoría con ese nombre',
+    forbidden: 'No tienes permiso para realizar esta acción',
+    'the request was forbidden': 'No tienes permiso para realizar esta acción',
+    'Correo reenviado': 'Correo reenviado',
+    'Codigo desabilitado': 'Clave anulada',
 };
 
 export function traducirError(error: unknown): string {

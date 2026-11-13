@@ -1,6 +1,6 @@
-
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Image, useWindowDimensions, View } from 'react-native';
+import { Image, useWindowDimensions, View } from 'react-native';
 import Boton from '../shared/components/Boton';
 import FormularioLogin from '../features/auth/components/FormularioLogin';
 import FormularioRegistro, { DatosRegistro } from '../features/auth/components/FormularioRegistro';
@@ -9,9 +9,11 @@ import { colors } from '../shared/theme/colors';
 import { fonts } from '../shared/theme/fonts';
 import FormularioActivacion from '../features/auth/components/FormularioActivacion';
 import FondoOndas from '../shared/components/FondoOndas';
+import { Alert } from 'react-native';
 import FormularioRecuperar from '../features/auth/components/FormularioRecuperar';
 import * as authService from '../features/auth/auth.service';
 import { useSesion } from '../features/auth/SesionContext';
+import { crearEmpresa } from '../features/empresa/empresa.service';
 
 
 type ModalAbierto = 'login' | 'registro' | 'activacion' | 'recuperar' | null;
@@ -29,11 +31,11 @@ export default function Index() {
   const { iniciarSesion } = useSesion();
   const [datosRegistro, setDatosRegistro] = useState<DatosRegistro | undefined>();
 
-  // Paso 2 del registro: crea la cuenta y canjea la clave municipal en una sola llamada
+  // Paso 2 del registro: crea la cuenta (solo la primera vez) y canjea la clave municipal
   async function activarCuenta(clave: string) {
     if (!datosRegistro) return;
-    // Una sola llamada: si la clave no es válida, el backend no crea la cuenta
     const token = await authService.registrar(datosRegistro, clave);
+    await crearEmpresa(datosRegistro.emprendimiento, token); // El emprendimiento queda guardado en el backend
     cerrarModal();
     await iniciarSesion(token);
   }
@@ -46,7 +48,7 @@ export default function Index() {
     <View style={{ flex: 1, backgroundColor: colors.fondo }}>
       <FondoOndas />
 
-      {/* Logo: empieza al 21% de la altura y ocupa el 67% del ancho */}
+      {/* Logo: empieza al 21% de la altura y ocupa el 67% del ancho, como en el mockup */}
       <View style={{ position: 'absolute', top: height * 0.30, width: '100%', alignItems: 'center' }}>
         <Image
           source={require('../../assets/images/logo-tally.png')}

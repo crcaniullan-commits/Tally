@@ -7,3 +7,7 @@ export const metodosPago: { id: MetodoPago; nombre: string; icono: string }[] = 
     { id: 'credito', nombre: 'Crédito', icono: 'credit-card-plus-outline' },
     { id: 'transferencia', nombre: 'Transferencia', icono: 'cellphone-arrow-down' },
 ];
+// Opción extra del carrusel: venta que el cliente paga después (Historia 008).
+// No es un método del backend: se guarda como pago pendiente hasta que se marque como pagado.
+export const ID_PENDIENTE = 'pendiente';
+export const metodoPendiente = { id: ID_PENDIENTE, nombre: 'Pendiente', icono: 'clock-outline' };

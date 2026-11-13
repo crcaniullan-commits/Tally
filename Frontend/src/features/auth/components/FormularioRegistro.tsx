@@ -45,14 +45,14 @@
         const nuevos: Errores = {};
         if (nombre.trim().length > 100) nuevos.nombre = 'Máximo 100 caracteres';
         if (!rutEsValido(rut)) nuevos.rut = 'RUT inválido. Revisa el número y el dígito verificador';
-        if (emprendimiento.trim().length > 100) nuevos.emprendimiento = 'Máximo 100 caracteres';
+        if (emprendimiento.trim().length > 30) nuevos.emprendimiento = 'Máximo 30 caracteres';
         if (!/^\S+@\S+\.\S+$/.test(correo.trim())) nuevos.correo = 'Ingresa un correo válido';
         if (contrasena.length < 8 || contrasena.length > 72) nuevos.contrasena = 'Debe tener entre 8 y 72 caracteres';
         if (confirmacion !== contrasena) nuevos.confirmacion = 'Las contraseñas no coinciden';
         setErrores(nuevos);
 
         if (Object.keys(nuevos).length === 0) {
-   // La cuenta se crea en el paso 2 (index.tsx → activarCuenta)
+        // Pendiente: conexión con el backend (POST /v1/auth)
             onExito({ nombre, rut, emprendimiento, correo, contrasena });
         }
     }
@@ -66,7 +66,7 @@
         <CampoTexto etiqueta="RUT" placeholder="Ej: 12.345.678-5"
             value={rut} onChangeText={setRut} autoCapitalize="characters" maxLength={12} error={errores.rut} />
         <CampoTexto etiqueta="Nombre de tu emprendimiento" placeholder="Ej: Dulces Juanita"
-            value={emprendimiento} onChangeText={setEmprendimiento} error={errores.emprendimiento} />
+            value={emprendimiento} onChangeText={setEmprendimiento} error={errores.emprendimiento} maxLength={30} />
         <CampoTexto etiqueta="Correo electrónico" placeholder="tucorreo@ejemplo.cl"
             value={correo} onChangeText={setCorreo} keyboardType="email-address" autoCapitalize="none" error={errores.correo} />
         <CampoTexto etiqueta="Contraseña" placeholder="Mínimo 8 caracteres"

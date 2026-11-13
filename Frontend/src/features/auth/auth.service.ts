@@ -1,7 +1,7 @@
-    import { peticion } from '../../shared/api/cliente';
+    import { ApiError, peticion } from '../../shared/api/cliente';
     import { DatosRegistro } from './components/FormularioRegistro';
 
-    // POST /v1/auth → crea la cuenta, canjea la clave municipal y devuelve el token de sesión (todo en uno)
+    // POST /v1/auth → crea la cuenta y devuelve el token de sesión
     export function registrar(datos: DatosRegistro, clave: string): Promise<string> {
     return peticion<string>('/auth', {
         metodo: 'POST',
@@ -24,7 +24,18 @@
     });
     }
 
-    // POST /v1/app/users/exchange/{clave} → canjea la clave municipal (requiere sesión)
-    export function canjearClave(clave: string, token: string): Promise<unknown> {
-    return peticion(`/app/users/exchange/${clave}`, { metodo: 'POST', token });
-    }
+
+export type Rol = 'usuario' | 'municipal';
+
+// Averigua el rol de la cuenta (el token no lo trae): se consulta una ruta solo para municipalidades.
+// Si responde 403 (prohibido) es un emprendedor; cualquier otra respuesta significa que sí tiene acceso municipal.
+export async function detectarRol(token: string): Promise<Rol> {
+  try {
+    await peticion('/app/users/municipal/11111111-1', { token });
+    return 'municipal';
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 403) return 'usuario';
+    if (error instanceof ApiError && error.status === 401) throw error; // Token inválido
+    return 'municipal'; // 404 (RUT de prueba no existe) = pasó el control de rol
+  }
+}

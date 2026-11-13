@@ -7,7 +7,7 @@ const datos = {
     emprendimiento: 'Dulces Juanita',
     correo: 'thiare@prueba.cl',
     contrasena: 'Tally2026',
-    claveActivacion: 'RE77IU', // Cada clave sirve una sola vez: se genera en Swagger y se pega a mano
+    claveActivacion: '',
 };
 
 const vacios = {
