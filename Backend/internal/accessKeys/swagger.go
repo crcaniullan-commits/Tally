@@ -8,7 +8,7 @@ package accesskeys
 //	@Accept			json
 //	@Produce		json
 //	@Param			payload	body		EmailPayload		true	"correo del destinatario"
-//	@Success		200		{object}	model.AccessKey		"código creado"
+//	@Success		201		{object}	model.AccessKey		"código creado"
 //	@Failure		400		{object}	map[string]string	"payload inválido o email mal formado"
 //	@Failure		500		{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth

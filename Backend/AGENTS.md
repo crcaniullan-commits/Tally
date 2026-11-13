@@ -92,7 +92,7 @@ Un tag roto no devuelve 400: **el `Validate.Struct` entra en panic** y el `Recov
 
 ## Tests
 
-Paquetes con tests: `accessKeys`, `auth`, `categories`, `empresas`, `expenses`, `incomes`, `pagination`, `users` y `util`. Sin tests: `db`, `dbtx`, `debtors`, `email`, `env`, `error`, `goals`, `middleware` y `model`.
+Paquetes con tests: `accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, `pagination`, `users` y `util`. Sin tests: `db`, `dbtx`, `excel`, `feed`, `email`, `env`, `error`, `middleware` y `model`.
 
 Convención, un archivo por capa dentro del paquete (tests en `package categories`, no `categories_test`):
 
@@ -105,13 +105,66 @@ Convención, un archivo por capa dentro del paquete (tests en `package categorie
 
 `testify` (`assert` / `require` / `mock`) y `go-sqlmock` son dependencias directas.
 
-**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`incomes`, `expenses`, `categories`, `empresas`, `accessKeys`, `auth`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. No hay tests de integración contra Postgres real.
+**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. Los tests de integración contra Postgres real viven en `tests/integration/` (ver sección siguiente).
 
 `categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Create` y en `CambiarNombre`, y `GetCategoriasPorEmpresa` / `GetCategoriasVisibles` en el store.
 
+`debtors` y `goals` tienen tests de service, handler y storage. `debtors` cubre CRUD, listado, `pagado` y mapeo de `ErrNotFound`; `goals` cubre el cálculo de estado y las rutas de detalle/estado.
+
+### Tests de integración (`tests/integration/`)
+
+Prueban flujos HTTP completos contra el router real y una base PostgreSQL real.
+Complementan los tests unitarios; no los reemplazan. El resumen de cobertura,
+bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
+
+**Infraestructura**
+
+- `TestMain` está en `tests/integration/main_test.go` y delega en `testutil.SetupSuite`.
+- `testutil/env.go` crea una base efímera `tally_it_<pid>` desde `DB_ADDR` (default `postgres://postgres:tally_database_env@localhost/tally_database_env?sslmode=disable`), aplica `migrations/*.up.sql` en orden y la dropea al terminar. `TEST_DB_ADDR` permite reutilizar una base existente sin crearla ni dropearla.
+- El router se replica en `testutil/env.go` desde `cmd/application/app.go`. **No** se modifica el archivo de producción para hacer pasar un test.
+- Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. `SendEmail` se reemplaza por un no-op.
+- `TestMain` registra un único usuario municipal; los tests lo obtienen con `testutil.MunicipalToken(t)` / `testutil.MunicipalRUT(t)`.
+
+**Archivos y nombres**
+
+- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `incomes_flow_test.go`, etc.).
+- El aislamiento multi-empresa vive en `tenant_isolation_test.go`.
+- Helpers compartidos en `helpers_test.go` (`requireProtected`, `dbDate`); entorno, cliente HTTP y fixtures en `testutil/`.
+- Los tests van en `package integration` (no `integration_test`).
+
+**Reglas de escritura**
+
+- HTTP en memoria con `httptest` a través de `testutil.Request`; no levantar un servidor real ni usar URLs externas.
+- Usar `testify` (`require` / `assert`). No agregar dependencias nuevas.
+- Flujo feliz secuencial reutilizando IDs generados; negativos en tablas con `t.Run`.
+- Validar **status exacto** y **mensaje exacto** (`testutil.RequireStatus` / `testutil.RequireError`). No inventar rutas, campos ni mensajes: el código es la fuente de verdad; swagger solo orienta.
+- Cada test debe ser independiente: crear sus propios usuarios/empresas con los fixtures (`NewUser`, `CreateEmpresa`, `CreateCategory`, `CreateIncome`, `CreateExpense`, `CreateDebtor`, `CreateGoal`) y limpiar con `t.Cleanup`. No depender del orden entre tests.
+- Todo flujo debe verificar al menos una ruta protegida sin token y con token inválido usando `requireProtected` (`401 unauthorized`).
+- Fechas: usar `dbDate(t, offset)` para alinear con `CURRENT_DATE` de Postgres y no con el reloj del host.
+- Cubrir explícitamente el aislamiento por empresa: acceso a la empresa ajena y a recursos ajenos por ID, además de listados que excluyan datos de otra empresa.
+
+**Bugs y discrepancias**
+
+- No corregir bugs de producción desde un test. Documentarlos en el test con `BUG:` (comportamiento incorrecto) o `DISCREPANCIA:` (swagger/código o código/código) y assertar el comportamiento actual.
+- Mantener `tests/report.md` actualizado con el resultado por flujo, bugs, discrepancias y casos omitidos.
+
+**Ejecución**
+
+```bash
+go tool task test                                   # vet + go test ./... (incluye integración si hay Postgres)
+GOPROXY=off go test -v ./tests/integration/...      # integración completa
+GOPROXY=off go test -v ./tests/integration/ -run TestIncomesFlow
+```
+
+Requiere PostgreSQL. Sin `TEST_DB_ADDR`, la suite crea y dropea su propia base.
+
+**CI:** el workflow levanta un service container `postgres:16` y exporta `DB_ADDR`; la suite crea su base efímera y aplica las migraciones sola. No hace falta un step de migraciones.
+
 ## Arquitectura
 
-`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`StoreIncomes`, `ServiceIncomes`, etc.) definidas en service/handler. Cada módulo expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*dbtx.Transactor` y la config JWT; `accessKeys` recibe el `SendEmail`; `empresas.InitModule` no recibe router y devuelve `Routes` + `middleware.EmpresaFinder`.
+`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`StoreIncomes`, `ServiceIncomes`, etc.) definidas en service/handler. Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*dbtx.Transactor` y la config JWT; `accessKeys` recibe el `SendEmail`; `empresas.InitModule` no recibe router y devuelve `Routes` + `middleware.EmpresaFinder`.
+
+Los módulos `excel` y `feed` son esqueletos: tienen `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas. `excel` generará un archivo Excel y lo guardará en S3 por usuario y empresa; `feed` obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa.
 
 Cableado actual en `cmd/application/app.go`:
 
@@ -121,9 +174,9 @@ Cableado actual en `cmd/application/app.go`:
   - `/users` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
   - `/key` — `POST /` (emitir), `POST /AccessID/{keyID}` (reenviar), `POST /revoke/{code}` (revocar). Solo rol municipal.
   - `/empresas` — `POST /` y `GET /`.
-  - `/empresas/{empresaID}` — detrás de `EmpresaMiddleware.EmpresaOfUser`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `incomes`, `expenses` y `categories` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`).
+  - `/empresas/{empresaID}` — detrás de `EmpresaMiddleware.EmpresaOfUser`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `incomes`, `expenses`, `categories` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `goals` (prefijo `/goal`: `POST /`, `GET /`, `GET /{goalID}`, `DELETE /{goalID}`, `GET /{goalID}/state`) y `debtors` (prefijo `/debtors`: `POST /`, `GET /`, `PATCH /{debtorID}`, `PATCH /{debtorID}/paid`).
 
-**No montados:** `debtors` y `goals` (handlers vacíos, sin lógica). El resto de los módulos con lógica (`accessKeys`, `auth`, `categories`, `empresas`, `expenses`, `incomes`, `users`) está montado.
+**No montados:** `excel` y `feed` (esqueletos sin lógica ni rutas). El resto de los módulos con lógica (`accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, `users`) está montado.
 
 Middlewares:
 - `middleware.GlobalMiddlewares()`: `RequestID`, `ClientIPFromHeader("X-Real-IP")`, `Logger`, `Recoverer`.
@@ -143,7 +196,7 @@ Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El se
 
 ## Swagger
 
-Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `accessKeys`, `auth`, `categories`, `empresas`, `expenses`, `incomes` y `users`. `debtors` y `goals` no tienen.
+Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes` y `users`. `excel` y `feed` no tienen endpoints todavía.
 
 `docs/docs.go`, `docs/swagger.json` y `docs/swagger.yaml` son **generados**: después de tocar anotaciones o tipos, `go tool task gen-docs` y commiteá el resultado. La UI queda en `/v1/swagger/`. El root de swagger se anota en `cmd/main.go` (`@BasePath /v1`, `@securityDefinitions.apiKey`).
 
@@ -151,9 +204,12 @@ Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se l
 
 `../.github/workflows/test.yml` corre solo el job `backend`: `go mod download`, `go vet ./...`, `go test -race -covermode=atomic -coverprofile=coverage.out ./...`, resumen con `go tool cover` y upload a Codecov (`fail_ci_if_error: false`). Usa `go-version-file: Backend/go.mod` y `working-directory: Backend`. El workflow vive en la raíz del repo porque GitHub Actions solo lee `.github/` del root. Triggers: push a `main`, PRs a `main` y manual.
 
+El job levanta un service container `postgres:16` (usuario `postgres`, contraseña `tally_database_env`, base `tally_database_env`) con health check `pg_isready`, y exporta `DB_ADDR` apuntando a `localhost:5432`. Ese Postgres es efímero y vive solo durante el job. No hay step de migraciones: `testutil` crea `tally_it_<pid>` dentro de esa instancia y aplica `migrations/*.up.sql` ahí mismo.
+
 ## Deuda técnica conocida (verificada, sin arreglar)
 
 - La unicidad de categorías es solo a nivel aplicación: hay ventana de carrera entre el chequeo y el `INSERT` (ver esquema). Cerrarla requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
+- `excel` y `feed` son solo esqueletos: no tienen handlers, services, stores, rutas, tests ni cliente S3 implementados.
 
 ## Otros
 

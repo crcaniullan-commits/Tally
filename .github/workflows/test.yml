@@ -20,6 +20,24 @@ jobs:
     name: Backend (Go)
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: tally_database_env
+          POSTGRES_DB: tally_database_env
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tally_database_env"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_ADDR: postgres://postgres:tally_database_env@localhost:5432/tally_database_env?sslmode=disable
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
