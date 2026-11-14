@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import Icono from './Icono';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import { useEscala } from '../utils/escala';
@@ -15,7 +15,7 @@ export default function Encabezado({ titulo, subtitulo, derecha, volver = true }
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       {volver && (
         <Pressable hitSlop={10} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={e(30)} color={colors.lavanda} />
+          <Icono nombre="chevron-left" tamano={e(30)} color={colors.lavanda} />
         </Pressable>
       )}
       <View style={{ flex: 1 }}>

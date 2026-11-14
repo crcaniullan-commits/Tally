@@ -67,7 +67,7 @@ export async function programarRecordatorioDiario(hora: number, minuto: number):
   await cancelarRecordatorioDiario();
   await N.scheduleNotificationAsync({
     identifier: ID_RECORDATORIO,
-    content: { title: 'Tally', body: '¿Registraste tus ventas y gastos de hoy? Te toma menos de un minuto 💜' },
+    content: { title: 'Tally', body: '¿Registraste tus ingresos y egresos de hoy? Te toma menos de un minuto 💜' },
     trigger: { type: N.SchedulableTriggerInputTypes.DAILY, hour: hora, minute: minuto, channelId: 'default' },
   });
 }
@@ -77,15 +77,16 @@ export async function cancelarRecordatorioDiario(): Promise<void> {
   if (N) await N.cancelScheduledNotificationAsync(ID_RECORDATORIO).catch(() => {});
 }
 
-// Aviso el día que vence un pago pendiente (a las 10:00). Devuelve el id para poder cancelarlo.
-export async function programarAvisoPendiente(fecha: Date, cliente: string, monto: string): Promise<string | undefined> {
+// Aviso de un pago pendiente a las 10:00, el día que vence o unos días antes. Devuelve el id para poder cancelarlo.
+export async function programarAvisoPendiente(fecha: Date, cliente: string, monto: string, diasAntes = 0): Promise<string | undefined> {
   const N = cargar();
   if (!N) return undefined;
-  const aviso = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 10, 0);
+  const aviso = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - diasAntes, 10, 0);
   if (aviso.getTime() <= Date.now()) return undefined; // Ya pasó: no se programa
+  const cuando = diasAntes === 0 ? 'Hoy vence' : diasAntes === 1 ? 'Mañana vence' : `En ${diasAntes} días vence`;
   try {
     return await N.scheduleNotificationAsync({
-      content: { title: 'Pago pendiente', body: `Hoy vence el pago de ${cliente}: $${monto}` },
+      content: { title: 'Pago pendiente', body: `${cuando} el pago de ${cliente}: $${monto}` },
       trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: aviso, channelId: 'default' },
     });
   } catch {

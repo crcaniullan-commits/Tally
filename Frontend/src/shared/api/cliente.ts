@@ -1,5 +1,5 @@
     // Cliente HTTP de Tally: todas las peticiones al backend pasan por aquí.
-    // Formato del backend: éxito → { "data": ... } · error → { "error": "mensaje" }
+    // Formato del backend: éxito → { "data": ... } (o { "datos": ... } en la versión en español) · error → { "error": "mensaje" }
 
     const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -49,7 +49,7 @@
 
         if (__DEV__) console.log(`[API] Respuesta ${respuesta.status}`);
 
-    let json: { data?: T; error?: string } | null = null;
+    let json: { data?: T; datos?: T; error?: string } | null = null;
     try {
         json = await respuesta.json();
     } catch {
@@ -60,5 +60,5 @@
         throw new ApiError(json?.error ?? 'Ocurrió un error inesperado', respuesta.status);
     }
 
-    return json?.data as T;
+    return (json?.data ?? json?.datos) as T;
     }

@@ -1,300 +1,183 @@
-import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { traducirError } from '../../features/auth/errores';
 import { useSesion } from '../../features/auth/SesionContext';
-import { Categoria, categoriasPredeterminadas, combinarCategorias, TipoMovimiento } from '../../features/categorias/categorias';
-import {
-  crearCategoria,
-  eliminarCategoria,
-  listarCategorias,
-  obtenerIdReal,
-  renombrarCategoria,
-} from '../../features/categorias/categorias.service';
-import ModalCategorias from '../../features/categorias/components/ModalCategorias';
-import CarruselOpciones, { OpcionCarrusel } from '../../features/movimientos/components/CarruselOpciones';
-import HistorialMovimientos, { Movimiento } from '../../features/movimientos/components/HistorialMovimientos';
-import ModalMovimiento from '../../features/movimientos/components/ModalMovimiento';
-import TecladoNumerico from '../../features/movimientos/components/TecladoNumerico';
-import { armarHistorial } from '../../features/movimientos/historial';
-import { ID_PENDIENTE, MetodoPago, metodoPendiente, metodosPago } from '../../features/movimientos/metodosPago';
-import { crearGasto, crearIngreso, listarGastos, listarIngresos } from '../../features/movimientos/movimientos.service';
-import { agregarPendiente, listarPendientes } from '../../features/pendientes/pendientes';
-import Boton from '../../shared/components/Boton';
-import CampoTexto from '../../shared/components/CampoTexto';
-import SelectorFecha from '../../shared/components/SelectorFecha';
+import { categoriasPredeterminadas, TipoMovimiento } from '../../features/categorias/categorias';
+import SelectorCategorias from '../../features/categorias/components/SelectorCategorias';
+import { useCategorias } from '../../features/categorias/useCategorias';
+import Calculadora from '../../features/movimientos/components/Calculadora';
+import SelectorMetodo from '../../features/movimientos/components/SelectorMetodo';
+import { ID_PENDIENTE } from '../../features/movimientos/metodosPago';
+import { registrarMovimiento, seCumplioLaMeta } from '../../features/movimientos/registrarMovimiento';
+import DatosPagoPendiente from '../../features/pendientes/components/DatosPagoPendiente';
+import BarraTitulo from '../../shared/components/BarraTitulo';
+import { useAlerta } from '../../shared/components/Confirmar';
+import EstadoEmpresa from '../../shared/components/EstadoEmpresa';
+import Icono from '../../shared/components/Icono';
+import { useAviso } from '../../shared/components/Toast';
 import { colors } from '../../shared/theme/colors';
 import { fonts } from '../../shared/theme/fonts';
-import { sombras } from '../../shared/theme/sombras';
 import { useEscala } from '../../shared/utils/escala';
-import { aISO, desdeISO, diasHasta, hoy, sumarDias } from '../../shared/utils/fechas';
+import { aISO, hoy, sumarDias } from '../../shared/utils/fechas';
 import { formatearMonto } from '../../shared/utils/formato';
 
-const MAX_DIGITOS = 10;
-const ID_OTRA = 'otra'; // Tarjeta que abre el modal de categorías propias
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+// Inicio: registro rápido de ingresos, egresos y pagos pendientes (Historias 004 y 008).
+// La lógica vive en features/: categorías (useCategorias), registro (registrarMovimiento) y componentes.
 export default function Inicio() {
-  const { token, empresa, cerrarSesion, manejarError } = useSesion();
-  const { e } = useEscala();
-  const insets = useSafeAreaInsets();
+  const { token, empresa, manejarError } = useSesion();
+  const { t } = useEscala();
+  const alerta = useAlerta();
+  const avisar = useAviso();
+  const cats = useCategorias();
 
-  // Formulario de registro rápido (Historia 004)
+  // Formulario
   const [tipo, setTipo] = useState<TipoMovimiento>('ingreso');
   const [monto, setMonto] = useState(0);
-  const [categoriaId, setCategoriaId] = useState<string | null>(null);
-  const [metodo, setMetodo] = useState<string | null>(null);
+  const [categoriaId, setCategoriaId] = useState<string | null>(categoriasPredeterminadas[0].id);
+  const [metodo, setMetodo] = useState<string>('efectivo');
   const [nota, setNota] = useState('');
-  // Solo para pagos pendientes
   const [cliente, setCliente] = useState('');
   const [vence, setVence] = useState(sumarDias(hoy(), 7));
-
-  const [categorias, setCategorias] = useState<Categoria[]>(categoriasPredeterminadas);
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-  const [avisos, setAvisos] = useState(0); // Pagos pendientes que vencen hoy o ya vencieron
-  const [modalCategorias, setModalCategorias] = useState(false);
-  const [seleccionado, setSeleccionado] = useState<Movimiento | null>(null);
-  const [cargandoDatos, setCargandoDatos] = useState(true);
   const [guardando, setGuardando] = useState(false);
-
-  // Carga categorías, historial y pagos pendientes
-  const cargarDatos = useCallback(async () => {
-    if (!token || !empresa) return;
-    try {
-      const [cats, ingresos, gastos, pendientes] = await Promise.all([
-        listarCategorias(empresa.id, token),
-        listarIngresos(empresa.id, token),
-        listarGastos(empresa.id, token),
-        listarPendientes(empresa.id),
-      ]);
-      const preparadas = combinarCategorias(cats);
-      setCategorias(preparadas);
-      setMovimientos(armarHistorial(ingresos, gastos, preparadas));
-      setAvisos(pendientes.filter((p) => diasHasta(desdeISO(p.vence)) <= 0).length);
-    } catch (error) {
-      manejarError(error);
-      Alert.alert('No se pudieron cargar tus datos', traducirError(error));
-    } finally {
-      setCargandoDatos(false);
-    }
-  }, [token, empresa, manejarError]);
-
-  // Se recarga al volver a esta pestaña (por si se editó algo en Historial o Pendientes)
-  useFocusEffect(useCallback(() => { cargarDatos(); }, [cargarDatos]));
+  const [arrastrando, setArrastrando] = useState(false); // Mientras se arrastra un tag, la pantalla no hace scroll
 
   const esIngreso = tipo === 'ingreso';
   const esPendiente = esIngreso && metodo === ID_PENDIENTE;
-  const delTipo = categorias.filter((c) => c.tipo === tipo || c.tipo === 'ambos');
-  const propias = categorias.filter((c) => c.tipo === 'ambos');
-  const colorTipo = esIngreso ? colors.ingreso : colors.egreso;
-  const formularioIncompleto =
-    monto === 0 || !categoriaId || !empresa || (esIngreso && !metodo) || (esPendiente && !cliente.trim());
-
-  const opcionesCategorias: OpcionCarrusel[] = [
-    ...delTipo,
-    { id: ID_OTRA, nombre: 'Otra', icono: 'plus', color: colors.lavanda, colorSuave: colors.lavandaSuave },
-  ];
-  const opcionesMetodos: OpcionCarrusel[] = [
-    ...metodosPago.map((m) => ({ ...m, color: colors.lavanda, colorSuave: colors.lavandaSuave })),
-    { ...metodoPendiente, color: colors.naranjo, colorSuave: colors.naranjoSuave },
-  ];
+  const categoria = cats.categorias.find((c) => c.id === categoriaId);
+  // Botón deshabilitado si falta un dato obligatorio (Definición de Terminado, Historia 004)
+  const incompleto = monto === 0 || !categoria || (esPendiente && !cliente.trim());
+  const fechaHoy = new Date();
 
   function cambiarTipo(nuevo: TipoMovimiento) {
     setTipo(nuevo);
-    setCategoriaId(null); // Las categorías de ingreso y egreso son distintas
-  }
-
-  function seleccionarCategoria(id: string) {
-    if (id === ID_OTRA) setModalCategorias(true);
-    else setCategoriaId(id);
-  }
-
-  function agregarDigito(digito: string) {
-    const nuevo = `${monto === 0 ? '' : monto}${digito}`;
-    if (nuevo.length > MAX_DIGITOS) return;
-    setMonto(Number(nuevo));
+    // Las categorías de ingreso y egreso son distintas: se elige la primera del nuevo tipo
+    setCategoriaId(cats.delTipo(nuevo)[0]?.id ?? null);
+    if (nuevo === 'egreso' && metodo === ID_PENDIENTE) setMetodo('efectivo');
   }
 
   function limpiarFormulario() {
     setMonto(0);
-    setCategoriaId(null);
-    setMetodo(null);
     setNota('');
     setCliente('');
     setVence(sumarDias(hoy(), 7));
+    if (metodo === ID_PENDIENTE) setMetodo('efectivo');
   }
 
-  // ---- Categorías propias ----
-  async function agregarCategoria(nombre: string) {
-    if (!token || !empresa) return;
-    try {
-      const creada = await crearCategoria(nombre, empresa.id, token);
-      const nueva: Categoria = {
-        id: creada.id, nombre: creada.nombre, tipo: 'ambos',
-        icono: 'tag-outline', color: colors.lavanda, colorSuave: colors.lavandaSuave,
-      };
-      setCategorias((actuales) => [...actuales, nueva]);
-      setCategoriaId(nueva.id);
-      setModalCategorias(false);
-    } catch (error) {
-      manejarError(error);
-      Alert.alert('No se pudo crear la categoría', traducirError(error));
-    }
-  }
-
-  async function cambiarNombreCategoria(c: Categoria, nombre: string) {
-    if (!token || !empresa) return;
-    try {
-      await renombrarCategoria(c.id, nombre, empresa.id, token);
-      setCategorias((actuales) => actuales.map((x) => (x.id === c.id ? { ...x, nombre } : x)));
-    } catch (error) {
-      manejarError(error);
-      Alert.alert('No se pudo renombrar', traducirError(error));
-    }
-  }
-
-  async function borrarCategoria(c: Categoria) {
-    if (!token || !empresa) return;
-    try {
-      await eliminarCategoria(c.id, empresa.id, token);
-      setCategorias((actuales) => actuales.filter((x) => x.id !== c.id));
-      if (categoriaId === c.id) setCategoriaId(null);
-    } catch (error) {
-      manejarError(error);
-      Alert.alert('No se pudo eliminar', traducirError(error));
-    }
-  }
-
-  // ---- Registrar ----
   async function registrar() {
-    const categoria = categorias.find((c) => c.id === categoriaId);
-    if (!token || !empresa || !categoria || formularioIncompleto) return;
+    if (incompleto || !token || !empresa || !categoria) return;
     setGuardando(true);
     try {
-      if (esPendiente) {
-        // Venta fiada: se guarda como pendiente y se avisa el día que vence
-        await agregarPendiente(empresa.id, { cliente: cliente.trim(), monto, vence: aISO(vence), nota: nota.trim(), categoria: categoria.nombre });
-        Alert.alert('Pago pendiente guardado', `Te avisaremos el día que vence. Puedes verlo en Registros → Pagos pendientes.`);
-      } else {
-        const idReal = await obtenerIdReal(categoria, empresa.id, token);
-        if (esIngreso) await crearIngreso({ monto, metodo: metodo as MetodoPago, categoriaId: idReal, nota }, empresa.id, token);
-        else await crearGasto({ monto, categoriaId: idReal, nota }, empresa.id, token);
-      }
+      const r = await registrarMovimiento(
+        { tipo, monto, categoria, metodo, nota, pendiente: esPendiente ? { cliente, vence: aISO(vence) } : null },
+        empresa.id, token,
+      );
+      avisar(r.mensaje, r.icono);
+      if (r.categoriaCreada) await cats.cargar();
+      if (esIngreso && !esPendiente && await seCumplioLaMeta(monto, empresa.id, token)) avisar('¡Cumpliste tu meta de venta! 🎉', 'trophy');
       limpiarFormulario();
-      await cargarDatos();
     } catch (error) {
       manejarError(error);
-      Alert.alert('No se pudo registrar', traducirError(error));
+      alerta('No se pudo registrar', traducirError(error));
     } finally {
       setGuardando(false);
     }
   }
 
-  const textoBoton = guardando ? 'Guardando...' : esPendiente ? 'Guardar pago pendiente' : esIngreso ? 'Registrar venta' : 'Registrar gasto';
+  // ---- Estilos del mockup ----
+  const tarjeta = {
+    backgroundColor: colors.superficie, borderRadius: t(16), padding: t(12), gap: t(10),
+    borderWidth: 1, borderColor: colors.lavandaOnda, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
+  };
+  const textoBoton = guardando ? 'Guardando...' : esPendiente ? 'Guardar pago pendiente' : esIngreso ? 'Registrar venta' : 'Registrar egreso';
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.fondoApp }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 32, gap: 22 }} keyboardShouldPersistTaps="handled">
+      {/* Todo se ajusta al alto de la pantalla: el teclado crece para llenar el espacio.
+          Solo hace scroll si el contenido no cabe (por ejemplo, con el pago pendiente abierto). */}
+      <ScrollView
+        scrollEnabled={!arrastrando}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: t(10) }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <BarraTitulo
+          titulo={empresa?.nombre_empresa ?? 'Cargando…'}
+          derecha={
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t(4), backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: t(10), paddingVertical: t(4), borderRadius: 999 }}>
+              <View style={{ width: t(6), height: t(6), borderRadius: 999, backgroundColor: colors.verde }} />
+              <Text style={{ fontFamily: fonts.negrita, fontSize: t(10), color: colors.superficie }}>
+                Hoy, {fechaHoy.getDate()} {MESES_CORTOS[fechaHoy.getMonth()]}
+              </Text>
+            </View>
+          }
+        />
+        <View style={{ flex: 1, paddingHorizontal: t(16), paddingTop: t(10), gap: t(8) }}>
+          <EstadoEmpresa />
 
-        {/* Encabezado: saludo, emprendimiento, pagos pendientes y salir */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.lavanda, fontFamily: fonts.negrita, fontSize: e(30) }}>¡Hola!</Text>
-            <Text numberOfLines={1} style={{ color: colors.lavanda, fontFamily: fonts.medio, fontSize: e(17), opacity: 0.8 }}>
-              {empresa?.nombre_empresa ?? 'Cargando…'}
-            </Text>
+          {/* 1. Tipo (ingreso / egreso) y monto */}
+          <View style={tarjeta}>
+            <View style={{ flexDirection: 'row', gap: t(4), backgroundColor: colors.lavandaSuave, padding: t(4), borderRadius: t(12) }}>
+              {(['ingreso', 'egreso'] as const).map((opcion) => {
+                const activo = tipo === opcion;
+                return (
+                  <Pressable key={opcion} onPress={() => cambiarTipo(opcion)} style={{
+                    flex: 1, paddingVertical: t(4), borderRadius: t(8), alignItems: 'center',
+                    backgroundColor: activo ? (opcion === 'ingreso' ? colors.ingreso : colors.egreso) : 'transparent',
+                  }}>
+                    <Text style={{ fontFamily: activo ? fonts.extra : fonts.negrita, fontSize: t(11), color: activo ? colors.superficie : colors.lavanda }}>
+                      {opcion === 'ingreso' ? 'INGRESO (+)' : 'EGRESO (−)'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: t(8), paddingVertical: t(2) }}>
+              <Text style={{ fontFamily: fonts.negrita, fontSize: t(12), color: colors.textoSecundario }}>Monto</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ flex: 1, textAlign: 'right', fontFamily: fonts.extra, fontSize: t(30), color: colors.lavanda, letterSpacing: -0.5 }}>
+                $ {formatearMonto(monto)}
+              </Text>
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 20 }}>
-            <Pressable hitSlop={10} onPress={() => router.push({ pathname: '/registros', params: { vista: 'pendientes' } })}>
-              <Ionicons name="notifications-outline" size={e(30)} color={colors.lavanda} />
-              {avisos > 0 && (
-                <View style={{ position: 'absolute', top: -4, right: -6, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.rosado, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: colors.superficie, fontFamily: fonts.negrita, fontSize: 12 }}>{avisos}</Text>
-                </View>
-              )}
-            </Pressable>
-            <Pressable hitSlop={10} onPress={cerrarSesion}>
-              <Ionicons name="log-out-outline" size={e(30)} color={colors.lavanda} />
-            </Pressable>
+
+          {/* 2. Categoría, método de pago y nota */}
+          <View style={[tarjeta, { gap: t(14) }]}>
+            <SelectorCategorias tipo={tipo} categorias={cats} categoriaId={categoriaId} onElegir={setCategoriaId} onArrastrando={setArrastrando} />
+
+            {/* Método de pago: solo ingresos (el backend no guarda método en los egresos) */}
+            {esIngreso && <SelectorMetodo metodo={metodo} onCambiar={setMetodo} />}
+
+            {esPendiente && <DatosPagoPendiente cliente={cliente} onCliente={setCliente} vence={vence} onVence={setVence} />}
+
+            {/* Nota con ícono de lápiz */}
+            <View>
+              <View style={{ position: 'absolute', left: t(12), top: t(9), zIndex: 1 }}>
+                <Icono nombre="pencil" tamano={t(14)} color={colors.textoSecundario} />
+              </View>
+              <TextInput value={nota} onChangeText={setNota} maxLength={100} multiline
+                placeholder="Nota opcional (Ej: Venta poleras diseño)" placeholderTextColor={colors.textoSecundario}
+                style={{
+                  paddingVertical: t(7), paddingHorizontal: t(12), paddingLeft: t(32), textAlignVertical: 'top',
+                  fontSize: t(12), fontFamily: fonts.normal, color: colors.texto,
+                  backgroundColor: colors.fondoApp, borderWidth: 1, borderColor: colors.lavandaOnda, borderRadius: t(12),
+                }} />
+            </View>
+          </View>
+
+          {/* 3. Zona del pulgar: el teclado ocupa el espacio que queda */}
+          <View style={[tarjeta, { flex: 1, minHeight: t(230) }]}>
+            <Calculadora
+              monto={monto}
+              onCambiar={setMonto}
+              textoBoton={textoBoton}
+              colorBoton={esPendiente ? colors.naranjo : esIngreso ? colors.ingreso : colors.egreso}
+              deshabilitado={incompleto || guardando}
+              onRegistrar={registrar}
+            />
           </View>
         </View>
-
-        {/* Paso 2 y 3: categoría y método de pago (los gastos no piden método) */}
-        <CarruselOpciones titulo="Categorías" opciones={opcionesCategorias} seleccionadaId={categoriaId} onSeleccionar={seleccionarCategoria} />
-        {esIngreso && (
-          <CarruselOpciones titulo="Método de pago" opciones={opcionesMetodos} seleccionadaId={metodo} onSeleccionar={setMetodo} />
-        )}
-
-        {/* Paso 1: calculadora */}
-        <View style={{ backgroundColor: colors.superficie, borderRadius: 24, padding: 16, gap: 14, ...sombras.flotante }}>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.titulo, fontSize: e(64), color: colors.lavanda, textAlign: 'center', letterSpacing: 1 }}>
-            $ {formatearMonto(monto)}
-          </Text>
-
-          <View style={{ flexDirection: 'row', borderRadius: 26, overflow: 'hidden', backgroundColor: colors.lavandaSuave }}>
-            {(['ingreso', 'egreso'] as const).map((opcion) => {
-              const activo = tipo === opcion;
-              const colorOpcion = opcion === 'ingreso' ? colors.ingreso : colors.egreso;
-              return (
-                <Pressable
-                  key={opcion}
-                  onPress={() => cambiarTipo(opcion)}
-                  style={{ flex: 1, paddingVertical: e(14), alignItems: 'center', justifyContent: 'center', borderRadius: 26, backgroundColor: activo ? colorOpcion : 'transparent' }}
-                >
-                  <Text style={{ width: '100%', textAlign: 'center', fontFamily: fonts.negrita, fontSize: e(18), color: activo ? colors.superficie : colors.lavanda }}>
-                    {opcion === 'ingreso' ? 'INGRESO (+)' : 'EGRESO (−)'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <TecladoNumerico onDigito={agregarDigito} onBorrar={() => setMonto(Math.floor(monto / 10))} onLimpiar={() => setMonto(0)} />
-        </View>
-
-        {/* Datos extra de un pago pendiente */}
-        {esPendiente && (
-          <View style={{ backgroundColor: colors.naranjoSuave, borderRadius: 20, padding: 16, gap: 12 }}>
-            <CampoTexto etiqueta="¿Quién te debe?" placeholder="Nombre del cliente" value={cliente} onChangeText={setCliente} maxLength={60} />
-            <SelectorFecha etiqueta="¿Cuándo te paga?" fecha={vence} onCambiar={setVence} />
-          </View>
-        )}
-
-        {/* Nota opcional + registrar */}
-        <TextInput
-          value={nota}
-          onChangeText={setNota}
-          maxLength={100}
-          placeholder="Nota (opcional). Ej: Venta poleras diseño"
-          placeholderTextColor={colors.lavanda}
-          style={{ backgroundColor: colors.superficie, borderRadius: 16, padding: 16, fontFamily: fonts.normal, fontSize: 16, color: colors.lavanda, borderWidth: 1.5, borderColor: colors.lavandaSuave }}
-        />
-
-        <Boton titulo={textoBoton} color={esPendiente ? colors.naranjo : colorTipo} onPress={registrar} deshabilitado={formularioIncompleto || guardando} />
-
-        <HistorialMovimientos
-          movimientos={movimientos}
-          cargando={cargandoDatos}
-          limite={3}
-          onVerTodos={() => router.push({ pathname: '/registros', params: { vista: 'movimientos' } })}
-          onPresionar={setSeleccionado}
-        />
       </ScrollView>
-
-      <ModalCategorias
-        visible={modalCategorias}
-        categorias={propias}
-        nombresExistentes={categorias.map((c) => c.nombre)}
-        seleccionadaId={categoriaId}
-        onSeleccionar={(id) => { setCategoriaId(id); setModalCategorias(false); }}
-        onAgregar={agregarCategoria}
-        onRenombrar={cambiarNombreCategoria}
-        onEliminar={borrarCategoria}
-        onCerrar={() => setModalCategorias(false)}
-      />
-
-      <ModalMovimiento movimiento={seleccionado} categorias={categorias} onCerrar={() => setSeleccionado(null)} onCambio={cargarDatos} />
     </KeyboardAvoidingView>
   );
 }

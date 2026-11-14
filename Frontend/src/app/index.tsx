@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, useWindowDimensions, View } from 'react-native';
+import { useAlerta } from '../shared/components/Confirmar';
 import Boton from '../shared/components/Boton';
 import FormularioLogin from '../features/auth/components/FormularioLogin';
 import FormularioRegistro, { DatosRegistro } from '../features/auth/components/FormularioRegistro';
@@ -9,7 +10,6 @@ import { colors } from '../shared/theme/colors';
 import { fonts } from '../shared/theme/fonts';
 import FormularioActivacion from '../features/auth/components/FormularioActivacion';
 import FondoOndas from '../shared/components/FondoOndas';
-import { Alert } from 'react-native';
 import FormularioRecuperar from '../features/auth/components/FormularioRecuperar';
 import * as authService from '../features/auth/auth.service';
 import { useSesion } from '../features/auth/SesionContext';
@@ -26,6 +26,7 @@ const titulos = {
 };
 
 export default function Index() {
+  const alerta = useAlerta();
   const { width, height } = useWindowDimensions();
   const [modal, setModal] = useState<ModalAbierto>(null);
   const { iniciarSesion } = useSesion();
@@ -95,7 +96,7 @@ export default function Index() {
           <FormularioRecuperar
             onExito={() => {
               setModal('login');
-              Alert.alert('Contraseña actualizada', 'Ya puedes iniciar sesión con tu nueva contraseña.');
+              alerta('Contraseña actualizada', 'Ya puedes iniciar sesión con tu nueva contraseña.');
             }}
             onVolver={() => setModal('login')}
           />

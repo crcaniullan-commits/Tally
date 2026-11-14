@@ -11,7 +11,7 @@ function armarHistorial(ingresos: IngresoApi[], gastos: GastoApi[], categorias: 
     const c = buscar(id);
     return {
       categoria: c?.nombre ?? 'Sin categoría',
-      icono: c?.icono ?? 'tag-outline',
+      icono: c?.icono ?? 'tag',
       color: c?.color ?? colors.lavanda,
       colorSuave: c?.colorSuave ?? colors.lavandaSuave,
     };

@@ -1,130 +1,130 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
-import Boton from '../../../shared/components/Boton';
-import CampoTexto from '../../../shared/components/CampoTexto';
-import ModalFlotante from '../../../shared/components/ModalFlotante';
+import { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icono from '../../../shared/components/Icono';
 import { colors } from '../../../shared/theme/colors';
 import { fonts } from '../../../shared/theme/fonts';
 import { useEscala } from '../../../shared/utils/escala';
-import { Categoria, MAX_NOMBRE_CATEGORIA, normalizar } from '../categorias';
+import { Categoria, MAX_NOMBRE_CATEGORIA, normalizar, TipoMovimiento } from '../categorias';
+import { EstiloCategoria, OPCIONES_COLOR, OPCIONES_ICONO } from '../estilosPropios';
 
-type ModalCategoriasProps = {
+type Props = {
   visible: boolean;
-  categorias: Categoria[];       // Categorías propias del usuario
-  nombresExistentes: string[];   // Para evitar nombres repetidos
-  seleccionadaId: string | null;
-  onSeleccionar: (id: string) => void;
-  onAgregar: (nombre: string) => void;
-  onRenombrar: (categoria: Categoria, nombre: string) => void;
-  onEliminar: (categoria: Categoria) => void;
+  tipo: TipoMovimiento;            // Para el título: "de ingreso" o "de egreso"
+  editando: Categoria | null;      // null = nueva categoría; con valor = editar (propia o predeterminada)
+  nombresExistentes: string[];     // Para evitar nombres repetidos
+  onGuardar: (nombre: string, estilo: EstiloCategoria) => void;
   onCerrar: () => void;
 };
 
-// Mis categorías (Historia 003): elegir, crear, renombrar y eliminar categorías propias
-export default function ModalCategorias({
-  visible, categorias, nombresExistentes, seleccionadaId, onSeleccionar, onAgregar, onRenombrar, onEliminar, onCerrar,
-}: ModalCategoriasProps) {
-  const { e } = useEscala();
-  const [nombreNueva, setNombreNueva] = useState('');
+// Hoja inferior del mockup "Nueva categoría de venta" (Historia 003).
+// También se usa para editar el nombre, color e ícono de cualquier categoría (desde "Editar").
+export default function ModalCategorias({ visible, tipo, editando, nombresExistentes, onGuardar, onCerrar }: Props) {
+  const { t } = useEscala();
+  const insets = useSafeAreaInsets();
+  const [nombre, setNombre] = useState('');
+  const [colorIdx, setColorIdx] = useState(0);
+  const [icono, setIcono] = useState(OPCIONES_ICONO[0]);
   const [error, setError] = useState<string | undefined>();
-  const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [textoEdicion, setTextoEdicion] = useState('');
 
-  const repetido = (nombre: string, exceptoId?: string) =>
-    nombresExistentes.some((n) => normalizar(n) === normalizar(nombre)) &&
-    !categorias.some((c) => c.id === exceptoId && normalizar(c.nombre) === normalizar(nombre));
-
-  function agregar() {
-    const nombre = nombreNueva.trim();
-    if (repetido(nombre)) {
-      setError('Ya existe una categoría con ese nombre');
-      return;
-    }
-    onAgregar(nombre);
-    setNombreNueva('');
+  // Cada vez que se abre, parte vacío o con los datos de la categoría a editar
+  useEffect(() => {
+    if (!visible) return;
+    setNombre(editando?.nombre ?? '');
+    const idx = editando ? OPCIONES_COLOR.findIndex((c) => c.color === editando.color) : 0;
+    setColorIdx(idx >= 0 ? idx : 0);
+    setIcono(editando?.icono && OPCIONES_ICONO.includes(editando.icono) ? editando.icono : OPCIONES_ICONO[0]);
     setError(undefined);
+  }, [visible, editando]);
+
+  function guardar() {
+    const limpio = nombre.trim();
+    if (!limpio) return setError('Escribe un nombre');
+    const repetido = nombresExistentes.some((n) => normalizar(n) === normalizar(limpio))
+      && normalizar(limpio) !== normalizar(editando?.nombre ?? '');
+    if (repetido) return setError('Ya existe una categoría con ese nombre');
+    onGuardar(limpio, { icono, ...OPCIONES_COLOR[colorIdx], tipo });
   }
 
-  function guardarEdicion(c: Categoria) {
-    const nombre = textoEdicion.trim();
-    if (!nombre || nombre === c.nombre) return setEditandoId(null);
-    if (repetido(nombre, c.id)) return Alert.alert('Nombre repetido', 'Ya existe una categoría con ese nombre.');
-    onRenombrar(c, nombre);
-    setEditandoId(null);
-  }
-
-  function confirmarEliminar(c: Categoria) {
-    Alert.alert('Eliminar categoría', `¿Eliminar "${c.nombre}"? Los movimientos ya registrados no se borran.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => onEliminar(c) },
-    ]);
-  }
+  const etiqueta = { fontFamily: fonts.negrita, fontSize: t(11), color: colors.texto, marginBottom: t(6) };
+  const titulo = editando ? 'Editar categoría' : `Nueva categoría de ${tipo === 'ingreso' ? 'ingreso' : 'egreso'}`;
 
   return (
-    <ModalFlotante visible={visible} titulo="Mis categorías" onCerrar={onCerrar}>
-      {categorias.length === 0 ? (
-        <Text style={{ color: colors.lavanda, fontFamily: fonts.normal, fontSize: e(15) }}>
-          Aún no tienes categorías propias. Crea la primera aquí abajo.
-        </Text>
-      ) : (
-        <View style={{ gap: 8 }}>
-          {categorias.map((c) => {
-            const seleccionada = c.id === seleccionadaId;
-            const editando = c.id === editandoId;
-            return (
-              <View
-                key={c.id}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14,
-                  backgroundColor: c.colorSuave, borderWidth: 2, borderColor: seleccionada ? c.color : 'transparent',
-                }}
-              >
-                <MaterialCommunityIcons name={c.icono as any} size={e(22)} color={c.color} />
-                {editando ? (
-                  <TextInput
-                    value={textoEdicion} onChangeText={setTextoEdicion} autoFocus maxLength={MAX_NOMBRE_CATEGORIA}
-                    onSubmitEditing={() => guardarEdicion(c)}
-                    style={{ flex: 1, fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda, padding: 0 }}
-                  />
-                ) : (
-                  <Pressable style={{ flex: 1 }} onPress={() => onSeleccionar(c.id)}>
-                    <Text style={{ color: colors.lavanda, fontSize: e(16), fontFamily: seleccionada ? fonts.negrita : fonts.medio }}>
-                      {c.nombre}
-                    </Text>
-                  </Pressable>
-                )}
-                {editando ? (
-                  <Pressable hitSlop={8} onPress={() => guardarEdicion(c)}>
-                    <Ionicons name="checkmark-circle" size={e(26)} color={colors.verde} />
-                  </Pressable>
-                ) : (
-                  <>
-                    <Pressable hitSlop={8} onPress={() => { setEditandoId(c.id); setTextoEdicion(c.nombre); }}>
-                      <Ionicons name="pencil" size={e(20)} color={colors.lavanda} />
-                    </Pressable>
-                    <Pressable hitSlop={8} onPress={() => confirmarEliminar(c)}>
-                      <Ionicons name="trash-outline" size={e(20)} color={colors.rosado} />
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            );
-          })}
-        </View>
-      )}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar} statusBarTranslucent>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Pressable onPress={onCerrar} style={{ flex: 1, backgroundColor: 'rgba(60, 56, 82, 0.4)' }} />
 
-      <View style={{ gap: 10, marginTop: 16 }}>
-        <CampoTexto
-          etiqueta="Nueva categoría"
-          placeholder="Ej: Publicidad"
-          value={nombreNueva}
-          onChangeText={(t) => { setNombreNueva(t); setError(undefined); }}
-          maxLength={MAX_NOMBRE_CATEGORIA}
-          error={error}
-        />
-        <Boton titulo="Agregar categoría" onPress={agregar} deshabilitado={!nombreNueva.trim()} />
-      </View>
-    </ModalFlotante>
+        <View style={{
+          backgroundColor: colors.superficie, borderTopLeftRadius: t(24), borderTopRightRadius: t(24),
+          padding: t(20), paddingBottom: t(20) + insets.bottom, gap: t(16),
+        }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontFamily: fonts.extra, fontSize: t(14), color: colors.lavanda }}>{titulo}</Text>
+            <Pressable onPress={onCerrar} hitSlop={10} style={{ padding: t(4), borderRadius: 999, backgroundColor: colors.lavandaSuave }}>
+              <Icono nombre="x" tamano={t(16)} color={colors.lavanda} />
+            </Pressable>
+          </View>
+
+          <View>
+            <Text style={etiqueta}>Nombre de categoría</Text>
+            <TextInput
+              value={nombre}
+              onChangeText={(v) => { setNombre(v); setError(undefined); }}
+              maxLength={MAX_NOMBRE_CATEGORIA}
+              placeholder="Ej: Repostería"
+              placeholderTextColor={colors.textoSecundario}
+              style={{
+                paddingHorizontal: t(12), paddingVertical: t(8), fontSize: t(12), fontFamily: fonts.normal, color: colors.texto,
+                backgroundColor: colors.fondoApp, borderWidth: 1, borderColor: error ? colors.error : colors.lavandaOnda, borderRadius: t(12),
+              }}
+            />
+            {error && <Text style={{ fontFamily: fonts.medio, fontSize: t(11), color: colors.error, marginTop: t(4) }}>{error}</Text>}
+          </View>
+
+          <View>
+            <Text style={etiqueta}>Elige un color</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t(8) }}>
+              {OPCIONES_COLOR.map((c, i) => (
+                <Pressable key={c.color} onPress={() => setColorIdx(i)} style={{
+                  width: t(36), height: t(36), borderRadius: 999, alignItems: 'center', justifyContent: 'center',
+                  borderWidth: 2, borderColor: i === colorIdx ? colors.lavanda : 'transparent',
+                }}>
+                  <View style={{ width: t(28), height: t(28), borderRadius: 999, backgroundColor: c.color }} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View>
+            <Text style={etiqueta}>Elige un ícono</Text>
+            <ScrollView style={{ maxHeight: t(180) }} nestedScrollEnabled>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t(8) }}>
+              {OPCIONES_ICONO.map((nombreIcono) => {
+                const activo = nombreIcono === icono;
+                return (
+                  <Pressable key={nombreIcono} onPress={() => setIcono(nombreIcono)} style={{
+                    width: '14%', flexGrow: 1, paddingVertical: t(10), borderRadius: t(12), alignItems: 'center', borderWidth: 1,
+                    backgroundColor: activo ? colors.lavandaSuave : colors.fondoApp,
+                    borderColor: activo ? colors.lavanda : colors.lavandaOnda,
+                  }}>
+                    <Icono nombre={nombreIcono} tamano={t(16)} color={activo ? OPCIONES_COLOR[colorIdx].color : colors.textoSecundario} />
+                  </Pressable>
+                );
+              })}
+            </View>
+            </ScrollView>
+          </View>
+
+          <Pressable onPress={guardar} style={({ pressed }) => ({
+            paddingVertical: t(10), borderRadius: t(12), alignItems: 'center', backgroundColor: colors.lavanda, opacity: pressed ? 0.85 : 1,
+          })}>
+            <Text style={{ fontFamily: fonts.extra, fontSize: t(12), color: colors.superficie }}>
+              {editando ? 'Guardar cambios' : 'Guardar categoría'}
+            </Text>
+          </Pressable>
+
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

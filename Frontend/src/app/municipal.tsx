@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useAlerta, useConfirmar } from '../shared/components/Confirmar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { traducirError } from '../features/auth/errores';
 import { useSesion } from '../features/auth/SesionContext';
@@ -14,10 +14,12 @@ import {
   revocarClave,
   UsuarioMunicipal,
 } from '../features/municipal/municipal.service';
+import { exportarClaves } from '../features/municipal/exportarClaves';
 import { ApiError } from '../shared/api/cliente';
 import Boton from '../shared/components/Boton';
 import CampoTexto from '../shared/components/CampoTexto';
 import Encabezado from '../shared/components/Encabezado';
+import Icono from '../shared/components/Icono';
 import { colors } from '../shared/theme/colors';
 import { fonts } from '../shared/theme/fonts';
 import { sombras } from '../shared/theme/sombras';
@@ -32,6 +34,8 @@ const fecha = (iso: string | null) => (iso ? aDMA(new Date(iso)) : '—');
 // Backoffice municipal (Historia 009): generar, reenviar y anular claves, y buscar emprendedores.
 // La municipalidad NO ve datos financieros: solo gestiona el acceso.
 export default function Municipal() {
+  const alerta = useAlerta();
+  const confirmar = useConfirmar();
   const { token, cerrarSesion, manejarError } = useSesion();
   const { e } = useEscala();
   const insets = useSafeAreaInsets();
@@ -39,7 +43,8 @@ export default function Municipal() {
   const [correo, setCorreo] = useState('');
   const [errorCorreo, setErrorCorreo] = useState<string | undefined>();
   const [claves, setClaves] = useState<ClaveEmitida[]>([]);
-  const [ultima, setUltima] = useState<ClaveEmitida | null>(null);
+  const [generadas, setGeneradas] = useState<ClaveEmitida[]>([]); // Resultado del último lote
+  const [progreso, setProgreso] = useState<string | null>(null);
   const [rut, setRut] = useState('');
   const [errorRut, setErrorRut] = useState<string | undefined>();
   const [encontrado, setEncontrado] = useState<UsuarioMunicipal | null>(null);
@@ -52,23 +57,33 @@ export default function Municipal() {
     await guardarClavesEmitidas(nueva);
   }
 
+  // Generación masiva (Historia 009): uno o varios correos, separados por coma, espacio o salto de línea
   async function generar() {
     if (!token) return;
-    if (!/^\S+@\S+\.\S+$/.test(correo.trim())) return setErrorCorreo('Ingresa un correo válido');
+    const correos = [...new Set(correo.split(/[\s,;]+/).map((c) => c.trim().toLowerCase()).filter(Boolean))];
+    const invalidos = correos.filter((c) => !/^\S+@\S+\.\S+$/.test(c));
+    if (correos.length === 0) return setErrorCorreo('Ingresa al menos un correo');
+    if (invalidos.length > 0) return setErrorCorreo(`Correo inválido: ${invalidos.join(', ')}`);
     setErrorCorreo(undefined);
     setOcupado('generar');
-    try {
-      const clave = await emitirClave(correo, token);
-      const emitida: ClaveEmitida = { ...clave, email: correo.trim().toLowerCase() };
-      setUltima(emitida);
-      await actualizarLista([emitida, ...claves]);
-      setCorreo('');
-    } catch (error) {
-      manejarError(error);
-      Alert.alert('No se pudo generar la clave', traducirError(error));
-    } finally {
-      setOcupado(null);
+    const nuevas: ClaveEmitida[] = [];
+    const fallidos: string[] = [];
+    for (let i = 0; i < correos.length; i++) {
+      setProgreso(`Generando ${i + 1} de ${correos.length}...`);
+      try {
+        const clave = await emitirClave(correos[i], token);
+        nuevas.push({ ...clave, email: correos[i] });
+      } catch (error) {
+        manejarError(error);
+        fallidos.push(`${correos[i]}: ${traducirError(error)}`);
+      }
     }
+    setProgreso(null);
+    setGeneradas(nuevas);
+    await actualizarLista([...nuevas, ...claves]);
+    if (nuevas.length > 0) setCorreo('');
+    setOcupado(null);
+    if (fallidos.length > 0) alerta('Algunas claves no se generaron', fallidos.join('\n'));
   }
 
   async function reenviar(c: ClaveEmitida) {
@@ -76,31 +91,25 @@ export default function Municipal() {
     setOcupado(c.id);
     try {
       await reenviarClave(c.id, token);
-      Alert.alert('Correo reenviado', `Se volvió a enviar la clave a ${c.email}.`);
+      alerta('Correo reenviado', `Se volvió a enviar la clave a ${c.email}.`);
     } catch (error) {
       manejarError(error);
-      Alert.alert('No se pudo reenviar', traducirError(error));
+      alerta('No se pudo reenviar', traducirError(error));
     } finally {
       setOcupado(null);
     }
   }
 
-  function anular(c: ClaveEmitida) {
-    Alert.alert('Anular clave', `La clave ${c.code} dejará de funcionar. ¿Continuar?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Anular', style: 'destructive', onPress: async () => {
-          if (!token) return;
-          try {
-            await revocarClave(c.code, token);
-            await actualizarLista(claves.map((x) => (x.id === c.id ? { ...x, revocada: true } : x)));
-          } catch (error) {
-            manejarError(error);
-            Alert.alert('No se pudo anular', traducirError(error));
-          }
-        },
-      },
-    ]);
+  async function anular(c: ClaveEmitida) {
+    const ok = await confirmar({ titulo: 'Anular clave', mensaje: `La clave ${c.code} dejará de funcionar. ¿Continuar?`, textoConfirmar: 'Anular', icono: 'key' });
+    if (!ok || !token) return;
+    try {
+      await revocarClave(c.code, token);
+      await actualizarLista(claves.map((x) => (x.id === c.id ? { ...x, revocada: true } : x)));
+    } catch (error) {
+      manejarError(error);
+      alerta('No se pudo anular', traducirError(error));
+    }
   }
 
   async function buscar() {
@@ -114,16 +123,16 @@ export default function Municipal() {
     } catch (error) {
       manejarError(error);
       const noExiste = error instanceof ApiError && error.status === 404;
-      Alert.alert(noExiste ? 'Sin resultados' : 'No se pudo buscar', noExiste ? 'No hay un emprendedor registrado con ese RUT.' : traducirError(error));
+      alerta(noExiste ? 'Sin resultados' : 'No se pudo buscar', noExiste ? 'No hay un emprendedor registrado con ese RUT.' : traducirError(error));
     } finally {
       setOcupado(null);
     }
   }
 
   const texto = { fontFamily: fonts.normal, fontSize: e(15), color: colors.lavanda };
-  const titulo = (icono: keyof typeof Ionicons.glyphMap, t: string) => (
+  const titulo = (icono: string, t: string) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Ionicons name={icono} size={e(24)} color={colors.lavanda} />
+      <Icono nombre={icono} tamano={e(24)} color={colors.lavanda} />
       <Text style={{ fontFamily: fonts.negrita, fontSize: e(20), color: colors.lavanda }}>{t}</Text>
     </View>
   );
@@ -135,28 +144,54 @@ export default function Municipal() {
           titulo="Panel municipal"
           subtitulo="Activación de emprendedores"
           volver={false}
-          derecha={<Pressable hitSlop={10} onPress={cerrarSesion}><Ionicons name="log-out-outline" size={e(30)} color={colors.lavanda} /></Pressable>}
+          derecha={<Pressable hitSlop={10} onPress={cerrarSesion}><Icono nombre="log-out" tamano={e(30)} color={colors.lavanda} /></Pressable>}
         />
 
         {/* Generar clave */}
         <View style={tarjeta}>
-          {titulo('key-outline', 'Generar clave de acceso')}
-          <Text style={texto}>La clave es de un solo uso, vence en un año y se envía al correo del emprendedor.</Text>
-          <CampoTexto etiqueta="Correo del emprendedor" value={correo} onChangeText={setCorreo} keyboardType="email-address"
-            autoCapitalize="none" placeholder="correo@ejemplo.cl" error={errorCorreo} maxLength={100} />
-          <Boton titulo={ocupado === 'generar' ? 'Generando...' : 'Generar y enviar clave'} onPress={generar} deshabilitado={!correo.trim() || ocupado !== null} />
-          {ultima && (
-            <View style={{ backgroundColor: colors.verdeSuave, borderRadius: 16, padding: 14, alignItems: 'center', gap: 4 }}>
-              <Text style={texto}>Clave para {ultima.email}</Text>
-              <Text selectable style={{ fontFamily: fonts.titulo, fontSize: e(44), color: colors.verde, letterSpacing: 4 }}>{ultima.code}</Text>
-              <Text style={{ ...texto, fontSize: e(13) }}>Mantén presionado para copiarla</Text>
+          {titulo('key', 'Generar claves de acceso')}
+          <Text style={texto}>Cada clave es de un solo uso, vence en un año y se envía al correo del emprendedor. Puedes generar varias a la vez: escribe un correo por línea o sepáralos con comas.</Text>
+          <CampoTexto etiqueta="Correos de los emprendedores" value={correo} onChangeText={setCorreo} keyboardType="email-address"
+            autoCapitalize="none" placeholder={'correo1@ejemplo.cl\ncorreo2@ejemplo.cl'} error={errorCorreo}
+            multiline style={{ minHeight: 90, textAlignVertical: 'top' }} />
+          <Boton titulo={progreso ?? 'Generar y enviar claves'} onPress={generar} deshabilitado={!correo.trim() || ocupado !== null} />
+          {generadas.length > 0 && (
+            <View style={{ backgroundColor: colors.verdeSuave, borderRadius: 16, padding: 14, gap: 8 }}>
+              <Text style={{ ...texto, fontFamily: fonts.negrita }}>
+                {generadas.length === 1 ? 'Clave generada' : `${generadas.length} claves generadas`} y enviadas por correo:
+              </Text>
+              {generadas.map((g) => (
+                <View key={g.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <Text numberOfLines={1} style={{ ...texto, flex: 1 }}>{g.email}</Text>
+                  <Text selectable style={{ fontFamily: fonts.titulo, fontSize: e(28), color: colors.verde, letterSpacing: 3 }}>{g.code}</Text>
+                </View>
+              ))}
+              <Text style={{ ...texto, fontSize: e(13) }}>Mantén presionada una clave para copiarla</Text>
             </View>
           )}
         </View>
 
         {/* Claves emitidas */}
         <View style={tarjeta}>
-          {titulo('list-outline', 'Claves emitidas')}
+          {titulo('list', 'Claves emitidas')}
+          {/* Exportar a Excel para que el municipio las distribuya (Historia 009) */}
+          {claves.length > 0 && (
+            <Boton
+              titulo={ocupado === 'exportar' ? 'Generando Excel...' : 'Exportar claves (Excel)'}
+              variante="secundario"
+              deshabilitado={ocupado !== null}
+              onPress={async () => {
+                setOcupado('exportar');
+                try {
+                  await exportarClaves(claves);
+                } catch (error) {
+                  alerta('No se pudo exportar', traducirError(error));
+                } finally {
+                  setOcupado(null);
+                }
+              }}
+            />
+          )}
           {claves.length === 0 ? (
             <Text style={texto}>Aún no has generado claves desde este dispositivo.</Text>
           ) : claves.map((c) => (
@@ -184,7 +219,7 @@ export default function Municipal() {
 
         {/* Buscar emprendedor */}
         <View style={tarjeta}>
-          {titulo('search-outline', 'Buscar emprendedor')}
+          {titulo('search', 'Buscar emprendedor')}
           <CampoTexto etiqueta="RUT" value={rut} onChangeText={setRut} placeholder="12.345.678-5" autoCapitalize="characters" error={errorRut} maxLength={12} />
           <Boton titulo={ocupado === 'buscar' ? 'Buscando...' : 'Buscar'} onPress={buscar} deshabilitado={!rut.trim() || ocupado !== null} variante="secundario" />
           {encontrado && (

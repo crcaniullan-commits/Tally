@@ -1,3 +1,4 @@
+import { API, FILTROS } from '../../shared/api/rutas';
 import { peticion } from '../../shared/api/cliente';
 import { MetodoPago } from './metodosPago';
 
@@ -21,7 +22,6 @@ export type GastoApi = {
   created_at: string;
 };
 
-const base = (empresaId: string) => `/app/empresas/${empresaId}`;
 const nota = (texto: string) => (texto.trim() ? texto.trim() : undefined); // Sin nota → no se envía
 
 // POST /incomes → registra un ingreso
@@ -30,7 +30,7 @@ export function crearIngreso(
   empresaId: string,
   token: string,
 ): Promise<IngresoApi> {
-  return peticion<IngresoApi>(`${base(empresaId)}/incomes/`, {
+  return peticion<IngresoApi>(API.ingresos(empresaId), {
     metodo: 'POST',
     cuerpo: { monto: datos.monto, payment_method: datos.metodo, category_id: datos.categoriaId, descripcion: nota(datos.nota) },
     token,
@@ -43,7 +43,7 @@ export function crearGasto(
   empresaId: string,
   token: string,
 ): Promise<GastoApi> {
-  return peticion<GastoApi>(`${base(empresaId)}/expenses/`, {
+  return peticion<GastoApi>(API.gastos(empresaId), {
     metodo: 'POST',
     cuerpo: { monto: datos.monto, category_id: datos.categoriaId, descripcion: nota(datos.nota) },
     token,
@@ -52,11 +52,11 @@ export function crearGasto(
 
 // GET → últimos 30 ingresos y gastos (máximo que permite el backend por página)
 export async function listarIngresos(empresaId: string, token: string): Promise<IngresoApi[]> {
-  return (await peticion<IngresoApi[]>(`${base(empresaId)}/incomes/?limit=30`, { token })) ?? [];
+  return (await peticion<IngresoApi[]>(`${API.ingresos(empresaId)}?${FILTROS.limite}=30`, { token })) ?? [];
 }
 
 export async function listarGastos(empresaId: string, token: string): Promise<GastoApi[]> {
-  return (await peticion<GastoApi[]>(`${base(empresaId)}/expenses/?limit=30`, { token })) ?? [];
+  return (await peticion<GastoApi[]>(`${API.gastos(empresaId)}?${FILTROS.limite}=30`, { token })) ?? [];
 }
 
 // Trae TODOS los movimientos desde una fecha, página por página (el backend entrega máximo 30 por vez)
@@ -65,7 +65,7 @@ async function traerTodo<T>(ruta: string, desde: string, token: string): Promise
   const MAX_PAGINAS = 30; // Tope de seguridad: hasta 900 movimientos por período
   const todos: T[] = [];
   for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
-    const lote = (await peticion<T[]>(`${ruta}?limit=${POR_PAGINA}&offset=${pagina * POR_PAGINA}&since=${desde}`, { token })) ?? [];
+    const lote = (await peticion<T[]>(`${ruta}?${FILTROS.limite}=${POR_PAGINA}&${FILTROS.desplazamiento}=${pagina * POR_PAGINA}&${FILTROS.desde}=${desde}`, { token })) ?? [];
     todos.push(...lote);
     if (lote.length < POR_PAGINA) break;
   }
@@ -74,17 +74,17 @@ async function traerTodo<T>(ruta: string, desde: string, token: string): Promise
 
 // desde: fecha en formato AAAA-MM-DD
 export function ingresosDesde(desde: string, empresaId: string, token: string) {
-  return traerTodo<IngresoApi>(`${base(empresaId)}/incomes/`, desde, token);
+  return traerTodo<IngresoApi>(API.ingresos(empresaId), desde, token);
 }
 
 export function gastosDesde(desde: string, empresaId: string, token: string) {
-  return traerTodo<GastoApi>(`${base(empresaId)}/expenses/`, desde, token);
+  return traerTodo<GastoApi>(API.gastos(empresaId), desde, token);
 }
 
 // DELETE → elimina un ingreso o un gasto (Historia 012)
 export function eliminarMovimiento(tipo: 'ingreso' | 'egreso', id: string, empresaId: string, token: string): Promise<unknown> {
-  const recurso = tipo === 'ingreso' ? 'incomes' : 'expenses';
-  return peticion(`${base(empresaId)}/${recurso}/${id}`, { metodo: 'DELETE', token });
+  const ruta = tipo === 'ingreso' ? API.ingreso(empresaId, id) : API.gasto(empresaId, id);
+  return peticion(ruta, { metodo: 'DELETE', token });
 }
 
 // Editar (Historia 012): el backend aún no tiene PATCH, así que se crea el movimiento corregido
@@ -101,4 +101,14 @@ export async function reemplazarMovimiento(
     await crearGasto({ monto: nuevo.monto, categoriaId: nuevo.categoriaId, nota: nuevo.nota }, empresaId, token);
   }
   await eliminarMovimiento(original.tipo, original.id, empresaId, token);
+}
+
+// ¿La categoría tiene movimientos? (Historia 003: no se puede eliminar si los tiene)
+export async function categoriaTieneMovimientos(categoriaId: string, empresaId: string, token: string): Promise<boolean> {
+  const filtro = `?${FILTROS.limite}=1&${FILTROS.categoria}=${categoriaId}`;
+  const [ingresos, gastos] = await Promise.all([
+    peticion<IngresoApi[]>(`${API.ingresos(empresaId)}${filtro}`, { token }),
+    peticion<GastoApi[]>(`${API.gastos(empresaId)}${filtro}`, { token }),
+  ]);
+  return (ingresos?.length ?? 0) > 0 || (gastos?.length ?? 0) > 0;
 }

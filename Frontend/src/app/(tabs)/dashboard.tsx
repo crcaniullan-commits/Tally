@@ -1,155 +1,127 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { traducirError } from '../../features/auth/errores';
 import { useSesion } from '../../features/auth/SesionContext';
-import { categoriasPredeterminadas, combinarCategorias } from '../../features/categorias/categorias';
-import { listarCategorias } from '../../features/categorias/categorias.service';
-import GraficoBarras from '../../features/dashboard/components/GraficoBarras';
-import { aTexto, calcularResumen, inicioPeriodo, Periodo, Resumen } from '../../features/dashboard/resumen';
+import { Agrupacion, calcularDashboard, PERIODOS, TipoGrafico } from '../../features/dashboard/calcularDashboard';
+import { BarrasHorizontales, BarrasVerticales, ComparadoHorizontal, ComparadoVertical, Torta } from '../../features/dashboard/components/Graficos';
+import ListaDesglose from '../../features/dashboard/components/ListaDesglose';
+import { FiltroDashboard, Periodo } from '../../features/dashboard/resumen';
+import { useDatosDashboard } from '../../features/dashboard/useDatosDashboard';
 import TarjetaMeta from '../../features/metas/components/TarjetaMeta';
-import { gastosDesde, ingresosDesde } from '../../features/movimientos/movimientos.service';
+import BarraTitulo from '../../shared/components/BarraTitulo';
+import EstadoEmpresa from '../../shared/components/EstadoEmpresa';
+import Icono from '../../shared/components/Icono';
+import Segmentado from '../../shared/components/Segmentado';
 import { colors } from '../../shared/theme/colors';
 import { fonts } from '../../shared/theme/fonts';
-import { sombras } from '../../shared/theme/sombras';
 import { useEscala } from '../../shared/utils/escala';
-import { formatearMonto } from '../../shared/utils/formato';
+import { pesos } from '../../shared/utils/formato';
 
-const periodos: { id: Periodo; nombre: string }[] = [
-  { id: 'semana', nombre: 'Semana' },
-  { id: 'mes', nombre: 'Mes' },
-  { id: 'anio', nombre: 'Año' },
-];
+const BOTONES_GRAFICO = [['torta', 'pie-chart'], ['barras', 'bar-chart-3'], ['horizontal', 'bar-chart-h']] as const;
 
-const tarjeta = { backgroundColor: colors.superficie, borderRadius: 20, padding: 16, ...sombras.suave };
-
+// Dashboard (Historia 006): meta, filtros, gráfico y desglose.
+// Los datos y cálculos viven en features/dashboard (useDatosDashboard y calcularDashboard).
 export default function Dashboard() {
-  const { token, empresa, manejarError } = useSesion();
-  const { e } = useEscala();
-  const insets = useSafeAreaInsets();
+  const { token, empresa } = useSesion();
+  const { t } = useEscala();
+  const [filtro, setFiltro] = useState<FiltroDashboard>('ingresos');
+  const [grafico, setGrafico] = useState<TipoGrafico>('torta');
+  const [agrupacion, setAgrupacion] = useState<Agrupacion>('categoria');
   const [periodo, setPeriodo] = useState<Periodo>('mes');
-  const [resumen, setResumen] = useState<Resumen | null>(null);
-  const [ventasMes, setVentasMes] = useState(0); // Para la meta mensual
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { datos, cargando, error, cargar, recargas } = useDatosDashboard(periodo);
 
-  const titulo = { fontFamily: fonts.negrita, fontSize: e(22), color: colors.lavanda };
-
-  const cargar = useCallback(async () => {
-    if (!token || !empresa) return;
-    setCargando(true);
-    setError(null);
-    try {
-      const desde = aTexto(inicioPeriodo(periodo));
-      const desdeMes = aTexto(inicioPeriodo('mes'));
-      const [ingresos, gastos, cats, ingresosMes] = await Promise.all([
-        ingresosDesde(desde, empresa.id, token),
-        gastosDesde(desde, empresa.id, token),
-        listarCategorias(empresa.id, token).catch(() => []),
-        periodo === 'mes' ? Promise.resolve(null) : ingresosDesde(desdeMes, empresa.id, token),
-      ]);
-      setVentasMes((ingresosMes ?? ingresos).reduce((s, i) => s + i.monto, 0));
-      const categorias = cats.length ? combinarCategorias(cats) : categoriasPredeterminadas;
-      setResumen(calcularResumen(periodo, ingresos, gastos, categorias));
-    } catch (err) {
-      manejarError(err);
-      setError(traducirError(err));
-    } finally {
-      setCargando(false);
-    }
-  }, [token, empresa, periodo, manejarError]);
-
-  // Se recarga cada vez que se entra a la pestaña (por si se registró algo en Inicio)
-  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  const r = datos ? calcularDashboard(datos, filtro, periodo, agrupacion) : null;
+  // Comparando ingresos y egresos por fecha no hay torta (no sirve para comparar)
+  const graficoVisible: TipoGrafico = r?.comparando && grafico === 'torta' ? 'barras' : grafico;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.fondoApp }}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 16, paddingBottom: 32, gap: 20 }}
+      contentContainerStyle={{ paddingBottom: t(20) }}
       refreshControl={<RefreshControl refreshing={false} onRefresh={cargar} />}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: fonts.negrita, fontSize: e(30), color: colors.lavanda }}>Salud financiera</Text>
-          <Text numberOfLines={1} style={{ fontFamily: fonts.medio, fontSize: e(17), color: colors.lavanda, opacity: 0.8 }}>
-            {empresa?.nombre_empresa ?? ''}
-          </Text>
-        </View>
-      </View>
+      <BarraTitulo titulo="Dashboard" />
+      <View style={{ paddingHorizontal: t(16), paddingTop: t(12), gap: t(12) }}>
+        <EstadoEmpresa />
 
-      {/* Selector de período */}
-      <View style={{ flexDirection: 'row', borderRadius: 26, backgroundColor: colors.lavandaSuave }}>
-        {periodos.map((p) => {
-          const activo = p.id === periodo;
-          return (
-            <Pressable key={p.id} onPress={() => setPeriodo(p.id)}
-              style={{ flex: 1, paddingVertical: e(12), borderRadius: 26, alignItems: 'center', backgroundColor: activo ? colors.lavanda : 'transparent' }}>
-              <Text style={{ fontFamily: fonts.negrita, fontSize: e(17), color: activo ? colors.superficie : colors.lavanda }}>{p.nombre}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        {/* Meta de venta del mes (Historia 007) */}
+        {empresa && token && <TarjetaMeta empresaId={empresa.id} token={token} recargar={recargas} />}
 
-      {cargando && !resumen ? (
-        <ActivityIndicator color={colors.lavanda} style={{ paddingVertical: 40 }} />
-      ) : error ? (
-        <Text style={{ fontFamily: fonts.medio, fontSize: e(16), color: colors.error, textAlign: 'center' }}>{error}</Text>
-      ) : resumen && (
-        <>
-          {/* Totales del período */}
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            {[
-              { t: 'Ingresos', v: resumen.ingresos, c: colors.ingreso },
-              { t: 'Gastos', v: resumen.gastos, c: colors.egreso },
-            ].map((x) => (
-              <View key={x.t} style={[tarjeta, { flex: 1, gap: 4 }]}>
-                <Text style={{ fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda }}>{x.t}</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.negrita, fontSize: e(24), color: x.c }}>
-                  ${formatearMonto(x.v)}
-                </Text>
-              </View>
-            ))}
-          </View>
+        {/* Qué se quiere ver y en qué período */}
+        <Segmentado
+          opciones={[
+            { id: 'ingresos', nombre: 'Ingresos', color: colors.verde },
+            { id: 'egresos', nombre: 'Egresos', color: colors.rosado },
+            { id: 'ambos', nombre: 'Ing. / Egr.', color: colors.lavanda },
+          ]}
+          valor={filtro}
+          onCambiar={setFiltro}
+          colorInactivo={colors.texto}
+          borde
+        />
+        <Segmentado opciones={PERIODOS.map((p) => ({ id: p.id, nombre: p.nombre }))} valor={periodo} onCambiar={setPeriodo} borde alto={4} />
 
-          <View style={[tarjeta, { gap: 4, alignItems: 'center' }]}>
-            <Text style={{ fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda }}>Balance (ganancia)</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit
-              style={{ fontFamily: fonts.titulo, fontSize: e(48), color: resumen.balance >= 0 ? colors.ingreso : colors.egreso }}>
-              {resumen.balance < 0 ? '−' : ''}${formatearMonto(Math.abs(resumen.balance))}
-            </Text>
-          </View>
-
-          {/* Meta de venta del mes (Historia 007) */}
-          {empresa && <TarjetaMeta empresaId={empresa.id} ventasDelMes={ventasMes} />}
-
-          {/* Ingresos vs gastos */}
-          <View style={[tarjeta, { gap: 14 }]}>
-            <Text style={titulo}>Ingresos vs gastos</Text>
-            <GraficoBarras barras={resumen.barras} />
-          </View>
-
-          {/* Gastos por categoría */}
-          <View style={[tarjeta, { gap: 14 }]}>
-            <Text style={titulo}>Gastos por categoría</Text>
-            {resumen.gastosPorCategoria.length === 0 ? (
-              <Text style={{ fontFamily: fonts.normal, fontSize: e(16), color: colors.lavanda }}>Sin gastos en este período.</Text>
-            ) : resumen.gastosPorCategoria.map((g) => (
-              <View key={g.nombre} style={{ gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
-                  <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda }}>{g.nombre}</Text>
-                  <Text style={{ fontFamily: fonts.negrita, fontSize: e(16), color: colors.lavanda }}>
-                    ${formatearMonto(g.total)} · {g.porcentaje}%
+        {/* Tarjeta principal: total, indicador, gráfico y desglose */}
+        <View style={{ backgroundColor: colors.superficie, borderRadius: t(16), padding: t(16), gap: t(16), borderWidth: 1, borderColor: colors.lavandaOnda, boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.06)' }}>
+          {cargando && !r ? (
+            <ActivityIndicator color={colors.lavanda} style={{ paddingVertical: t(60) }} />
+          ) : error || !r ? (
+            <Text style={{ fontFamily: fonts.medio, fontSize: t(12), color: colors.error, textAlign: 'center', paddingVertical: t(40) }}>{error}</Text>
+          ) : (
+            <>
+              {/* Total a la izquierda; a la derecha, el tipo de gráfico sobre el indicador */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t(8) }}>
+                <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.extra, fontSize: t(24), color: colors.texto, letterSpacing: -0.5 }}>{pesos(r.total)}</Text>
+                  <Text style={{ fontFamily: fonts.medio, fontSize: t(12), color: colors.textoSecundario }}>{r.subtitulo}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: t(6) }}>
+                  <View style={{ flexDirection: 'row', backgroundColor: colors.lavandaSuave, padding: t(3), borderRadius: t(10), borderWidth: 1, borderColor: colors.lavandaOnda }}>
+                    {BOTONES_GRAFICO.filter(([id]) => !(r.comparando && id === 'torta')).map(([id, icono]) => {
+                      const activo = graficoVisible === id;
+                      return (
+                        <Pressable key={id} onPress={() => setGrafico(id)} style={{ padding: t(5), borderRadius: t(7), backgroundColor: activo ? colors.lavanda : 'transparent' }}>
+                          <Icono nombre={icono} tamano={t(14)} color={activo ? colors.superficie : colors.lavanda} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ fontFamily: fonts.extra, fontSize: t(11), color: r.insignia.color, backgroundColor: r.insignia.fondo, paddingHorizontal: t(10), paddingVertical: t(4), borderRadius: t(8), overflow: 'hidden' }}>
+                    {r.insignia.texto}
                   </Text>
                 </View>
-                <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.lavandaSuave, overflow: 'hidden' }}>
-                  <View style={{ width: `${g.porcentaje}%`, height: '100%', backgroundColor: g.color, borderRadius: 6 }} />
-                </View>
               </View>
-            ))}
-          </View>
-        </>
-      )}
+
+              {/* Ver el gráfico por categoría o comparando fechas */}
+              <Segmentado
+                opciones={[{ id: 'categoria', nombre: 'Por categoría' }, { id: 'fecha', nombre: 'Por fecha' }]}
+                valor={agrupacion}
+                onCambiar={setAgrupacion}
+                alto={4}
+              />
+
+              <View style={{ paddingVertical: t(4), alignItems: 'center', justifyContent: 'center', minHeight: t(140) }}>
+                {r.items.length === 0 ? (
+                  <Text style={{ fontFamily: fonts.medio, fontSize: t(12), color: colors.textoSecundario, textAlign: 'center' }}>
+                    Sin movimientos en este período.{'\n'}Registra uno en Inicio para ver tu gráfico.
+                  </Text>
+                ) : (
+                  <View style={{ width: '100%', gap: t(10) }}>
+                    <Text style={{ fontFamily: fonts.extra, fontSize: t(12), color: colors.lavanda }}>{r.tituloGrafico}</Text>
+                    {r.comparando
+                      ? (graficoVisible === 'barras' ? <ComparadoVertical comparado={r.comparado} /> : <ComparadoHorizontal comparado={r.comparado} />)
+                      : graficoVisible === 'torta' ? <Torta items={r.agrupados} total={r.total} etiqueta={r.etiquetaCentro} />
+                      : graficoVisible === 'barras' ? <BarrasVerticales items={r.agrupados} />
+                      : <BarrasHorizontales items={r.items} />}
+                  </View>
+                )}
+              </View>
+
+              {r.items.length > 0 && <ListaDesglose items={r.items} comparando={r.comparando} />}
+            </>
+          )}
+        </View>
+      </View>
     </ScrollView>
   );
 }

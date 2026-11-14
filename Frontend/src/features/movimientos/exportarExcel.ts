@@ -1,47 +1,79 @@
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
+import {
+  bordes, C, celda, Estilo, estiloEncabezado, estiloSubtitulo, estiloTitulo, fechaExcel as fecha, guardarYCompartir, horaExcel as hora,
+} from '../../shared/utils/excel';
 import { Movimiento } from './components/HistorialMovimientos';
 
-const dosDigitos = (n: number) => String(n).padStart(2, '0');
-const fecha = (f: Date) => `${dosDigitos(f.getDate())}-${dosDigitos(f.getMonth() + 1)}-${f.getFullYear()}`;
+// Excel con colores de Tally (Historia 005)
+const MONEDA = '"$"#,##0;-"$"#,##0';
+const COLUMNAS = ['Fecha', 'Hora', 'Tipo', 'Categoría', 'Método de pago', 'Comentario', 'Monto'];
 
-// Genera un archivo Excel con los movimientos y abre el menú para compartirlo
-// (WhatsApp, correo, Drive, etc.) — Historia 005
-export async function exportarExcel(movimientos: Movimiento[], nombreArchivo: string) {
-  const filas = movimientos.map((m) => ({
-    Fecha: fecha(m.fecha),
-    Tipo: m.tipo === 'ingreso' ? 'Ingreso' : 'Gasto',
-    Categoría: m.categoria,
-    'Método de pago': m.metodo || '-',
-    Nota: m.nota || '-',
-    Monto: m.tipo === 'ingreso' ? m.monto : -m.monto, // Gastos en negativo para poder sumar
-  }));
-
+// Genera el archivo y abre el menú para compartirlo (WhatsApp, correo, Drive...). Devuelve true si se completó.
+export async function exportarExcel(movimientos: Movimiento[], nombreArchivo: string, empresa: string, periodo: string): Promise<boolean> {
   const totalIngresos = movimientos.filter((m) => m.tipo === 'ingreso').reduce((s, m) => s + m.monto, 0);
-  const totalGastos = movimientos.filter((m) => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0);
+  const totalEgresos = movimientos.filter((m) => m.tipo === 'egreso').reduce((s, m) => s + m.monto, 0);
+  const n = COLUMNAS.length;
+  const vacia = (s: Estilo) => Array.from({ length: n - 1 }, () => celda('', s));
 
-  const hoja = XLSX.utils.json_to_sheet(filas);
-  XLSX.utils.sheet_add_aoa(hoja, [
+  // 1) Título y datos del reporte
+  const titulo = estiloTitulo;
+  const sub = estiloSubtitulo;
+  const filas: unknown[][] = [
+    [celda('Tally · Reporte de movimientos', titulo), ...vacia(titulo)],
+    [celda(`${empresa}  ·  Período: ${periodo}  ·  Descargado el ${fecha(new Date())}`, sub), ...vacia(sub)],
     [],
-    ['Total ingresos', '', '', '', '', totalIngresos],
-    ['Total gastos', '', '', '', '', -totalGastos],
-    ['Balance', '', '', '', '', totalIngresos - totalGastos],
-  ], { origin: -1 });
-  hoja['!cols'] = [{ wch: 12 }, { wch: 9 }, { wch: 16 }, { wch: 16 }, { wch: 30 }, { wch: 12 }];
+  ];
+
+  // 2) Encabezados
+  const encabezado = estiloEncabezado;
+  filas.push(COLUMNAS.map((c) => celda(c, encabezado)));
+
+  // 3) Movimientos con filas alternadas y tipo/monto en color
+  movimientos.forEach((m, i) => {
+    const fondo = { fgColor: { rgb: i % 2 === 0 ? C.blanco : C.fondo } };
+    const base = { font: { color: { rgb: C.texto } }, fill: fondo, border: bordes, alignment: { vertical: 'center' } };
+    const esIngreso = m.tipo === 'ingreso';
+    const color = esIngreso ? C.verde : C.rosado;
+    filas.push([
+      celda(fecha(m.fecha), { ...base, alignment: { horizontal: 'center' } }),
+      celda(hora(m.fecha), { ...base, alignment: { horizontal: 'center' } }),
+      celda(esIngreso ? 'Ingreso' : 'Egreso', { ...base, font: { bold: true, color: { rgb: color } }, alignment: { horizontal: 'center' } }),
+      celda(m.categoria, base),
+      celda(m.metodo || '—', base),
+      celda(m.nota || '—', { ...base, alignment: { wrapText: true, vertical: 'center' } }),
+      celda(esIngreso ? m.monto : -m.monto, { ...base, font: { bold: true, color: { rgb: color } } }, MONEDA),
+    ]);
+  });
+  if (movimientos.length === 0) {
+    const s = { font: { italic: true, color: { rgb: C.gris } }, border: bordes };
+    filas.push([celda('Sin movimientos en este período', s), ...vacia(s)]);
+  }
+
+  // 4) Resumen
+  const inicioResumen = filas.length + 1;
+  filas.push([]);
+  const resumen = (texto: string, valor: number, color: string, fondo: string) => {
+    const s = { font: { bold: true, sz: 12, color: { rgb: color } }, fill: { fgColor: { rgb: fondo } }, border: bordes };
+    return [...Array.from({ length: n - 2 }, () => celda('', {})), celda(texto, s), celda(valor, s, MONEDA)];
+  };
+  const tituloResumen = { font: { bold: true, color: { rgb: C.blanco } }, fill: { fgColor: { rgb: C.lavanda } }, border: bordes };
+  filas.push([...Array.from({ length: n - 2 }, () => celda('', {})), celda('Resumen', tituloResumen), celda('', tituloResumen)]);
+  filas.push(resumen('Total ingresos', totalIngresos, C.verde, C.verdeSuave));
+  filas.push(resumen('Total egresos', -totalEgresos, C.rosado, C.rosadoSuave));
+  filas.push(resumen('Balance', totalIngresos - totalEgresos, C.azul, C.azulSuave));
+
+  const hoja = XLSX.utils.aoa_to_sheet(filas);
+  hoja['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: n - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: n - 1 } },
+    { s: { r: inicioResumen, c: n - 2 }, e: { r: inicioResumen, c: n - 1 } },
+    ...(movimientos.length === 0 ? [{ s: { r: 4, c: 0 }, e: { r: 4, c: n - 1 } }] : []),
+  ];
+  hoja['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 18 }, { wch: 16 }, { wch: 34 }, { wch: 14 }];
+  hoja['!rows'] = [{ hpt: 30 }, { hpt: 18 }, {}, { hpt: 22 }];
 
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, 'Movimientos');
-  const contenido = XLSX.write(libro, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
-
-  const archivo = new File(Paths.cache, `${nombreArchivo}.xlsx`);
-  if (archivo.exists) archivo.delete();
-  archivo.create();
-  archivo.write(new Uint8Array(contenido));
-
-  await Sharing.shareAsync(archivo.uri, {
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    dialogTitle: 'Compartir movimientos',
-    UTI: 'org.openxmlformats.spreadsheetml.sheet',
-  });
+  await guardarYCompartir(libro, nombreArchivo);
+  return true;
 }

@@ -1,7 +1,7 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ReactNode } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { traducirError } from '../../auth/errores';
 import { useSesion } from '../../auth/SesionContext';
 import { categoriasPredeterminadas, combinarCategorias, normalizar } from '../../categorias/categorias';
@@ -9,12 +9,16 @@ import { listarCategorias, obtenerIdReal } from '../../categorias/categorias.ser
 import Chip from '../../movimientos/components/Chip';
 import { MetodoPago, metodosPago } from '../../movimientos/metodosPago';
 import { crearIngreso } from '../../movimientos/movimientos.service';
-import { listarPendientes, Pendiente, quitarPendiente } from '../../pendientes/pendientes';
+import { listarPendientes, marcarPagado, Pendiente } from '../../pendientes/pendientes';
 import Boton from '../../../shared/components/Boton';
+import BarraTitulo from '../../../shared/components/BarraTitulo';
+import Icono from '../../../shared/components/Icono';
+import { useAviso } from '../../../shared/components/Toast';
+import { useConfirmar, useAlerta } from '../../../shared/components/Confirmar';
+import ModalPendiente from './ModalPendiente';
 import ModalFlotante from '../../../shared/components/ModalFlotante';
 import { colors } from '../../../shared/theme/colors';
 import { fonts } from '../../../shared/theme/fonts';
-import { sombras } from '../../../shared/theme/sombras';
 import { useEscala } from '../../../shared/utils/escala';
 import { aDMA, desdeISO, diasHasta } from '../../../shared/utils/fechas';
 import { formatearMonto } from '../../../shared/utils/formato';
@@ -28,9 +32,13 @@ function estado(p: Pendiente): { texto: string; color: string; fondo: string } {
 }
 
 // Pagos pendientes / fiado (Historia 008)
-export default function PanelPendientes() {
+export default function PanelPendientes({ selector, onCambio }: { selector: ReactNode; onCambio: () => void }) {
+  const alerta = useAlerta();
   const { token, empresa, manejarError } = useSesion();
-  const { e } = useEscala();
+  const { e, t } = useEscala();
+  const avisar = useAviso();
+  const confirmar = useConfirmar();
+  const [editando, setEditando] = useState<Pendiente | null>(null);
   const [lista, setLista] = useState<Pendiente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cobrando, setCobrando] = useState<Pendiente | null>(null); // Pago que se está marcando como pagado
@@ -38,11 +46,17 @@ export default function PanelPendientes() {
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
-    if (!empresa) return;
+    if (!empresa || !token) return;
     setCargando(true);
-    setLista(await listarPendientes(empresa.id));
-    setCargando(false);
-  }, [empresa]);
+    try {
+      setLista(await listarPendientes(empresa.id, token));
+    } catch (error) {
+      manejarError(error);
+      alerta('No se pudieron cargar los pagos pendientes', traducirError(error));
+    } finally {
+      setCargando(false);
+    }
+  }, [empresa, token, manejarError]);
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
@@ -60,71 +74,101 @@ export default function PanelPendientes() {
       const idReal = await obtenerIdReal(categoria, empresa.id, token);
       const nota = [`Pago de ${cobrando.cliente}`, cobrando.nota].filter(Boolean).join(' · ').slice(0, 100);
       await crearIngreso({ monto: cobrando.monto, metodo, categoriaId: idReal, nota }, empresa.id, token);
-      await quitarPendiente(empresa.id, cobrando);
+      await marcarPagado(empresa.id, token, cobrando);
       setCobrando(null);
       await cargar();
-      Alert.alert('¡Pago registrado!', 'Se agregó a tus ingresos de hoy.');
+      avisar('¡Pago registrado como ingreso!');
+      onCambio();
     } catch (error) {
       manejarError(error);
-      Alert.alert('No se pudo registrar el pago', traducirError(error));
+      alerta('No se pudo registrar el pago', traducirError(error));
     } finally {
       setGuardando(false);
     }
   }
 
-  function eliminar(p: Pendiente) {
-    Alert.alert('Eliminar pago pendiente', `¿Eliminar el pago de ${p.cliente}? No se registrará como ingreso.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => { if (empresa) { await quitarPendiente(empresa.id, p); cargar(); } } },
-    ]);
+  async function eliminar(p: Pendiente) {
+    const ok = await confirmar({
+      titulo: 'Quitar pago pendiente',
+      mensaje: `¿Quitar el pago de ${p.cliente} de la lista? No se registrará como ingreso.`,
+      textoConfirmar: 'Quitar',
+    });
+    if (!ok || !empresa || !token) return;
+    try {
+      await marcarPagado(empresa.id, token, p);
+      avisar('Pago pendiente quitado', 'trash');
+      cargar();
+    } catch (error) {
+      manejarError(error);
+      alerta('No se pudo quitar', traducirError(error));
+    }
   }
+
+  const tarjeta = { backgroundColor: colors.superficie, borderRadius: t(12), borderWidth: 1, borderColor: colors.lavandaOnda, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)' };
+  const botonChico = (texto: string, color: string, fondo: string, accion: () => void) => (
+    <Pressable onPress={accion} style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: t(6), borderRadius: t(8), backgroundColor: fondo, opacity: pressed ? 0.8 : 1 })}>
+      <Text style={{ fontFamily: fonts.negrita, fontSize: t(11), color }}>{texto}</Text>
+    </Pressable>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.fondoApp }}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 32, gap: 18 }}>
-        <View style={{ backgroundColor: colors.superficie, borderRadius: 20, padding: 16, alignItems: 'center', gap: 2, ...sombras.suave }}>
-          <Text style={{ fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda }}>Total por cobrar</Text>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.titulo, fontSize: e(44), color: colors.naranjo }}>${formatearMonto(total)}</Text>
+      <ScrollView contentContainerStyle={{ paddingBottom: t(20) }} showsVerticalScrollIndicator={false}>
+      <BarraTitulo titulo="Registros" />
+      <View style={{ paddingHorizontal: t(16), paddingTop: t(12), gap: t(12) }}>
+        {selector}
+
+        <View style={[tarjeta, { padding: t(12), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          <Text style={{ fontFamily: fonts.negrita, fontSize: t(11), color: colors.textoSecundario }}>Total por cobrar</Text>
+          <Text numberOfLines={1} style={{ fontFamily: fonts.extra, fontSize: t(18), color: colors.naranjo }}>${formatearMonto(total)}</Text>
         </View>
 
         {cargando ? (
           <ActivityIndicator color={colors.lavanda} />
         ) : lista.length === 0 ? (
-          <View style={{ alignItems: 'center', gap: 8, paddingVertical: 24 }}>
-            <MaterialCommunityIcons name="check-circle-outline" size={e(48)} color={colors.verde} />
-            <Text style={{ fontFamily: fonts.medio, fontSize: e(16), color: colors.lavanda, textAlign: 'center' }}>
-              No tienes pagos pendientes.{'\n'}Para agregar uno, en Inicio elige el método de pago "Pendiente".
+          <View style={{ alignItems: 'center', gap: t(8), paddingVertical: t(24) }}>
+            <Icono nombre="check-circle" tamano={t(36)} color={colors.verde} />
+            <Text style={{ fontFamily: fonts.medio, fontSize: t(12), color: colors.textoSecundario, textAlign: 'center' }}>
+              No tienes pagos pendientes.{'\n'}Para agregar uno, en Inicio toca "Pago pendiente".
             </Text>
           </View>
         ) : (
-          lista.map((p) => {
-            const est = estado(p);
-            return (
-              <View key={p.id} style={{ backgroundColor: colors.superficie, borderRadius: 20, padding: 16, gap: 10, ...sombras.suave }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: e(48), height: e(48), borderRadius: 14, backgroundColor: est.fondo, alignItems: 'center', justifyContent: 'center' }}>
-                    <MaterialCommunityIcons name="clock-outline" size={e(26)} color={est.color} />
+          <>
+            <Text style={{ fontFamily: fonts.extra, fontSize: t(12), color: colors.lavanda }}>
+              {lista.length} pago{lista.length === 1 ? '' : 's'} pendiente{lista.length === 1 ? '' : 's'}
+            </Text>
+            {lista.map((p) => {
+              const est = estado(p);
+              return (
+                <View key={p.id} style={[tarjeta, { padding: t(12), gap: t(10) }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t(10) }}>
+                    <View style={{ width: t(32), height: t(32), borderRadius: t(8), backgroundColor: est.fondo, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icono nombre="clock" tamano={t(16)} color={est.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ fontFamily: fonts.negrita, fontSize: t(12), color: colors.texto }}>{p.cliente}</Text>
+                      <Text numberOfLines={1} style={{ fontFamily: fonts.medio, fontSize: t(10), color: est.color }}>
+                        {est.texto} • {aDMA(desdeISO(p.vence))}{p.nota ? ` • ${p.nota}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: fonts.extra, fontSize: t(12), color: colors.naranjo }}>${formatearMonto(p.monto)}</Text>
+                    <Pressable hitSlop={10} onPress={() => setEditando(p)} style={{ padding: t(4), borderRadius: t(6), backgroundColor: colors.lavandaSuave }}>
+                      <Icono nombre="pencil" tamano={t(11)} color={colors.lavanda} />
+                    </Pressable>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ fontFamily: fonts.negrita, fontSize: e(17), color: colors.lavanda }}>{p.cliente}</Text>
-                    <Text style={{ fontFamily: fonts.medio, fontSize: e(14), color: est.color }}>{est.texto} · {aDMA(desdeISO(p.vence))}</Text>
-                    {p.nota ? <Text numberOfLines={1} style={{ fontFamily: fonts.normal, fontSize: e(13), color: colors.lavanda, opacity: 0.8 }}>{p.nota}</Text> : null}
+                  <View style={{ flexDirection: 'row', gap: t(8) }}>
+                    {botonChico('Marcar pagado', colors.verde, colors.verdeSuave, () => { setMetodo('efectivo'); setCobrando(p); })}
+                    {botonChico('Quitar', colors.rosado, colors.rosadoSuave, () => eliminar(p))}
                   </View>
-                  <Text style={{ fontFamily: fonts.negrita, fontSize: e(18), color: colors.naranjo }}>${formatearMonto(p.monto)}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Boton titulo="Marcar pagado" color={colors.ingreso} onPress={() => { setMetodo('efectivo'); setCobrando(p); }} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Boton titulo="Eliminar" variante="secundario" color={colors.error} onPress={() => eliminar(p)} />
-                  </View>
-                </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </>
         )}
+      </View>
       </ScrollView>
+
+      <ModalPendiente pendiente={editando} onCerrar={() => setEditando(null)} onCambio={cargar} />
 
       <ModalFlotante visible={!!cobrando} titulo="¿Cómo te pagó?" onCerrar={() => setCobrando(null)}>
         <View style={{ gap: 16 }}>

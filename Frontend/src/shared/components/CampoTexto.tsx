@@ -1,7 +1,7 @@
-    import { Ionicons } from '@expo/vector-icons';
     import { useState } from 'react';
     import { Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
-    import { colors } from '../theme/colors';
+    import Icono from './Icono';
+import { colors } from '../theme/colors';
     import { fonts } from '../theme/fonts';
     import { sombras } from '../theme/sombras';
 
@@ -44,11 +44,7 @@
                 hitSlop={10}
                 style={{ position: 'absolute', right: 12 }}
             >
-                <Ionicons
-                name={mostrarContrasena ? 'eye-off-outline' : 'eye-outline'}
-                size={22}
-                color={colors.textoSecundario}
-                />
+                <Icono nombre={mostrarContrasena ? 'eye-off' : 'eye'} tamano={22} color={colors.textoSecundario} />
             </Pressable>
             )}
         </View>
