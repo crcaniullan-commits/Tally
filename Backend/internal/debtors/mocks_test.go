@@ -9,62 +9,62 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// DebtorStoreMock es un mock de DebtorStorage para probar DebtorService sin
+// AlmacenDeudoresMock es un mock de RepositorioDeudores para probar ServicioDeudores sin
 // tocar la base de datos.
-type DebtorStoreMock struct {
+type AlmacenDeudoresMock struct {
 	mock.Mock
 }
 
-func (m *DebtorStoreMock) GetDebtor(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID) (bool, error) {
-	args := m.Called(ctx, debtorID, empresaID)
+func (m *AlmacenDeudoresMock) ObtenerDeudor(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, deudorID, empresaID)
 	pagado, _ := args.Get(0).(bool)
 	return pagado, args.Error(1)
 }
 
-func (m *DebtorStoreMock) Create(ctx context.Context, debtor *model.Debtor) error {
+func (m *AlmacenDeudoresMock) Crear(ctx context.Context, debtor *model.Debtor) error {
 	args := m.Called(ctx, debtor)
 	return args.Error(0)
 }
 
-func (m *DebtorStoreMock) Update(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID, debtor model.Debtor) error {
-	args := m.Called(ctx, debtorID, empresaID, debtor)
+func (m *AlmacenDeudoresMock) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, debtor model.Debtor) error {
+	args := m.Called(ctx, deudorID, empresaID, debtor)
 	return args.Error(0)
 }
 
-func (m *DebtorStoreMock) PaidDebtor(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, debtorID, empresaID)
+func (m *AlmacenDeudoresMock) MarcarDeudorPagado(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, deudorID, empresaID)
 	return args.Error(0)
 }
 
-func (m *DebtorStoreMock) GetDebtors(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
+func (m *AlmacenDeudoresMock) ObtenerDeudores(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
 	args := m.Called(ctx, empresaID)
 	debtors, _ := args.Get(0).([]model.Debtor)
 	return debtors, args.Error(1)
 }
 
-// ServiceDebtorsMock es un mock de ServiceDebtors para probar DebtorsHandler
+// IServiceDeudoresMock es un mock de IServiceDeudores para probar HandlerDeudores
 // de forma aislada.
-type ServiceDebtorsMock struct {
+type IServiceDeudoresMock struct {
 	mock.Mock
 }
 
-func (m *ServiceDebtorsMock) Create(ctx context.Context, empresaID uuid.UUID, payload DebtorPayload) (model.Debtor, error) {
+func (m *IServiceDeudoresMock) Crear(ctx context.Context, empresaID uuid.UUID, payload PayloadDeudor) (model.Debtor, error) {
 	args := m.Called(ctx, empresaID, payload)
 	debtor, _ := args.Get(0).(model.Debtor)
 	return debtor, args.Error(1)
 }
 
-func (m *ServiceDebtorsMock) Update(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID, payload UpdatePayload) error {
-	args := m.Called(ctx, debtorID, empresaID, payload)
+func (m *IServiceDeudoresMock) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, payload PayloadActualizacionDeudor) error {
+	args := m.Called(ctx, deudorID, empresaID, payload)
 	return args.Error(0)
 }
 
-func (m *ServiceDebtorsMock) PaidDebtor(ctx context.Context, debtorID uuid.UUID, empresaID uuid.UUID) error {
-	args := m.Called(ctx, debtorID, empresaID)
+func (m *IServiceDeudoresMock) MarcarDeudorPagado(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, deudorID, empresaID)
 	return args.Error(0)
 }
 
-func (m *ServiceDebtorsMock) GetDebtors(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
+func (m *IServiceDeudoresMock) ObtenerDeudores(ctx context.Context, empresaID uuid.UUID) ([]model.Debtor, error) {
 	args := m.Called(ctx, empresaID)
 	debtors, _ := args.Get(0).([]model.Debtor)
 	return debtors, args.Error(1)
@@ -101,8 +101,8 @@ func newTestDebtor() model.Debtor {
 
 // newTestDebtorPayload arma el payload de alta con valores que pasan la
 // validación.
-func newTestDebtorPayload() DebtorPayload {
-	return DebtorPayload{
+func newTestDebtorPayload() PayloadDeudor {
+	return PayloadDeudor{
 		Nombre:      "Cliente",
 		Monto:       15000,
 		Descripcion: "Deuda pendiente",
@@ -111,8 +111,8 @@ func newTestDebtorPayload() DebtorPayload {
 }
 
 // newTestUpdatePayload arma el payload de actualización con valores válidos.
-func newTestUpdatePayload() UpdatePayload {
-	return UpdatePayload{
+func newTestUpdatePayload() PayloadActualizacionDeudor {
+	return PayloadActualizacionDeudor{
 		Nombre:      "Cliente",
 		Monto:       15000,
 		FechaLimite: testFechaLimite,

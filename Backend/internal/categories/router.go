@@ -3,23 +3,23 @@ package categories
 import (
 	"database/sql"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl util.MiddlewareAuth) {
-	err := errorhandler.NewErrorResponse(logger)
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+	err := errores.NuevaRespuestaErrores(logger)
 
-	repo := NewStoreCategorie(db)
-	svc := NewCategorieService(repo)
-	hdl := NewCategoriesHandler(svc, err)
+	repo := NuevoAlmacenCategorias(db)
+	svc := NuevoServicioCategorias(repo)
+	hdl := NuevoHandlerCategorias(svc, err)
 
-	r.Route("/categories", func(r chi.Router) {
-		r.Get("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.GetCategorias))
-		r.Post("/", middl.CheckOwnership(util.UserRoleUsuario, hdl.Create))
-		r.Patch("/{categoriaID}", middl.CheckOwnership(util.UserRoleUsuario, hdl.CambiarNombre))
-		r.Delete("/{categoria}", middl.CheckOwnership(util.UserRoleUsuario, hdl.BorrarCategoria))
+	r.Route("/categorias", func(r chi.Router) {
+		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerCategorias))
+		r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Crear))
+		r.Patch("/{categoriaID}", middl.VerificarRol(utilidades.RolUsuario, hdl.CambiarNombre))
+		r.Delete("/{categoria}", middl.VerificarRol(utilidades.RolUsuario, hdl.BorrarCategoria))
 	})
 }

@@ -15,12 +15,12 @@ var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
 func TestDebtorService_Create(t *testing.T) {
 	t.Run("crea la deuda con el payload y la empresa", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
 		payload := newTestDebtorPayload()
 
-		store.On("Create", mock.Anything, mock.MatchedBy(func(debtor *model.Debtor) bool {
+		store.On("Crear", mock.Anything, mock.MatchedBy(func(debtor *model.Debtor) bool {
 			return debtor.EmpresaID == testEmpresaID &&
 				debtor.Nombre == payload.Nombre &&
 				debtor.Monto == payload.Monto &&
@@ -35,7 +35,7 @@ func TestDebtorService_Create(t *testing.T) {
 			debtor.CreatedAt = testDebtorCreatedAt
 		}).Once()
 
-		debtor, err := service.Create(context.Background(), testEmpresaID, payload)
+		debtor, err := service.Crear(context.Background(), testEmpresaID, payload)
 
 		require.NoError(t, err)
 		assert.Equal(t, testDebtorID, debtor.ID)
@@ -52,13 +52,13 @@ func TestDebtorService_Create(t *testing.T) {
 	})
 
 	t.Run("propaga el error del store", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
-		store.On("Create", mock.Anything, mock.AnythingOfType("*model.Debtor")).
+		store.On("Crear", mock.Anything, mock.AnythingOfType("*model.Debtor")).
 			Return(errStoreBoom).Once()
 
-		debtor, err := service.Create(context.Background(), testEmpresaID, newTestDebtorPayload())
+		debtor, err := service.Crear(context.Background(), testEmpresaID, newTestDebtorPayload())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Equal(t, model.Debtor{}, debtor)
@@ -68,32 +68,32 @@ func TestDebtorService_Create(t *testing.T) {
 
 func TestDebtorService_Update(t *testing.T) {
 	t.Run("actualiza la deuda con el payload y la empresa", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
 		payload := newTestUpdatePayload()
 
-		store.On("Update", mock.Anything, testDebtorID, testEmpresaID, mock.MatchedBy(func(debtor model.Debtor) bool {
+		store.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, mock.MatchedBy(func(debtor model.Debtor) bool {
 			return debtor.Nombre == payload.Nombre &&
 				debtor.Monto == payload.Monto &&
 				debtor.FechaLimite != nil &&
 				debtor.FechaLimite.Equal(payload.FechaLimite)
 		})).Return(nil).Once()
 
-		err := service.Update(context.Background(), testDebtorID, testEmpresaID, payload)
+		err := service.Actualizar(context.Background(), testDebtorID, testEmpresaID, payload)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("propaga el error del store", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
-		store.On("Update", mock.Anything, testDebtorID, testEmpresaID, mock.Anything).
+		store.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, mock.Anything).
 			Return(errStoreBoom).Once()
 
-		err := service.Update(context.Background(), testDebtorID, testEmpresaID, newTestUpdatePayload())
+		err := service.Actualizar(context.Background(), testDebtorID, testEmpresaID, newTestUpdatePayload())
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
@@ -102,25 +102,25 @@ func TestDebtorService_Update(t *testing.T) {
 
 func TestDebtorService_PaidDebtor(t *testing.T) {
 	t.Run("marca la deuda como pagada", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
-		store.On("PaidDebtor", mock.Anything, testDebtorID, testEmpresaID).Return(nil).Once()
+		store.On("MarcarDeudorPagado", mock.Anything, testDebtorID, testEmpresaID).Return(nil).Once()
 
-		err := service.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := service.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("propaga el error del store", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
-		store.On("PaidDebtor", mock.Anything, testDebtorID, testEmpresaID).
+		store.On("MarcarDeudorPagado", mock.Anything, testDebtorID, testEmpresaID).
 			Return(errStoreBoom).Once()
 
-		err := service.PaidDebtor(context.Background(), testDebtorID, testEmpresaID)
+		err := service.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
@@ -129,13 +129,13 @@ func TestDebtorService_PaidDebtor(t *testing.T) {
 
 func TestDebtorService_GetDebtors(t *testing.T) {
 	t.Run("devuelve las deudas de la empresa", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 		debtors := []model.Debtor{newTestDebtor()}
 
-		store.On("GetDebtors", mock.Anything, testEmpresaID).Return(debtors, nil).Once()
+		store.On("ObtenerDeudores", mock.Anything, testEmpresaID).Return(debtors, nil).Once()
 
-		result, err := service.GetDebtors(context.Background(), testEmpresaID)
+		result, err := service.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.NoError(t, err)
 		assert.Equal(t, debtors, result)
@@ -143,13 +143,13 @@ func TestDebtorService_GetDebtors(t *testing.T) {
 	})
 
 	t.Run("propaga el error del store", func(t *testing.T) {
-		store := new(DebtorStoreMock)
-		service := NewDebtorService(store)
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
 
-		store.On("GetDebtors", mock.Anything, testEmpresaID).
+		store.On("ObtenerDeudores", mock.Anything, testEmpresaID).
 			Return(nil, errStoreBoom).Once()
 
-		result, err := service.GetDebtors(context.Background(), testEmpresaID)
+		result, err := service.ObtenerDeudores(context.Background(), testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, result)

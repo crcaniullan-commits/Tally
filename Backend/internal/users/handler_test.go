@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -16,21 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 )
 
 const (
-	bodyUpdateOK      = `{"data":"Usuario actualizado con exito"}`
-	bodyDeleteOK      = `{"data":"Usuario eliminado"}`
-	bodyNotFound      = `{"error":"not found"}`
-	bodyUnauthorized  = `{"error":"unauthorized"}`
-	bodyInternalError = `{"error":"the server encountered a problem"}`
+	bodyUpdateOK      = `{"datos":"Usuario actualizado con éxito"}`
+	bodyDeleteOK      = `{"datos":"Usuario eliminado"}`
+	bodyNotFound      = `{"error":"no encontrado"}`
+	bodyUnauthorized  = `{"error":"no autorizado"}`
+	bodyInternalError = `{"error":"el servidor encontró un problema"}`
 )
 
-// newTestHandler arma un UsersHandler con un service mockeado y el logger de
+// newTestHandler arma un HandlerUsuarios con un service mockeado y el logger de
 // errorhandler apontando a un noop (para que los tests no ensucien la salida).
-func newTestHandler(service ServiceUsers) *UsersHandler {
-	return NewUserHandler(service, errorhandler.NewErrorResponse(zap.NewNop().Sugar()))
+func newTestHandler(service IServiceUsuarios) *HandlerUsuarios {
+	return NuevoHandlerUsuarios(service, errores.NuevaRespuestaErrores(zap.NewNop().Sugar()))
 }
 
 // requestWithUser construye una request con el usuario del middleware inyectado
@@ -43,7 +43,7 @@ func requestWithUser(method, target, body string) *http.Request {
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 	}
 
-	return r.WithContext(context.WithValue(r.Context(), util.UserCtx, newTestUser()))
+	return r.WithContext(context.WithValue(r.Context(), utilidades.ContextoUsuario, newTestUser()))
 }
 
 // requestWithRutParam inyecta el URL param "rut" que lee el handler vía
@@ -68,22 +68,22 @@ func decodeEnvelope(t *testing.T, body string) map[string]any {
 
 func TestUsersHandler_Update(t *testing.T) {
 	t.Run("responde 200 cuando el servicio actualiza correctamente", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		body := `{"password":"NuevaClave123","nombre":"Nombre Nuevo"}`
 		usuario := newTestUser()
 
-		service.On("Update", mock.Anything, usuario, &UpdateUserPayload{
+		service.On("Actualizar", mock.Anything, usuario, &PayloadActualizarUsuario{
 			Password: "NuevaClave123",
-			Name:     "Nombre Nuevo",
+			Nombre:   "Nombre Nuevo",
 		}).Return(nil).Once()
 
 		r := requestWithUser(http.MethodPatch, "/users", body)
-		usuario = util.GetUserFromContext(r)
+		usuario = utilidades.ObtenerUsuarioDelContexto(r)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, bodyUpdateOK, w.Body.String())
@@ -91,18 +91,18 @@ func TestUsersHandler_Update(t *testing.T) {
 	})
 
 	t.Run("responde 400 y no llama al servicio si la validación falla", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		// password de 3 caracteres: viola min=8
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"abc","nombre":"Nombre Nuevo"}`)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Password")
-		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("acepta una actualización parcial: solo la contraseña, sin nombre", func(t *testing.T) {
@@ -110,18 +110,18 @@ func TestUsersHandler_Update(t *testing.T) {
 		// nombre, la contraseña, o las dos, pero no está obligado a mandar las
 		// dos. Por eso este caso NO es 400: tiene que llegar al service, que
 		// es quien decide si toca algo.
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
-		service.On("Update", mock.Anything, mock.Anything, &UpdateUserPayload{
+		service.On("Actualizar", mock.Anything, mock.Anything, &PayloadActualizarUsuario{
 			Password: "NuevaClave123",
-			Name:     "",
+			Nombre:   "",
 		}).Return(nil).Once()
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123"}`)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, bodyUpdateOK, w.Body.String())
@@ -129,18 +129,18 @@ func TestUsersHandler_Update(t *testing.T) {
 	})
 
 	t.Run("acepta una actualización parcial: solo el nombre, sin contraseña", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
-		service.On("Update", mock.Anything, mock.Anything, &UpdateUserPayload{
+		service.On("Actualizar", mock.Anything, mock.Anything, &PayloadActualizarUsuario{
 			Password: "",
-			Name:     "Nombre Nuevo",
+			Nombre:   "Nombre Nuevo",
 		}).Return(nil).Once()
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"nombre":"Nombre Nuevo"}`)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, bodyUpdateOK, w.Body.String())
@@ -148,44 +148,44 @@ func TestUsersHandler_Update(t *testing.T) {
 	})
 
 	t.Run("responde 400 y no llama al servicio si el body no es JSON válido", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":`)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 y no llama al servicio si viene un campo desconocido", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
-		// util.ReadJSON usa DisallowUnknownFields
+		// utilidades.LeerJSON usa DisallowUnknownFields
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123","nombre":"Nombre","rol":"municipal"}`)
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "rol")
-		service.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("responde 404 si el servicio devuelve util.ErrNotFound", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+	t.Run("responde 404 si el servicio devuelve utilidades.ErrorNoEncontrado", func(t *testing.T) {
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123","nombre":"Nombre Nuevo"}`)
-		usuario := util.GetUserFromContext(r)
+		usuario := utilidades.ObtenerUsuarioDelContexto(r)
 
-		service.On("Update", mock.Anything, usuario, mock.Anything).Return(util.ErrNotFound).Once()
+		service.On("Actualizar", mock.Anything, usuario, mock.Anything).Return(utilidades.ErrorNoEncontrado).Once()
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
@@ -193,16 +193,16 @@ func TestUsersHandler_Update(t *testing.T) {
 	})
 
 	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		r := requestWithUser(http.MethodPatch, "/users", `{"password":"NuevaClave123","nombre":"Nombre Nuevo"}`)
-		usuario := util.GetUserFromContext(r)
+		usuario := utilidades.ObtenerUsuarioDelContexto(r)
 
-		service.On("Update", mock.Anything, usuario, mock.Anything).Return(errStoreBoom).Once()
+		service.On("Actualizar", mock.Anything, usuario, mock.Anything).Return(errStoreBoom).Once()
 
 		w := httptest.NewRecorder()
-		handler.Update(w, r)
+		handler.Actualizar(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -212,34 +212,34 @@ func TestUsersHandler_Update(t *testing.T) {
 
 func TestUsersHandler_Delete(t *testing.T) {
 	t.Run("responde 200 y elimina el usuario del contexto", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		usuario := newTestUser()
-		service.On("Delete", mock.Anything, usuario.ID).Return(nil).Once()
+		service.On("Eliminar", mock.Anything, usuario.ID).Return(nil).Once()
 
 		r := requestWithUser(http.MethodDelete, "/users", "")
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, bodyDeleteOK, w.Body.String())
 		service.AssertExpectations(t)
-		service.AssertCalled(t, "Delete", mock.Anything, usuario.ID)
+		service.AssertCalled(t, "Eliminar", mock.Anything, usuario.ID)
 	})
 
 	t.Run("responde 404 si el usuario ya no existe", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		usuario := newTestUser()
-		service.On("Delete", mock.Anything, usuario.ID).Return(util.ErrNotFound).Once()
+		service.On("Eliminar", mock.Anything, usuario.ID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithUser(http.MethodDelete, "/users", "")
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
@@ -247,16 +247,16 @@ func TestUsersHandler_Delete(t *testing.T) {
 	})
 
 	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		usuario := newTestUser()
-		service.On("Delete", mock.Anything, usuario.ID).Return(errStoreBoom).Once()
+		service.On("Eliminar", mock.Anything, usuario.ID).Return(errStoreBoom).Once()
 
 		r := requestWithUser(http.MethodDelete, "/users", "")
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -264,39 +264,39 @@ func TestUsersHandler_Delete(t *testing.T) {
 	})
 
 	t.Run("responde 401 si la request no trae usuario en el contexto", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		r := httptest.NewRequest(http.MethodDelete, "/users", nil)
 		w := httptest.NewRecorder()
 
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.JSONEq(t, bodyUnauthorized, w.Body.String())
-		service.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "Eliminar", mock.Anything, mock.Anything)
 	})
 }
 
 func TestUsersHandler_GetByRut(t *testing.T) {
 	t.Run("responde 200 con el usuario y el RUT parseado desde la URL", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		esperado := newTestUser()
-		service.On("GetByRut", mock.Anything, util.RUT{Cuerpo: 19234567, DV: "K"}).
+		service.On("ObtenerPorRUT", mock.Anything, utilidades.RUT{Cuerpo: 19234567, DV: "K"}).
 			Return(esperado, nil).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 
 		w := httptest.NewRecorder()
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
 
 		envelope := decodeEnvelope(t, w.Body.String())
-		data, ok := envelope["data"].(map[string]any)
+		data, ok := envelope["datos"].(map[string]any)
 		require.True(t, ok, "la respuesta debe traer un objeto en \"data\"")
 
 		assert.Equal(t, esperado.ID.String(), data["id"])
@@ -308,32 +308,32 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 	})
 
 	t.Run("acepta el RUT sin separadores", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		esperado := newTestUser()
-		service.On("GetByRut", mock.Anything, util.RUT{Cuerpo: 19234567, DV: "K"}).
+		service.On("ObtenerPorRUT", mock.Anything, utilidades.RUT{Cuerpo: 19234567, DV: "K"}).
 			Return(esperado, nil).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19234567K", "19234567K")
 
 		w := httptest.NewRecorder()
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		service.AssertExpectations(t)
 	})
 
-	t.Run("responde 404 si el servicio devuelve util.ErrNotFound", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+	t.Run("responde 404 si el servicio devuelve utilidades.ErrorNoEncontrado", func(t *testing.T) {
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
-		service.On("GetByRut", mock.Anything, mock.Anything).Return(nil, util.ErrNotFound).Once()
+		service.On("ObtenerPorRUT", mock.Anything, mock.Anything).Return(nil, utilidades.ErrorNoEncontrado).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 
 		w := httptest.NewRecorder()
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
@@ -341,15 +341,15 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 	})
 
 	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
-		service.On("GetByRut", mock.Anything, mock.Anything).Return(nil, errStoreBoom).Once()
+		service.On("ObtenerPorRUT", mock.Anything, mock.Anything).Return(nil, errStoreBoom).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 
 		w := httptest.NewRecorder()
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
@@ -357,75 +357,75 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 	})
 
 	t.Run("responde 400 y no consulta el servicio si el RUT es inválido", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/no-es-un-rut", "no-es-un-rut")
 
 		w := httptest.NewRecorder()
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), util.ErrFormatoInvalido.Error())
-		service.AssertNotCalled(t, "GetByRut", mock.Anything, mock.Anything)
+		assert.Contains(t, w.Body.String(), utilidades.ErrFormatoInvalido.Error())
+		service.AssertNotCalled(t, "ObtenerPorRUT", mock.Anything, mock.Anything)
 	})
 }
 
 func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
-	t.Run("UserService satisface la interfaz que espera el handler", func(t *testing.T) {
-		// Guarda contra regresiones de firmas: si cambia ServiceUsers, esto
+	t.Run("ServicioUsuarios satisface la interfaz que espera el handler", func(t *testing.T) {
+		// Guarda contra regresiones de firmas: si cambia IServiceUsuarios, esto
 		// deja de compilar.
-		var _ ServiceUsers = NewUserService(new(StoreUserMock))
+		var _ IServiceUsuarios = NuevoServicioUsuarios(new(RepositorioUsuariosMock))
 	})
 
-	t.Run("el handler construye un UserService real sobre un store mockeado", func(t *testing.T) {
-		store := new(StoreUserMock)
-		store.On("GetByRut", mock.Anything, "19.234.567-K").Return(newTestUser(), nil).Once()
+	t.Run("el handler construye un ServicioUsuarios real sobre un store mockeado", func(t *testing.T) {
+		store := new(RepositorioUsuariosMock)
+		store.On("ObtenerPorRUT", mock.Anything, "19.234.567-K").Return(newTestUser(), nil).Once()
 
-		handler := newTestHandler(NewUserService(store))
+		handler := newTestHandler(NuevoServicioUsuarios(store))
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 		w := httptest.NewRecorder()
 
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("no filtra el password hash en la respuesta JSON", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		usuario := newTestUser()
 		require.NoError(t, usuario.PasswordHash.Set("Secreto123"))
-		service.On("GetByRut", mock.Anything, mock.Anything).Return(usuario, nil).Once()
+		service.On("ObtenerPorRUT", mock.Anything, mock.Anything).Return(usuario, nil).Once()
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 		w := httptest.NewRecorder()
 
-		handler.GetByRut(w, r)
+		handler.ObtenerPorRUT(w, r)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		assert.NotContains(t, w.Body.String(), "$2a$")
 	})
 
 	t.Run("el uuid del usuario del contexto es el que se propaga", func(t *testing.T) {
-		service := new(ServiceUsersMock)
+		service := new(IServiceUsuariosMock)
 		handler := newTestHandler(service)
 
 		usuario := newTestUser()
-		service.On("Delete", mock.Anything, usuario.ID).Return(nil).Once()
+		service.On("Eliminar", mock.Anything, usuario.ID).Return(nil).Once()
 
 		r := requestWithUser(http.MethodDelete, "/users", "")
 		// sanity: el helper inyecta el usuario que esperamos
-		require.Equal(t, usuario.ID, util.GetUserFromContext(r).ID)
+		require.Equal(t, usuario.ID, utilidades.ObtenerUsuarioDelContexto(r).ID)
 		assert.NotEqual(t, uuid.Nil, usuario.ID)
 
 		w := httptest.NewRecorder()
-		handler.Delete(w, r)
+		handler.Eliminar(w, r)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		service.AssertCalled(t, "Delete", mock.Anything, uuid.MustParse(usuario.ID.String()))
+		service.AssertCalled(t, "Eliminar", mock.Anything, uuid.MustParse(usuario.ID.String()))
 	})
 }

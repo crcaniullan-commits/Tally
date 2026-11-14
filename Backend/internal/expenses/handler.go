@@ -4,107 +4,156 @@ import (
 	"context"
 	"net/http"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/pagination"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/paginacion"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceExpenses interface {
-	AddExpense(context.Context, ExpensePayload, uuid.UUID) (model.Expense, error)
-	DeleteExpense(context.Context, uuid.UUID, uuid.UUID) error
-	GetAllExpensesOfEmpresa(context.Context, uuid.UUID, pagination.IncomePaginationQuery) ([]model.Expense, error)
+type IServiceGastos interface {
+	AgregarGasto(context.Context, PayloadGasto, uuid.UUID) (model.Expense, error)
+	ActualizarGasto(context.Context, PayloadActualizarGasto, uuid.UUID, uuid.UUID) (model.Expense, error)
+	EliminarGasto(context.Context, uuid.UUID, uuid.UUID) error
+	ObtenerGastosDeEmpresa(context.Context, uuid.UUID, paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error)
 }
 
-type ExpensesHandler struct {
-	service ServiceExpenses
-	errors  errorhandler.ErrorsResponse
+type HandlerGastos struct {
+	service IServiceGastos
+	errors  errores.RespuestaErrores
 }
 
-func NewExpensesHandler(s ServiceExpenses, e errorhandler.ErrorsResponse) *ExpensesHandler {
-	return &ExpensesHandler{s, e}
+func NuevoHandlerGastos(s IServiceGastos, e errores.RespuestaErrores) *HandlerGastos {
+	return &HandlerGastos{s, e}
 }
 
 func empresaID(r *http.Request) uuid.UUID {
-	return util.GetEmpresaFromContext(r).ID
+	return utilidades.ObtenerEmpresaDelContexto(r).ID
 }
 
-type ExpensePayload struct {
+type PayloadGasto struct {
 	Monto       int64      `json:"monto" validate:"required,gt=0"`
 	CategoryID  *uuid.UUID `json:"category_id" validate:"required"`
 	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
 }
 
-func (h *ExpensesHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload ExpensePayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+// PayloadActualizarGasto son los campos editables de un gasto. Lo que no viene
+// en el payload se queda como está; "fecha" (AAAA-MM-DD) permite corregir la
+// fecha del movimiento.
+type PayloadActualizarGasto struct {
+	Monto       *int64     `json:"monto" validate:"omitempty,gt=0"`
+	CategoryID  *uuid.UUID `json:"category_id"`
+	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
+	Fecha       *string    `json:"fecha"`
+}
+
+// Actualizar edita un gasto: monto, categoría, descripción y fecha.
+func (h *HandlerGastos) Actualizar(w http.ResponseWriter, r *http.Request) {
+	gastoID, err := uuid.Parse(chi.URLParam(r, "gastoID"))
+
+	if err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	expense, err := h.service.AddExpense(r.Context(), payload, empresaID(r))
+	var payload PayloadActualizarGasto
+
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	expense, err := h.service.ActualizarGasto(r.Context(), payload, gastoID, empresaID(r))
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.BadRequestResponse(w, r, err)
+		case ErrorMovimientoNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
+			return
+		case ErrorFechaInvalida, ErrorSinCambios, utilidades.ErrorNoEncontrado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, expense); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, expense); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *ExpensesHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	expenseID, err := uuid.Parse(chi.URLParam(r, "expenseID"))
-
-	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerGastos) Crear(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadGasto
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	if err = h.service.DeleteExpense(r.Context(), expenseID, empresaID(r)); err != nil {
+	expense, err := h.service.AgregarGasto(r.Context(), payload, empresaID(r))
+
+	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err = util.JsonResponse(w, http.StatusOK, "expense eliminado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, expense); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *ExpensesHandler) GetExpensesOfEmpresa(w http.ResponseWriter, r *http.Request) {
-	fq, err := pagination.NewIncomePaginationQuery().Parse(r)
+func (h *HandlerGastos) Eliminar(w http.ResponseWriter, r *http.Request) {
+	gastoID, err := uuid.Parse(chi.URLParam(r, "gastoID"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	expenses, err := h.service.GetAllExpensesOfEmpresa(r.Context(), empresaID(r), fq)
+	if err = h.service.EliminarGasto(r.Context(), gastoID, empresaID(r)); err != nil {
+		switch err {
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
+			return
+		default:
+			h.errors.ErrorInterno(w, r, err)
+			return
+		}
+	}
+
+	if err = utilidades.RespuestaJSON(w, http.StatusOK, "gasto eliminado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
+}
+
+func (h *HandlerGastos) ObtenerGastosDeEmpresa(w http.ResponseWriter, r *http.Request) {
+	fq, err := paginacion.NuevaConsultaPaginacionIngresos().Parse(r)
 
 	if err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, expenses); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	expenses, err := h.service.ObtenerGastosDeEmpresa(r.Context(), empresaID(r), fq)
+
+	if err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, expenses); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }

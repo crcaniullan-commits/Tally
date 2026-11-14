@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/users"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
@@ -17,12 +17,12 @@ import (
 )
 
 const (
-	bodyTokenOK       = `{"data":"jwt.token.de.prueba"}`
-	bodyInternalError = `{"error":"the server encountered a problem"}`
+	bodyTokenOK       = `{"datos":"jwt.token.de.prueba"}`
+	bodyInternalError = `{"error":"el servidor encontró un problema"}`
 )
 
-func newTestHandler(service ServiceAuth) *AuthHandler {
-	return NewAuthHandler(service, errorhandler.NewErrorResponse(zap.NewNop().Sugar()))
+func newTestHandler(service IServiceAuth) *HandlerAuth {
+	return NuevoHandlerAuth(service, errores.NuevaRespuestaErrores(zap.NewNop().Sugar()))
 }
 
 func request(method, target, body string) *http.Request {
@@ -35,13 +35,13 @@ func request(method, target, body string) *http.Request {
 
 func TestAuthHandler_Register(t *testing.T) {
 	t.Run("responde 201 con el token y llama al service con el payload", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("RegisterUser", mock.Anything, &CreateUserPayload{
+		service.On("RegistrarUsuario", mock.Anything, &PayloadCrearUsuario{
 			Email:    "nuevo@correo.cl",
 			Password: testPassword,
-			Name:     "Nombre Nuevo",
+			Nombre:   "Nombre Nuevo",
 			Rut:      "19234567K",
 			Code:     testAccessKeyCode,
 		}).Return(testToken, nil).Once()
@@ -49,7 +49,7 @@ func TestAuthHandler_Register(t *testing.T) {
 		body := `{"email":"nuevo@correo.cl","password":"ClaveSegura123","nombre":"Nombre Nuevo","rut":"19234567K","code":"` + testAccessKeyCode + `"}`
 
 		w := httptest.NewRecorder()
-		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.JSONEq(t, bodyTokenOK, w.Body.String())
@@ -57,76 +57,94 @@ func TestAuthHandler_Register(t *testing.T) {
 	})
 
 	t.Run("responde 400 y no llama al service si la validacion falla", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
 		body := `{"email":"nuevo@correo.cl","password":"abc","nombre":"Nombre Nuevo","rut":"19234567K","code":"` + testAccessKeyCode + `"}`
 
 		w := httptest.NewRecorder()
-		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Password")
-		service.AssertNotCalled(t, "RegisterUser", mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "RegistrarUsuario", mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el email ya existe", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("RegisterUser", mock.Anything, mock.Anything).
+		service.On("RegistrarUsuario", mock.Anything, mock.Anything).
 			Return("", users.ErrDuplicateEmail).Once()
 
 		body := `{"email":"nuevo@correo.cl","password":"ClaveSegura123","nombre":"Nombre Nuevo","rut":"19234567K","code":"` + testAccessKeyCode + `"}`
 
 		w := httptest.NewRecorder()
-		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"a user with that email already exists"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"ya existe un usuario con ese correo"}`, w.Body.String())
 	})
 
 	t.Run("responde 400 si el codigo no es canjeable", func(t *testing.T) {
-		// El canje vive ahora en RegisterUser: un codigo invalido/vencido/
+		// El canje vive ahora en RegistrarUsuario: un codigo invalido/vencido/
 		// revocado/ya usado no puede volver a ser un 500.
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("RegisterUser", mock.Anything, mock.Anything).
-			Return("", accesskeys.ErrNotRedeemable).Once()
+		service.On("RegistrarUsuario", mock.Anything, mock.Anything).
+			Return("", clavesacceso.ErrorCodigoNoCanjeable).Once()
 
 		body := `{"email":"nuevo@correo.cl","password":"ClaveSegura123","nombre":"Nombre Nuevo","rut":"19234567K","code":"MALO"}`
 
 		w := httptest.NewRecorder()
-		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), accesskeys.ErrNotRedeemable.Error())
+		assert.Contains(t, w.Body.String(), clavesacceso.ErrorCodigoNoCanjeable.Error())
 	})
 
 	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("RegisterUser", mock.Anything, mock.Anything).
+		service.On("RegistrarUsuario", mock.Anything, mock.Anything).
 			Return("", errServiceBoom).Once()
 
 		body := `{"email":"nuevo@correo.cl","password":"ClaveSegura123","nombre":"Nombre Nuevo","rut":"19234567K","code":"` + testAccessKeyCode + `"}`
 
 		w := httptest.NewRecorder()
-		handler.RegisterHandler(w, request(http.MethodPost, "/auth", body))
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())
+	})
+
+	t.Run("responde 400 si el rut no tiene formato valido", func(t *testing.T) {
+		// El ParseRUT vive en el service: si el handler no mapea el error de
+		// dominio, un RUT mal formado terminaba en un 500.
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("RegistrarUsuario", mock.Anything, mock.Anything).
+			Return("", utilidades.ErrFormatoInvalido).Once()
+
+		body := `{"email":"nuevo@correo.cl","password":"ClaveSegura123","nombre":"Nombre Nuevo","rut":"19234567K","code":"` + testAccessKeyCode + `"}`
+
+		w := httptest.NewRecorder()
+		handler.Registrar(w, request(http.MethodPost, "/auth", body))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"el formato del RUT no es válido"}`, w.Body.String())
 	})
 }
 
 func TestAuthHandler_Login(t *testing.T) {
 	t.Run("responde 202 con el token", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("Login", mock.Anything, &LoginUserPayload{
+		service.On("Login", mock.Anything, &PayloadInicioSesion{
 			Email:    "emprendedor@correo.cl",
 			Password: testPassword,
 		}).Return(testToken, nil).Once()
@@ -142,7 +160,7 @@ func TestAuthHandler_Login(t *testing.T) {
 	})
 
 	t.Run("responde 400 si la validacion falla", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
 		w := httptest.NewRecorder()
@@ -153,10 +171,10 @@ func TestAuthHandler_Login(t *testing.T) {
 	})
 
 	t.Run("responde 400 si el email no existe", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("Login", mock.Anything, mock.Anything).Return("", util.ErrNotFound).Once()
+		service.On("Login", mock.Anything, mock.Anything).Return("", utilidades.ErrorNoEncontrado).Once()
 
 		body := `{"email":"nadie@correo.cl","password":"ClaveSegura123"}`
 
@@ -164,11 +182,11 @@ func TestAuthHandler_Login(t *testing.T) {
 		handler.Login(w, request(http.MethodPost, "/auth/login", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"resource not found"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"recurso no encontrado"}`, w.Body.String())
 	})
 
 	t.Run("responde 400 si la clave no coincide", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
 		service.On("Login", mock.Anything, mock.Anything).
@@ -183,7 +201,7 @@ func TestAuthHandler_Login(t *testing.T) {
 	})
 
 	t.Run("responde 500 con cualquier otro error", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
 		service.On("Login", mock.Anything, mock.Anything).Return("", errServiceBoom).Once()
@@ -202,13 +220,13 @@ func TestAuthHandler_CrearMunicipal(t *testing.T) {
 	t.Run("responde 201 sin exigir code en el payload", func(t *testing.T) {
 		// Regresion: el payload municipal compartido con registro exigia code,
 		// rompiendo la creacion de municipales.
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("CreateMunicipal", mock.Anything, &CreateMunicipalPayload{
+		service.On("CrearMunicipal", mock.Anything, &PayloadCrearMunicipal{
 			Email:    "municipal@correo.cl",
 			Password: testPassword,
-			Name:     "Nombre Municipal",
+			Nombre:   "Nombre Municipal",
 			Rut:      "19234567K",
 		}).Return(testToken, nil).Once()
 
@@ -223,7 +241,7 @@ func TestAuthHandler_CrearMunicipal(t *testing.T) {
 	})
 
 	t.Run("responde 400 si la validacion falla", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
 		body := `{"email":"municipal@correo.cl","password":"abc","nombre":"Nombre Municipal","rut":"19234567K"}`
@@ -232,14 +250,14 @@ func TestAuthHandler_CrearMunicipal(t *testing.T) {
 		handler.CrearMunicipal(w, request(http.MethodPost, "/auth/municipal", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		service.AssertNotCalled(t, "CreateMunicipal", mock.Anything, mock.Anything)
+		service.AssertNotCalled(t, "CrearMunicipal", mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el rut ya existe", func(t *testing.T) {
-		service := new(ServiceAuthMock)
+		service := new(IServiceAuthMock)
 		handler := newTestHandler(service)
 
-		service.On("CreateMunicipal", mock.Anything, mock.Anything).
+		service.On("CrearMunicipal", mock.Anything, mock.Anything).
 			Return("", users.ErrDuplicateRut).Once()
 
 		body := `{"email":"municipal@correo.cl","password":"ClaveSegura123","nombre":"Nombre Municipal","rut":"19234567K"}`
@@ -248,6 +266,161 @@ func TestAuthHandler_CrearMunicipal(t *testing.T) {
 		handler.CrearMunicipal(w, request(http.MethodPost, "/auth/municipal", body))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"a user with that rut already exists"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"ya existe un usuario con ese RUT"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si el rut no tiene formato valido", func(t *testing.T) {
+		// El ParseRUT vive en el service: si el handler no mapea el error de
+		// dominio, un RUT mal formado terminaba en un 500.
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("CrearMunicipal", mock.Anything, mock.Anything).
+			Return("", utilidades.ErrFormatoInvalido).Once()
+
+		body := `{"email":"municipal@correo.cl","password":"ClaveSegura123","nombre":"Nombre Municipal","rut":"19234567K"}`
+
+		w := httptest.NewRecorder()
+		handler.CrearMunicipal(w, request(http.MethodPost, "/auth/municipal", body))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"el formato del RUT no es válido"}`, w.Body.String())
+	})
+}
+
+func TestAuthHandler_SolicitarRecuperacion(t *testing.T) {
+	t.Run("responde 202 con el mensaje de confirmacion", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("SolicitarRecuperacion", mock.Anything, "emprendedor@correo.cl").Return(nil).Once()
+
+		w := httptest.NewRecorder()
+		handler.SolicitarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password", `{"email":"emprendedor@correo.cl"}`))
+
+		assert.Equal(t, http.StatusAccepted, w.Code)
+		assert.JSONEq(t, `{"datos":"código de recuperación enviado"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el email no esta registrado", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("SolicitarRecuperacion", mock.Anything, "nadie@correo.cl").
+			Return(utilidades.ErrorNoEncontrado).Once()
+
+		w := httptest.NewRecorder()
+		handler.SolicitarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password", `{"email":"nadie@correo.cl"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"recurso no encontrado"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si la validacion falla", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		w := httptest.NewRecorder()
+		handler.SolicitarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password", `{"email":"no-es-email"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "SolicitarRecuperacion", mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 500 con cualquier otro error del servicio", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("SolicitarRecuperacion", mock.Anything, mock.Anything).Return(errServiceBoom).Once()
+
+		w := httptest.NewRecorder()
+		handler.SolicitarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password", `{"email":"emprendedor@correo.cl"}`))
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.JSONEq(t, bodyInternalError, w.Body.String())
+	})
+}
+
+func TestAuthHandler_VerificarCodigoRecuperacion(t *testing.T) {
+	t.Run("responde 200 con el mensaje de confirmacion", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("VerificarCodigoRecuperacion", mock.Anything, "emprendedor@correo.cl", "123456").Return(nil).Once()
+
+		w := httptest.NewRecorder()
+		handler.VerificarCodigoRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/verificar", `{"email":"emprendedor@correo.cl","codigo":"123456"}`))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, `{"datos":"código verificado"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 con un codigo invalido", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("VerificarCodigoRecuperacion", mock.Anything, mock.Anything, mock.Anything).
+			Return(ErrorCodigoRecuperacionInvalido).Once()
+
+		w := httptest.NewRecorder()
+		handler.VerificarCodigoRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/verificar", `{"email":"emprendedor@correo.cl","codigo":"000000"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"el código de recuperación no es válido"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si el codigo no tiene 6 digitos", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		w := httptest.NewRecorder()
+		handler.VerificarCodigoRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/verificar", `{"email":"emprendedor@correo.cl","codigo":"123"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "VerificarCodigoRecuperacion", mock.Anything, mock.Anything, mock.Anything)
+	})
+}
+
+func TestAuthHandler_ConfirmarRecuperacion(t *testing.T) {
+	t.Run("responde 200 con el mensaje de confirmacion", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("ConfirmarRecuperacion", mock.Anything, "emprendedor@correo.cl", "123456", "ClaveSegura123").
+			Return(nil).Once()
+
+		w := httptest.NewRecorder()
+		handler.ConfirmarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/confirmar", `{"email":"emprendedor@correo.cl","codigo":"123456","password":"ClaveSegura123"}`))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, `{"datos":"contraseña actualizada"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el codigo todavia no fue verificado", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		service.On("ConfirmarRecuperacion", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(ErrorCodigoRecuperacionNoVerificado).Once()
+
+		w := httptest.NewRecorder()
+		handler.ConfirmarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/confirmar", `{"email":"emprendedor@correo.cl","codigo":"123456","password":"ClaveSegura123"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"el código de recuperación todavía no fue verificado"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si la contraseña es muy corta", func(t *testing.T) {
+		service := new(IServiceAuthMock)
+		handler := newTestHandler(service)
+
+		w := httptest.NewRecorder()
+		handler.ConfirmarRecuperacion(w, request(http.MethodPost, "/auth/recuperar-password/confirmar", `{"email":"emprendedor@correo.cl","codigo":"123456","password":"corta"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ConfirmarRecuperacion", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 }

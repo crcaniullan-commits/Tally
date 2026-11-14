@@ -17,7 +17,7 @@ func TestAccessKeysFlow(t *testing.T) {
 	var key model.AccessKey
 
 	t.Run("el municipal emite una llave", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key", municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves", municipal, map[string]string{
 			"email": email,
 		})
 
@@ -30,7 +30,7 @@ func TestAccessKeysFlow(t *testing.T) {
 	})
 
 	t.Run("el municipal reenvía la llave por id", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/AccessID/"+key.ID.String(), municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/"+key.ID.String(), municipal, map[string]string{
 			"email": email,
 		})
 
@@ -39,14 +39,14 @@ func TestAccessKeysFlow(t *testing.T) {
 	})
 
 	t.Run("el municipal revoca la llave por código", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/revoke/"+key.Code, municipal, nil)
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/revocar/"+key.Code, municipal, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Codigo desabilitado", testutil.DecodeData[string](t, res))
+		require.Equal(t, "Código deshabilitado", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("una llave revocada ya no se puede canjear", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    testutil.UniqueEmail("key_revoked"),
 			"password": "Password123",
 			"nombre":   "Llave Revocada",
@@ -54,13 +54,13 @@ func TestAccessKeysFlow(t *testing.T) {
 			"code":     key.Code,
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "The code can't be Redeemed")
+		testutil.RequireError(t, res, http.StatusBadRequest, "El código no se puede canjear")
 	})
 
 	t.Run("una llave nueva sí se puede canjear", func(t *testing.T) {
 		freshEmail := testutil.UniqueEmail("key_fresh")
 		fresh := testutil.IssueKey(t, freshEmail)
-		res := testutil.Request(t, http.MethodPost, "/v1/auth", "", map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion", "", map[string]string{
 			"email":    freshEmail,
 			"password": "Password123",
 			"nombre":   "Llave Nueva",
@@ -74,47 +74,47 @@ func TestAccessKeysFlow(t *testing.T) {
 
 	t.Run("un usuario normal no puede emitir llaves", func(t *testing.T) {
 		u := testutil.NewUser(t)
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key", u.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves", u.Token, map[string]string{
 			"email": testutil.UniqueEmail("key_forbidden"),
 		})
 
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("un usuario normal no puede reenviar llaves", func(t *testing.T) {
 		u := testutil.NewUser(t)
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/AccessID/"+uuid.NewString(), u.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/"+uuid.NewString(), u.Token, map[string]string{
 			"email": testutil.UniqueEmail("key_forbidden"),
 		})
 
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("un usuario normal no puede revocar llaves", func(t *testing.T) {
 		u := testutil.NewUser(t)
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/revoke/cualquier-codigo", u.Token, nil)
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/revocar/cualquier-codigo", u.Token, nil)
 
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("valida el email al emitir", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key", municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves", municipal, map[string]string{
 			"email": "no-es-email",
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "Key: 'EmailPayload.Email' Error:Field validation for 'Email' failed on the 'email' tag")
+		testutil.RequireError(t, res, http.StatusBadRequest, "Key: 'PayloadCorreo.Email' Error:Field validation for 'Email' failed on the 'email' tag")
 	})
 
 	t.Run("valida el email al reenviar", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/AccessID/"+key.ID.String(), municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/"+key.ID.String(), municipal, map[string]string{
 			"email": "no-es-email",
 		})
 
-		testutil.RequireError(t, res, http.StatusBadRequest, "Key: 'EmailPayload.Email' Error:Field validation for 'Email' failed on the 'email' tag")
+		testutil.RequireError(t, res, http.StatusBadRequest, "Key: 'PayloadCorreo.Email' Error:Field validation for 'Email' failed on the 'email' tag")
 	})
 
 	t.Run("reenviar con un id inválido devuelve 400", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/AccessID/not-a-uuid", municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/not-a-uuid", municipal, map[string]string{
 			"email": email,
 		})
 
@@ -122,20 +122,20 @@ func TestAccessKeysFlow(t *testing.T) {
 	})
 
 	t.Run("reenviar una llave inexistente devuelve 404", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/AccessID/"+uuid.NewString(), municipal, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/"+uuid.NewString(), municipal, map[string]string{
 			"email": email,
 		})
 
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("revocar un código inexistente devuelve 404", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/key/revoke/no-existe", municipal, nil)
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/claves/revocar/no-existe", municipal, nil)
 
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
-	requireProtected(t, http.MethodPost, "/v1/app/key")
-	requireProtected(t, http.MethodPost, "/v1/app/key/AccessID/"+uuid.NewString())
-	requireProtected(t, http.MethodPost, "/v1/app/key/revoke/cualquier-codigo")
+	requireProtected(t, http.MethodPost, "/v1/aplicacion/claves")
+	requireProtected(t, http.MethodPost, "/v1/aplicacion/claves/IDAcceso/"+uuid.NewString())
+	requireProtected(t, http.MethodPost, "/v1/aplicacion/claves/revocar/cualquier-codigo")
 }

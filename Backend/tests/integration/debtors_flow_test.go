@@ -21,7 +21,7 @@ func TestDebtorsFlow(t *testing.T) {
 	var debtor model.Debtor
 
 	t.Run("crea un deudor", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, map[string]any{
 			"nombre":       nombre,
 			"monto":        50000,
 			"descripcion":  "deuda de prueba",
@@ -42,7 +42,7 @@ func TestDebtorsFlow(t *testing.T) {
 	})
 
 	t.Run("lista los deudores de la empresa", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		debtors := testutil.DecodeData[[]model.Debtor](t, res)
@@ -60,7 +60,7 @@ func TestDebtorsFlow(t *testing.T) {
 		newName := testutil.UniqueName("Deudor Actualizado")
 		newDate := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
 
-		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+debtor.ID.String()), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+debtor.ID.String()), user.Token, map[string]any{
 			"nombre":       newName,
 			"monto":        60000,
 			"fecha_limite": newDate.Format(time.RFC3339),
@@ -69,7 +69,7 @@ func TestDebtorsFlow(t *testing.T) {
 		testutil.RequireStatus(t, res, http.StatusOK)
 		require.Equal(t, "Deuda actualizada", testutil.DecodeData[string](t, res))
 
-		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, nil)
 		debtors := testutil.DecodeData[[]model.Debtor](t, list)
 		for _, d := range debtors {
 			if d.ID == debtor.ID {
@@ -85,12 +85,12 @@ func TestDebtorsFlow(t *testing.T) {
 	})
 
 	t.Run("marca el deudor como pagado", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+debtor.ID.String()+"/paid"), user.Token, nil)
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+debtor.ID.String()+"/pagada"), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		require.Equal(t, "Deuda pagada", testutil.DecodeData[string](t, res))
 
-		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, nil)
 		debtors := testutil.DecodeData[[]model.Debtor](t, list)
 		for _, d := range debtors {
 			if d.ID == debtor.ID {
@@ -115,42 +115,42 @@ func TestDebtorsFlow(t *testing.T) {
 			{
 				name:    "nombre faltante",
 				mutate:  func(m map[string]any) { delete(m, "nombre") },
-				message: "Key: 'DebtorPayload.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag",
+				message: "Key: 'PayloadDeudor.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag",
 			},
 			{
 				name:    "monto faltante",
 				mutate:  func(m map[string]any) { delete(m, "monto") },
-				message: "Key: 'DebtorPayload.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
+				message: "Key: 'PayloadDeudor.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto cero",
 				mutate:  func(m map[string]any) { m["monto"] = 0 },
-				message: "Key: 'DebtorPayload.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
+				message: "Key: 'PayloadDeudor.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto negativo",
 				mutate:  func(m map[string]any) { m["monto"] = -1 },
-				message: "Key: 'DebtorPayload.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
+				message: "Key: 'PayloadDeudor.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
 			},
 			{
 				name:    "descripción faltante",
 				mutate:  func(m map[string]any) { delete(m, "descripcion") },
-				message: "Key: 'DebtorPayload.Descripcion' Error:Field validation for 'Descripcion' failed on the 'required' tag",
+				message: "Key: 'PayloadDeudor.Descripcion' Error:Field validation for 'Descripcion' failed on the 'required' tag",
 			},
 			{
 				name:    "fecha límite faltante",
 				mutate:  func(m map[string]any) { delete(m, "fecha_limite") },
-				message: "Key: 'DebtorPayload.FechaLimite' Error:Field validation for 'FechaLimite' failed on the 'required' tag",
+				message: "Key: 'PayloadDeudor.FechaLimite' Error:Field validation for 'FechaLimite' failed on the 'required' tag",
 			},
 			{
 				name:    "nombre demasiado largo",
 				mutate:  func(m map[string]any) { m["nombre"] = "1234567890123456789012345678901" },
-				message: "Key: 'DebtorPayload.Nombre' Error:Field validation for 'Nombre' failed on the 'max' tag",
+				message: "Key: 'PayloadDeudor.Nombre' Error:Field validation for 'Nombre' failed on the 'max' tag",
 			},
 			{
 				name:    "descripción demasiado larga",
 				mutate:  func(m map[string]any) { m["descripcion"] = string(make([]byte, 101)) },
-				message: "Key: 'DebtorPayload.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
+				message: "Key: 'PayloadDeudor.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
 			},
 			{
 				name:    "fecha límite con formato inválido",
@@ -167,14 +167,14 @@ func TestDebtorsFlow(t *testing.T) {
 				}
 				tc.mutate(body)
 
-				res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, body)
+				res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
 	})
 
 	t.Run("rechaza campos desconocidos al crear", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/debtors"), user.Token, map[string]any{
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, map[string]any{
 			"nombre":       "X",
 			"monto":        1000,
 			"descripcion":  "d",
@@ -193,17 +193,17 @@ func TestDebtorsFlow(t *testing.T) {
 			{
 				name:    "nombre faltante",
 				body:    map[string]any{"monto": 1000, "fecha_limite": time.Now().UTC().Format(time.RFC3339)},
-				message: "Key: 'UpdatePayload.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag",
+				message: "Key: 'PayloadActualizacionDeudor.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag",
 			},
 			{
 				name:    "monto faltante",
 				body:    map[string]any{"nombre": "X", "fecha_limite": time.Now().UTC().Format(time.RFC3339)},
-				message: "Key: 'UpdatePayload.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
+				message: "Key: 'PayloadActualizacionDeudor.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "fecha faltante",
 				body:    map[string]any{"nombre": "X", "monto": 1000},
-				message: "Key: 'UpdatePayload.FechaLimite' Error:Field validation for 'FechaLimite' failed on the 'required' tag",
+				message: "Key: 'PayloadActualizacionDeudor.FechaLimite' Error:Field validation for 'FechaLimite' failed on the 'required' tag",
 			},
 			{
 				name:    "descripción no permitida",
@@ -214,7 +214,7 @@ func TestDebtorsFlow(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+debtor.ID.String()), user.Token, tc.body)
+				res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+debtor.ID.String()), user.Token, tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
@@ -238,7 +238,7 @@ func TestDebtorsFlow(t *testing.T) {
 			{
 				name:    "patch con uuid inválido",
 				method:  http.MethodPatch,
-				path:    testutil.EmpresaPath(empresa.ID, "/debtors/no-uuid"),
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/no-uuid"),
 				body:    validBody,
 				status:  http.StatusBadRequest,
 				message: "invalid UUID length: 7",
@@ -246,24 +246,24 @@ func TestDebtorsFlow(t *testing.T) {
 			{
 				name:    "patch inexistente",
 				method:  http.MethodPatch,
-				path:    testutil.EmpresaPath(empresa.ID, "/debtors/"+uuid.NewString()),
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()),
 				body:    validBody,
 				status:  http.StatusNotFound,
-				message: "not found",
+				message: "no encontrado",
 			},
 			{
 				name:    "paid con uuid inválido",
 				method:  http.MethodPatch,
-				path:    testutil.EmpresaPath(empresa.ID, "/debtors/no-uuid/paid"),
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/no-uuid/pagada"),
 				status:  http.StatusBadRequest,
 				message: "invalid UUID length: 7",
 			},
 			{
 				name:    "paid inexistente",
 				method:  http.MethodPatch,
-				path:    testutil.EmpresaPath(empresa.ID, "/debtors/"+uuid.NewString()+"/paid"),
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()+"/pagada"),
 				status:  http.StatusNotFound,
-				message: "not found",
+				message: "no encontrado",
 			},
 		}
 
@@ -280,32 +280,32 @@ func TestDebtorsFlow(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
 		otherDebtor := testutil.CreateDebtor(t, otherUser, otherEmpresa.ID, 1000)
 
-		patch := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+otherDebtor.ID.String()), user.Token, map[string]any{
+		patch := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+otherDebtor.ID.String()), user.Token, map[string]any{
 			"nombre":       "Intruso",
 			"monto":        2000,
 			"fecha_limite": time.Now().UTC().Format(time.RFC3339),
 		})
-		testutil.RequireError(t, patch, http.StatusNotFound, "not found")
+		testutil.RequireError(t, patch, http.StatusNotFound, "no encontrado")
 
-		paid := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+otherDebtor.ID.String()+"/paid"), user.Token, nil)
-		testutil.RequireError(t, paid, http.StatusNotFound, "not found")
+		paid := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+otherDebtor.ID.String()+"/pagada"), user.Token, nil)
+		testutil.RequireError(t, paid, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("no puede acceder a la empresa de otro usuario", func(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
 
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/debtors"), user.Token, nil)
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/deudas"), user.Token, nil)
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("un municipal no puede acceder a los deudores", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/debtors"), testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
-	requireProtected(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/debtors"))
-	requireProtected(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/debtors"))
-	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+uuid.NewString()))
-	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/debtors/"+uuid.NewString()+"/paid"))
+	requireProtected(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"))
+	requireProtected(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/deudas"))
+	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()))
+	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()+"/pagada"))
 }

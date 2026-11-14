@@ -4,58 +4,58 @@ import (
 	"context"
 	"net/http"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceUsers interface {
-	Update(context.Context, *model.User, *UpdateUserPayload) error
-	Delete(context.Context, uuid.UUID) error
-	GetByRut(context.Context, util.RUT) (*model.User, error)
+type IServiceUsuarios interface {
+	Actualizar(context.Context, *model.User, *PayloadActualizarUsuario) error
+	Eliminar(context.Context, uuid.UUID) error
+	ObtenerPorRUT(context.Context, utilidades.RUT) (*model.User, error)
 }
 
-type UsersHandler struct {
-	service ServiceUsers
-	errors  errorhandler.ErrorsResponse
+type HandlerUsuarios struct {
+	service IServiceUsuarios
+	errors  errores.RespuestaErrores
 }
 
-func NewUserHandler(s ServiceUsers, e errorhandler.ErrorsResponse) *UsersHandler {
-	return &UsersHandler{s, e}
+func NuevoHandlerUsuarios(s IServiceUsuarios, e errores.RespuestaErrores) *HandlerUsuarios {
+	return &HandlerUsuarios{s, e}
 }
 
-type UpdateUserPayload struct {
+type PayloadActualizarUsuario struct {
 	Password string `json:"password" validate:"omitempty,min=8,max=72"`
-	Name     string `json:"nombre" validate:"omitempty,max=100"`
+	Nombre   string `json:"nombre" validate:"omitempty,max=100"`
 }
 
 /*
 *	handler para que el usuario actualize sus datos
  */
-func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
-	var payload UpdateUserPayload
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+func (h *HandlerUsuarios) Actualizar(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadActualizarUsuario
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	user := util.GetUserFromContext(r)
+	user := utilidades.ObtenerUsuarioDelContexto(r)
 
-	if err := h.service.Update(r.Context(), user, &payload); err != nil {
+	if err := h.service.Actualizar(r.Context(), user, &payload); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Usuario actualizado con exito"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Usuario actualizado con éxito"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
@@ -63,28 +63,28 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 /**
 *	Handler para que el usuario elimine su cuenta
  */
-func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerUsuarios) Eliminar(w http.ResponseWriter, r *http.Request) {
 
-	user := util.GetUserFromContext(r)
+	user := utilidades.ObtenerUsuarioDelContexto(r)
 
 	if user == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	if err := h.service.Delete(r.Context(), user.ID); err != nil {
+	if err := h.service.Eliminar(r.Context(), user.ID); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Usuario eliminado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Usuario eliminado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
@@ -93,29 +93,29 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 *	Handler para que los usuarios municipales
 *	Buscen la cuenta de los usuarios emprendedores
  */
-func (h *UsersHandler) GetByRut(w http.ResponseWriter, r *http.Request) {
-	rut, err := util.ParseRUT(chi.URLParam(r, "rut"))
+func (h *HandlerUsuarios) ObtenerPorRUT(w http.ResponseWriter, r *http.Request) {
+	rut, err := utilidades.ParseRUT(chi.URLParam(r, "rut"))
 
 	if err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	user, err := h.service.GetByRut(r.Context(), rut)
+	user, err := h.service.ObtenerPorRUT(r.Context(), rut)
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err = util.JsonResponse(w, http.StatusOK, user); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err = utilidades.RespuestaJSON(w, http.StatusOK, user); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 

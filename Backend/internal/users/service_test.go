@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -16,24 +16,24 @@ import (
 
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
-// newService arma un UserService con el store mockeado. El canje de codigos ya
+// newService arma un ServicioUsuarios con el store mockeado. El canje de codigos ya
 // no vive en este service (se movio al registro en auth), asi que no hay
 // transactor ni redeemer que inyectar.
-func newService(store StoreUser) *UserService {
-	return NewUserService(store)
+func newService(store RepositorioUsuarios) *ServicioUsuarios {
+	return NuevoServicioUsuarios(store)
 }
 
 func TestUserService_Update(t *testing.T) {
 	t.Run("hashea la contraseña y persiste el usuario cuando viene password", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
-		payload := &UpdateUserPayload{Password: "NuevaClave123", Name: "Nombre Nuevo"}
+		payload := &PayloadActualizarUsuario{Password: "NuevaClave123", Nombre: "Nombre Nuevo"}
 
-		store.On("Update", mock.Anything, user).Return(nil).Once()
+		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
 
-		err := service.Update(context.Background(), user, payload)
+		err := service.Actualizar(context.Background(), user, payload)
 
 		require.NoError(t, err)
 
@@ -43,22 +43,22 @@ func TestUserService_Update(t *testing.T) {
 		assert.NoError(t, user.PasswordHash.Compare("NuevaClave123"))
 
 		store.AssertExpectations(t)
-		store.AssertNumberOfCalls(t, "Update", 1)
+		store.AssertNumberOfCalls(t, "Actualizar", 1)
 	})
 
 	t.Run("actualiza nombre y contraseña a la vez cuando viene el payload completo", func(t *testing.T) {
 		// Regresión: antes service.go usaba `if password != "" { ... } else if name != ""`,
 		// y enviar ambos campos dejaba el nombre sin actualizar. Ahora son dos `if`
 		// independientes (service.go:26 y service.go:32).
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
-		payload := &UpdateUserPayload{Password: "NuevaClave123", Name: "Nombre Nuevo"}
+		payload := &PayloadActualizarUsuario{Password: "NuevaClave123", Nombre: "Nombre Nuevo"}
 
-		store.On("Update", mock.Anything, user).Return(nil).Once()
+		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
 
-		require.NoError(t, service.Update(context.Background(), user, payload))
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
 
 		assert.Equal(t, "Nombre Nuevo", user.Nombre, "el nombre debe actualizarse aunque venga password")
 		assert.NoError(t, user.PasswordHash.Compare("NuevaClave123"))
@@ -66,16 +66,16 @@ func TestUserService_Update(t *testing.T) {
 	})
 
 	t.Run("actualiza solo el nombre cuando no viene password", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
 		hashPrevio := append([]byte(nil), user.PasswordHash.GetHash()...)
-		payload := &UpdateUserPayload{Name: "Nombre Nuevo"}
+		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
 
-		store.On("Update", mock.Anything, user).Return(nil).Once()
+		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
 
-		require.NoError(t, service.Update(context.Background(), user, payload))
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
 
 		assert.Equal(t, "Nombre Nuevo", user.Nombre)
 		assert.Equal(t, hashPrevio, user.PasswordHash.GetHash(), "no debe tocar la contraseña")
@@ -83,86 +83,86 @@ func TestUserService_Update(t *testing.T) {
 	})
 
 	t.Run("persiste aunque el payload venga vacío", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
-		payload := &UpdateUserPayload{}
+		payload := &PayloadActualizarUsuario{}
 
-		store.On("Update", mock.Anything, user).Return(nil).Once()
+		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
 
-		require.NoError(t, service.Update(context.Background(), user, payload))
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
 		assert.Equal(t, "Nombre Original", user.Nombre)
-		store.AssertNumberOfCalls(t, "Update", 1)
+		store.AssertNumberOfCalls(t, "Actualizar", 1)
 	})
 
 	t.Run("propaga el error del store sin envolverlo", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
-		payload := &UpdateUserPayload{Name: "Nombre Nuevo"}
+		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
 
-		store.On("Update", mock.Anything, user).Return(util.ErrNotFound).Once()
+		store.On("Actualizar", mock.Anything, user).Return(utilidades.ErrorNoEncontrado).Once()
 
-		err := service.Update(context.Background(), user, payload)
+		err := service.Actualizar(context.Background(), user, payload)
 
 		require.Error(t, err)
-		assert.ErrorIs(t, err, util.ErrNotFound)
+		assert.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("no toca el store si el hasheo falla (password > 72 bytes)", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
-		payload := &UpdateUserPayload{Password: strings.Repeat("a", 73)}
+		payload := &PayloadActualizarUsuario{Password: strings.Repeat("a", 73)}
 
-		err := service.Update(context.Background(), user, payload)
+		err := service.Actualizar(context.Background(), user, payload)
 
 		require.ErrorIs(t, err, bcrypt.ErrPasswordTooLong)
-		store.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 }
 
 func TestUserService_Delete(t *testing.T) {
 	t.Run("elimina el usuario con el id recibido", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		userID := uuid.New()
-		store.On("Delete", mock.Anything, userID).Return(nil).Once()
+		store.On("Eliminar", mock.Anything, userID).Return(nil).Once()
 
-		err := service.Delete(context.Background(), userID)
+		err := service.Eliminar(context.Background(), userID)
 
 		require.NoError(t, err)
 		store.AssertExpectations(t)
-		store.AssertCalled(t, "Delete", mock.Anything, userID)
+		store.AssertCalled(t, "Eliminar", mock.Anything, userID)
 	})
 
-	t.Run("propaga util.ErrNotFound cuando el usuario no existe", func(t *testing.T) {
-		store := new(StoreUserMock)
+	t.Run("propaga utilidades.ErrorNoEncontrado cuando el usuario no existe", func(t *testing.T) {
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		userID := uuid.New()
-		store.On("Delete", mock.Anything, userID).Return(util.ErrNotFound).Once()
+		store.On("Eliminar", mock.Anything, userID).Return(utilidades.ErrorNoEncontrado).Once()
 
-		err := service.Delete(context.Background(), userID)
+		err := service.Eliminar(context.Background(), userID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("propaga errores inesperados del store", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		userID := uuid.New()
-		store.On("Delete", mock.Anything, userID).Return(errStoreBoom).Once()
+		store.On("Eliminar", mock.Anything, userID).Return(errStoreBoom).Once()
 
-		err := service.Delete(context.Background(), userID)
+		err := service.Eliminar(context.Background(), userID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
@@ -171,13 +171,13 @@ func TestUserService_Delete(t *testing.T) {
 
 func TestUserService_GetByRut(t *testing.T) {
 	t.Run("busca por el RUT formateado y devuelve el usuario", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		esperado := newTestUser()
-		store.On("GetByRut", mock.Anything, "19.234.567-K").Return(esperado, nil).Once()
+		store.On("ObtenerPorRUT", mock.Anything, "19.234.567-K").Return(esperado, nil).Once()
 
-		user, err := service.GetByRut(context.Background(), util.RUT{Cuerpo: 19234567, DV: "K"})
+		user, err := service.ObtenerPorRUT(context.Background(), utilidades.RUT{Cuerpo: 19234567, DV: "K"})
 
 		require.NoError(t, err)
 		assert.Same(t, esperado, user)
@@ -187,23 +187,23 @@ func TestUserService_GetByRut(t *testing.T) {
 	t.Run("convierte el RUT a string estándar antes de consultar el store", func(t *testing.T) {
 		casos := []struct {
 			nombre   string
-			rut      util.RUT
+			rut      utilidades.RUT
 			formatea string
 		}{
-			{"cuerpo de 7 dígitos", util.RUT{Cuerpo: 19234567, DV: "K"}, "19.234.567-K"},
-			{"cuerpo de 4 dígitos", util.RUT{Cuerpo: 1234, DV: "5"}, "1.234-5"},
-			{"cuerpo de 2 dígitos", util.RUT{Cuerpo: 12, DV: "3"}, "12-3"},
+			{"cuerpo de 7 dígitos", utilidades.RUT{Cuerpo: 19234567, DV: "K"}, "19.234.567-K"},
+			{"cuerpo de 4 dígitos", utilidades.RUT{Cuerpo: 1234, DV: "5"}, "1.234-5"},
+			{"cuerpo de 2 dígitos", utilidades.RUT{Cuerpo: 12, DV: "3"}, "12-3"},
 		}
 
 		for _, c := range casos {
 			t.Run(c.nombre, func(t *testing.T) {
-				store := new(StoreUserMock)
+				store := new(RepositorioUsuariosMock)
 				service := newService(store)
 
 				esperado := newTestUser()
-				store.On("GetByRut", mock.Anything, c.formatea).Return(esperado, nil).Once()
+				store.On("ObtenerPorRUT", mock.Anything, c.formatea).Return(esperado, nil).Once()
 
-				user, err := service.GetByRut(context.Background(), c.rut)
+				user, err := service.ObtenerPorRUT(context.Background(), c.rut)
 
 				require.NoError(t, err)
 				assert.Same(t, esperado, user)
@@ -213,25 +213,25 @@ func TestUserService_GetByRut(t *testing.T) {
 	})
 
 	t.Run("devuelve nil usuario y el error si el store falla", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
-		store.On("GetByRut", mock.Anything, mock.Anything).Return(nil, util.ErrNotFound).Once()
+		store.On("ObtenerPorRUT", mock.Anything, mock.Anything).Return(nil, utilidades.ErrorNoEncontrado).Once()
 
-		user, err := service.GetByRut(context.Background(), util.RUT{Cuerpo: 19234567, DV: "K"})
+		user, err := service.ObtenerPorRUT(context.Background(), utilidades.RUT{Cuerpo: 19234567, DV: "K"})
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		assert.Nil(t, user)
 		store.AssertExpectations(t)
 	})
 
 	t.Run("no enmascara el error aunque el store devuelva un usuario", func(t *testing.T) {
-		store := new(StoreUserMock)
+		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
-		store.On("GetByRut", mock.Anything, mock.Anything).Return(newTestUser(), errStoreBoom).Once()
+		store.On("ObtenerPorRUT", mock.Anything, mock.Anything).Return(newTestUser(), errStoreBoom).Once()
 
-		user, err := service.GetByRut(context.Background(), util.RUT{Cuerpo: 19234567, DV: "K"})
+		user, err := service.ObtenerPorRUT(context.Background(), utilidades.RUT{Cuerpo: 19234567, DV: "K"})
 
 		require.ErrorIs(t, err, errStoreBoom)
 		assert.Nil(t, user, "si hay error el servicio debe devolver nil")

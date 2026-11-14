@@ -5,145 +5,145 @@ import (
 	"errors"
 	"net/http"
 
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type ServiceEmpresas interface {
-	Create(context.Context, empresaPayload) (model.Empresa, error)
+type IServiceEmpresas interface {
+	Crear(context.Context, PayloadEmpresa) (model.Empresa, error)
 	CambiarNombre(context.Context, string, uuid.UUID, uuid.UUID) error
 	BorrarEmpresa(context.Context, uuid.UUID, uuid.UUID) error
-	GetEmpresas(context.Context, uuid.UUID) ([]model.Empresa, error)
+	ObtenerEmpresas(context.Context, uuid.UUID) ([]model.Empresa, error)
 }
 
-type EmpresasHandler struct {
-	service ServiceEmpresas
-	errors  errorhandler.ErrorsResponse
+type HandlerEmpresas struct {
+	service IServiceEmpresas
+	errors  errores.RespuestaErrores
 }
 
-func NewEmpresasHandler(s ServiceEmpresas, e errorhandler.ErrorsResponse) *EmpresasHandler {
-	return &EmpresasHandler{s, e}
+func NuevoHandlerEmpresas(s IServiceEmpresas, e errores.RespuestaErrores) *HandlerEmpresas {
+	return &HandlerEmpresas{s, e}
 }
 
-type empresaPayload struct {
-	Nombre_empresa string `json:"nombre_empresa" validate:"required,max=30"`
-	user_id        uuid.UUID
+type PayloadEmpresa struct {
+	NombreEmpresa string `json:"nombre_empresa" validate:"required,max=30"`
+	userID        uuid.UUID
 }
 
-func (h *EmpresasHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var payload empresaPayload
-	user := util.GetUserFromContext(r)
+func (h *HandlerEmpresas) Crear(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadEmpresa
+	user := utilidades.ObtenerUsuarioDelContexto(r)
 
 	if user == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	payload.user_id = user.ID
+	payload.userID = user.ID
 
-	if err := util.ReadJSONAndValidate(w, r, &payload); err != nil {
-		h.errors.BadRequestResponse(w, r, err)
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
 		return
 	}
 
-	empresa, err := h.service.Create(r.Context(), payload)
+	empresa, err := h.service.Crear(r.Context(), payload)
 
 	if err != nil {
-		h.errors.InternalServerError(w, r, err)
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 
-	if err := util.JsonResponse(w, http.StatusCreated, empresa); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusCreated, empresa); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *EmpresasHandler) GetEmpresas(w http.ResponseWriter, r *http.Request) {
-	user := util.GetUserFromContext(r)
+func (h *HandlerEmpresas) ObtenerEmpresas(w http.ResponseWriter, r *http.Request) {
+	user := utilidades.ObtenerUsuarioDelContexto(r)
 
 	if user == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
-	empresas, err := h.service.GetEmpresas(r.Context(), user.ID)
+	empresas, err := h.service.ObtenerEmpresas(r.Context(), user.ID)
 
 	if err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, empresas); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, empresas); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *EmpresasHandler) CambiarNombre(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerEmpresas) CambiarNombre(w http.ResponseWriter, r *http.Request) {
 	nombre := chi.URLParam(r, "nombre")
 
 	if nombre == "" {
-		h.errors.BadRequestResponse(w, r, errors.New("la ruta debe incluir el nombre de la empresa"))
+		h.errors.ErrorSolicitudInvalida(w, r, errors.New("la ruta debe incluir el nombre de la empresa"))
 		return
 	}
 
-	user := util.GetUserFromContext(r)
-	empresa := util.GetEmpresaFromContext(r)
+	user := utilidades.ObtenerUsuarioDelContexto(r)
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if user == nil || empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
 	if err := h.service.CambiarNombre(r.Context(), nombre, empresa.ID, user.ID); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "Nombre acualizado"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Nombre actualizado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
 
-func (h *EmpresasHandler) BorrarEmpresa(w http.ResponseWriter, r *http.Request) {
-	user := util.GetUserFromContext(r)
-	empresa := util.GetEmpresaFromContext(r)
+func (h *HandlerEmpresas) BorrarEmpresa(w http.ResponseWriter, r *http.Request) {
+	user := utilidades.ObtenerUsuarioDelContexto(r)
+	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if user == nil || empresa == nil {
-		h.errors.UnauthorizedErrorResponse(w, r, util.ErrUnauthorized)
+		h.errors.ErrorNoAutorizado(w, r, utilidades.ErrorNoAutorizado)
 		return
 	}
 
 	if err := h.service.BorrarEmpresa(r.Context(), empresa.ID, user.ID); err != nil {
 		switch err {
-		case util.ErrNotFound:
-			h.errors.NotFoundResponse(w, r, err)
+		case utilidades.ErrorNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
 			return
 		default:
-			h.errors.InternalServerError(w, r, err)
+			h.errors.ErrorInterno(w, r, err)
 			return
 		}
 	}
 
-	if err := util.JsonResponse(w, http.StatusOK, "empresa borrada"); err != nil {
-		h.errors.InternalServerError(w, r, err)
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "empresa borrada"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
 		return
 	}
 }
