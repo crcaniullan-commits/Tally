@@ -14,8 +14,8 @@ import (
 func TestIncomesFlow(t *testing.T) {
 	user := testutil.NewUser(t)
 	empresa := testutil.CreateEmpresa(t, user)
-	catA := testutil.CreateCategory(t, user, empresa.ID)
-	catB := testutil.CreateCategory(t, user, empresa.ID)
+	catA := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
+	catB := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
 
 	var conCategoria, sinCategoria, conGlobal model.Income
 
@@ -93,8 +93,8 @@ func TestIncomesFlow(t *testing.T) {
 
 	t.Run("filtra por categoría", func(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, user)
-		catX := testutil.CreateCategory(t, user, otherEmpresa.ID)
-		catY := testutil.CreateCategory(t, user, otherEmpresa.ID)
+		catX := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeIngreso)
+		catY := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeIngreso)
 
 		withX := testutil.CreateIncome(t, user, otherEmpresa.ID, 1000, &catX.ID)
 		testutil.CreateIncome(t, user, otherEmpresa.ID, 2000, &catY.ID)
@@ -149,15 +149,14 @@ func TestIncomesFlow(t *testing.T) {
 		require.Empty(t, testutil.DecodeData[[]model.Income](t, beyond))
 	})
 
-	t.Run("edita un ingreso y su fecha", func(t *testing.T) {
+	t.Run("edita un ingreso sin tocar la fecha", func(t *testing.T) {
 		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, &catA.ID)
 
-		nuevaFecha := dbDate(t, -10)
+		fechaOriginal := editable.Fecha.Format(time.DateOnly)
 
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
 			"monto":       20000,
 			"descripcion": "venta corregida",
-			"fecha":       nuevaFecha,
 		})
 
 		testutil.RequireStatus(t, res, http.StatusOK)
@@ -167,7 +166,9 @@ func TestIncomesFlow(t *testing.T) {
 		require.Equal(t, int64(20000), actualizado.Monto)
 		require.NotNil(t, actualizado.Descripcion)
 		require.Equal(t, "venta corregida", *actualizado.Descripcion)
-		require.Equal(t, nuevaFecha, actualizado.Fecha.Format(time.DateOnly))
+
+		// La fecha no es un campo editable: el movimiento conserva la suya.
+		require.Equal(t, fechaOriginal, actualizado.Fecha.Format(time.DateOnly))
 
 		// Los campos que no se mandaron quedan como estaban.
 		require.Equal(t, model.PaymentMethodEfectivo, actualizado.PaymentMethod)
@@ -175,14 +176,22 @@ func TestIncomesFlow(t *testing.T) {
 		require.Equal(t, catA.ID, *actualizado.CategoryID)
 	})
 
+	t.Run("la edición rechaza una categoría de tipo gasto", func(t *testing.T) {
+		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, nil)
+		gastoCat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
+			"category_id": gastoCat.ID.String(),
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
+	})
+
 	t.Run("la edición se refleja en el listado", func(t *testing.T) {
 		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, nil)
 
-		nuevaFecha := dbDate(t, -5)
-
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
 			"monto": 33000,
-			"fecha": nuevaFecha,
 		})
 		testutil.RequireStatus(t, res, http.StatusOK)
 
@@ -194,10 +203,19 @@ func TestIncomesFlow(t *testing.T) {
 			if income.ID == editable.ID {
 				encontrado = true
 				require.Equal(t, int64(33000), income.Monto)
-				require.Equal(t, nuevaFecha, income.Fecha.Format(time.DateOnly))
 			}
 		}
 		require.True(t, encontrado, "el ingreso editado debe aparecer en el listado")
+	})
+
+	t.Run("la edición no acepta la fecha", func(t *testing.T) {
+		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, nil)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
+			"fecha": dbDate(t, -5),
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, `json: unknown field "fecha"`)
 	})
 
 	t.Run("la edición valida el payload", func(t *testing.T) {
@@ -221,7 +239,7 @@ func TestIncomesFlow(t *testing.T) {
 			{
 				name:    "fecha con formato inválido",
 				body:    map[string]any{"fecha": "10-09-2026"},
-				message: "la fecha debe tener el formato AAAA-MM-DD",
+				message: `json: unknown field "fecha"`,
 			},
 			{
 				name:    "payload vacío",
@@ -354,12 +372,23 @@ func TestIncomesFlow(t *testing.T) {
 	t.Run("rechaza una categoría de otra empresa", func(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
-		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
+		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID, model.CategoryTypeIngreso)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/ingresos"), user.Token, map[string]any{
 			"monto":          1000,
 			"payment_method": "efectivo",
 			"category_id":    otherCategory.ID.String(),
+		})
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
+	})
+
+	t.Run("rechaza una categoría de tipo gasto", func(t *testing.T) {
+		gastoCat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
+
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/ingresos"), user.Token, map[string]any{
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    gastoCat.ID.String(),
 		})
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})

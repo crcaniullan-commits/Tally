@@ -8,4 +8,7 @@ var (
 	// asociados y borrarla se los llevaría por delante (los gastos se borran
 	// por ON DELETE CASCADE y los ingresos pierden la categoría).
 	ErrorCategoriaConMovimientos = errors.New("la categoría tiene movimientos asociados y no se puede eliminar")
+	// ErrorTipoCategoriaInvalido: el tipo de la categoría no es 'ingreso' ni
+	// 'gasto'. El enum de la base solo admite esos dos valores.
+	ErrorTipoCategoriaInvalido = errors.New("el tipo de la categoría debe ser 'ingreso' o 'gasto'")
 )

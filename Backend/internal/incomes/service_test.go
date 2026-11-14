@@ -23,7 +23,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 
 		payload := newTestPayload()
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(true, nil).Once()
 
 		store.On("AgregarIngreso", mock.Anything,
@@ -47,7 +47,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(true, nil).Once()
 		store.On("AgregarIngreso", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
@@ -58,7 +58,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		_, err := service.AgregarIngreso(context.Background(), newTestPayload(), testEmpresaID)
 
 		require.NoError(t, err)
-		store.AssertCalled(t, "CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID)
+		store.AssertCalled(t, "CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso)
 		store.AssertExpectations(t)
 	})
 
@@ -94,7 +94,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 			PayloadIngreso{Monto: 300, PaymentMethod: utilidades.MetodoPagoEfectivo}, testEmpresaID)
 
 		require.NoError(t, err)
-		store.AssertNotCalled(t, "CategoriaExiste", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "CategoriaExiste", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
 	})
 
@@ -102,7 +102,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(false, nil).Once()
 
 		_, err := service.AgregarIngreso(context.Background(), newTestPayload(), testEmpresaID)
@@ -119,7 +119,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(false, nil).Once()
 
 		_, err := service.AgregarIngreso(context.Background(), newTestPayload(), testEmpresaID)
@@ -133,7 +133,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(false, errStoreBoom).Once()
 
 		_, err := service.AgregarIngreso(context.Background(), newTestPayload(), testEmpresaID)
@@ -147,7 +147,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(true, nil).Once()
 		store.On("AgregarIngreso", mock.Anything,
 			mock.MatchedBy(func(i *model.Income) bool {
@@ -165,7 +165,7 @@ func TestIncomeService_AddIncome(t *testing.T) {
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			Return(true, nil).Once()
 		store.On("AgregarIngreso", mock.Anything, mock.Anything).
 			Return(errStoreBoom).Once()
@@ -320,15 +320,13 @@ func TestIncomeService_UpdateIncome(t *testing.T) {
 
 		monto := int64(2500)
 		descripcion := "Venta de la tarde"
-		fecha := "2026-09-15"
 
 		store.On("ActualizarIngreso", mock.Anything,
 			mock.MatchedBy(func(c CambiosIngreso) bool {
 				return c.Monto != nil && *c.Monto == monto &&
 					c.PaymentMethod == nil &&
 					c.Descripcion != nil && *c.Descripcion == descripcion &&
-					c.CategoryID == nil &&
-					c.Fecha != nil && c.Fecha.Format("2006-01-02") == fecha
+					c.CategoryID == nil
 			}),
 			testIncomeID, testEmpresaID,
 		).Return(newTestIncome(), nil).Once()
@@ -336,7 +334,6 @@ func TestIncomeService_UpdateIncome(t *testing.T) {
 		income, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
 			Monto:       &monto,
 			Descripcion: &descripcion,
-			Fecha:       &fecha,
 		}, testIncomeID, testEmpresaID)
 
 		require.NoError(t, err)
@@ -344,18 +341,27 @@ func TestIncomeService_UpdateIncome(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("rechaza una fecha con formato invalido", func(t *testing.T) {
+	t.Run("no manda la fecha: el movimiento conserva la suya", func(t *testing.T) {
+		// La fecha no es un campo editable: el store solo recibe los campos
+		// que el service decide tocar.
 		store := new(RepositorioIngresosMock)
 		service := NuevoServicioIngresos(store)
 
-		fecha := "15-09-2026"
+		monto := int64(2500)
+
+		store.On("ActualizarIngreso", mock.Anything,
+			mock.MatchedBy(func(c CambiosIngreso) bool {
+				return c.Monto != nil && *c.Monto == monto
+			}),
+			testIncomeID, testEmpresaID,
+		).Return(newTestIncome(), nil).Once()
 
 		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
-			Fecha: &fecha,
+			Monto: &monto,
 		}, testIncomeID, testEmpresaID)
 
-		require.ErrorIs(t, err, ErrorFechaInvalida)
-		store.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		require.NoError(t, err)
+		store.AssertExpectations(t)
 	})
 
 	t.Run("rechaza un payload sin campos", func(t *testing.T) {
@@ -374,7 +380,7 @@ func TestIncomeService_UpdateIncome(t *testing.T) {
 
 		categoria := uuid.New()
 
-		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID).Return(false, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID, model.CategoryTypeIngreso).Return(false, nil).Once()
 
 		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
 			CategoryID: &categoria,

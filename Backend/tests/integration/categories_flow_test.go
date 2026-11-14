@@ -22,6 +22,7 @@ func TestCategoriesFlow(t *testing.T) {
 		name := testutil.UniqueName("Cat Flow")
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": name,
+			"tipo":   "gasto",
 		})
 
 		testutil.RequireStatus(t, res, http.StatusCreated)
@@ -30,6 +31,7 @@ func TestCategoriesFlow(t *testing.T) {
 		require.Equal(t, name, categoria.Nombre)
 		require.NotNil(t, categoria.EmpresaID)
 		require.Equal(t, empresa.ID, *categoria.EmpresaID)
+		require.Equal(t, model.CategoryTypeGasto, categoria.Tipo)
 	})
 
 	t.Run("lista las categorías propias y las globales", func(t *testing.T) {
@@ -57,6 +59,7 @@ func TestCategoriesFlow(t *testing.T) {
 			for _, c := range categorias {
 				if c.EmpresaID == nil && c.Nombre == nombre {
 					found = true
+					require.Equal(t, model.CategoryTypeIngreso, c.Tipo, "las globales son de tipo ingreso")
 					break
 				}
 			}
@@ -86,11 +89,13 @@ func TestCategoriesFlow(t *testing.T) {
 		base := testutil.UniqueName("Comida")
 		first := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": base,
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, first, http.StatusCreated)
 
 		second := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": strings.ToUpper(base),
+			"tipo":   "gasto",
 		})
 		testutil.RequireError(t, second, http.StatusBadRequest, "La categoría ya existe")
 	})
@@ -99,23 +104,41 @@ func TestCategoriesFlow(t *testing.T) {
 		suffix := uuid.NewString()[:8]
 		first := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": "Áqui " + suffix,
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, first, http.StatusCreated)
 
 		second := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": "aqui " + suffix,
+			"tipo":   "gasto",
 		})
 		testutil.RequireError(t, second, http.StatusBadRequest, "La categoría ya existe")
+	})
+
+	t.Run("el mismo nombre puede existir con otro tipo", func(t *testing.T) {
+		base := testutil.UniqueName("CompartidaTipos")
+		first := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
+			"nombre": base,
+			"tipo":   "gasto",
+		})
+		testutil.RequireStatus(t, first, http.StatusCreated)
+
+		second := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
+			"nombre": base,
+			"tipo":   "ingreso",
+		})
+		testutil.RequireStatus(t, second, http.StatusCreated)
 	})
 
 	t.Run("rechaza renombrar a un nombre ya usado", func(t *testing.T) {
 		base := testutil.UniqueName("Repetida")
 		created := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": base,
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, created, http.StatusCreated)
 
-		other := testutil.CreateCategory(t, user, empresa.ID)
+		other := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/categorias/"+other.ID.String()), user.Token, map[string]string{
 			"nombre": strings.ToLower(base),
 		})
@@ -126,12 +149,14 @@ func TestCategoriesFlow(t *testing.T) {
 		name := testutil.UniqueName("Compartida")
 		first := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": name,
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, first, http.StatusCreated)
 
 		otherEmpresa := testutil.CreateEmpresa(t, user)
 		second := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(otherEmpresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": name,
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, second, http.StatusCreated)
 	})
@@ -141,6 +166,7 @@ func TestCategoriesFlow(t *testing.T) {
 		// nombre de una global no bloquea una categoría propia.
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, map[string]string{
 			"nombre": "Ventas",
+			"tipo":   "gasto",
 		})
 		testutil.RequireStatus(t, res, http.StatusCreated)
 	})
@@ -168,7 +194,7 @@ func TestCategoriesFlow(t *testing.T) {
 	})
 
 	t.Run("no se puede borrar una categoría con gastos", func(t *testing.T) {
-		cat := testutil.CreateCategory(t, user, empresa.ID)
+		cat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
 
 		gasto := testutil.CreateExpense(t, user, empresa.ID, 5000, cat.ID)
 		require.NotEqual(t, uuid.Nil, gasto.ID)
@@ -202,7 +228,7 @@ func TestCategoriesFlow(t *testing.T) {
 	})
 
 	t.Run("no se puede borrar una categoría con ingresos", func(t *testing.T) {
-		cat := testutil.CreateCategory(t, user, empresa.ID)
+		cat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
 
 		ingreso := testutil.CreateIncome(t, user, empresa.ID, 7000, &cat.ID)
 		require.NotEqual(t, uuid.Nil, ingreso.ID)
@@ -213,14 +239,14 @@ func TestCategoriesFlow(t *testing.T) {
 	})
 
 	t.Run("se puede borrar una categoría sin movimientos", func(t *testing.T) {
-		cat := testutil.CreateCategory(t, user, empresa.ID)
+		cat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
 
 		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+cat.ID.String()), user.Token, nil)
 		testutil.RequireStatus(t, res, http.StatusOK)
 	})
 
 	t.Run("borra la categoría", func(t *testing.T) {
-		toDelete := testutil.CreateCategory(t, user, empresa.ID)
+		toDelete := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
 		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+toDelete.ID.String()), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
@@ -241,17 +267,27 @@ func TestCategoriesFlow(t *testing.T) {
 		}{
 			{
 				name:    "nombre vacío",
-				body:    map[string]string{"nombre": ""},
+				body:    map[string]string{"nombre": "", "tipo": "gasto"},
 				message: "Key: 'PayloadCategoria.Nombre' Error:Field validation for 'Nombre' failed on the 'required' tag",
 			},
 			{
 				name:    "nombre demasiado largo",
-				body:    map[string]string{"nombre": "1234567890123456789012345678901"},
+				body:    map[string]string{"nombre": "1234567890123456789012345678901", "tipo": "gasto"},
 				message: "Key: 'PayloadCategoria.Nombre' Error:Field validation for 'Nombre' failed on the 'max' tag",
 			},
 			{
+				name:    "sin tipo",
+				body:    map[string]string{"nombre": "X"},
+				message: "Key: 'PayloadCategoria.Tipo' Error:Field validation for 'Tipo' failed on the 'required' tag",
+			},
+			{
+				name:    "tipo inválido",
+				body:    map[string]string{"nombre": "X", "tipo": "otro"},
+				message: "Key: 'PayloadCategoria.Tipo' Error:Field validation for 'Tipo' failed on the 'oneof' tag",
+			},
+			{
 				name:    "campo desconocido",
-				body:    map[string]any{"nombre": "X", "extra": 1},
+				body:    map[string]any{"nombre": "X", "tipo": "gasto", "extra": 1},
 				message: `json: unknown field "extra"`,
 			},
 		}
@@ -261,6 +297,24 @@ func TestCategoriesFlow(t *testing.T) {
 				res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
+		}
+	})
+
+	t.Run("el PATCH no cambia el tipo", func(t *testing.T) {
+		cat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/categorias/"+cat.ID.String()), user.Token, map[string]string{
+			"nombre": testutil.UniqueName("ConTipo"),
+			"tipo":   "ingreso",
+		})
+		testutil.RequireError(t, res, http.StatusBadRequest, `json: unknown field "tipo"`)
+
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
+		testutil.RequireStatus(t, list, http.StatusOK)
+		for _, c := range testutil.DecodeData[[]model.Categorie](t, list) {
+			if c.ID == cat.ID {
+				require.Equal(t, model.CategoryTypeGasto, c.Tipo, "el tipo no debe cambiar")
+			}
 		}
 	})
 
@@ -316,7 +370,7 @@ func TestCategoriesFlow(t *testing.T) {
 	t.Run("no puede tocar una categoría de otra empresa", func(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
-		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
+		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID, model.CategoryTypeGasto)
 
 		patch := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/categorias/"+otherCategory.ID.String()), user.Token, map[string]string{
 			"nombre": "Intruso",

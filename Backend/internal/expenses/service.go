@@ -2,7 +2,6 @@ package expenses
 
 import (
 	"context"
-	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -15,24 +14,22 @@ type RepositorioGastos interface {
 	ActualizarGasto(context.Context, CambiosGasto, uuid.UUID, uuid.UUID) (model.Expense, error)
 	EliminarGasto(context.Context, uuid.UUID, uuid.UUID) error
 	ObtenerGastosDeEmpresa(context.Context, uuid.UUID, paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error)
-	CategoriaExiste(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	CategoriaExiste(context.Context, uuid.UUID, uuid.UUID, model.CategoryType) (bool, error)
 }
 
 // CambiosGasto son los campos a modificar de un gasto. Un puntero nil significa
-// "no tocar este campo".
+// "no tocar este campo". La fecha no entra: el movimiento conserva la suya.
 type CambiosGasto struct {
 	Monto       *int64
 	CategoryID  *uuid.UUID
 	Descripcion *string
-	Fecha       *time.Time
 }
 
 // Vacio indica que no hay nada que actualizar.
 func (c CambiosGasto) Vacio() bool {
 	return c.Monto == nil &&
 		c.CategoryID == nil &&
-		c.Descripcion == nil &&
-		c.Fecha == nil
+		c.Descripcion == nil
 }
 
 type ServicioGastos struct {
@@ -54,7 +51,7 @@ func (s *ServicioGastos) AgregarGasto(ctx context.Context, payload PayloadGasto,
 		return model.Expense{}, utilidades.ErrorNoEncontrado
 	}
 
-	existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID)
+	existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID, model.CategoryTypeGasto)
 	if err != nil {
 		return model.Expense{}, err
 	}
@@ -80,7 +77,7 @@ func (s *ServicioGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, e
 }
 
 // ActualizarGasto modifica un gasto de la empresa. Solo se tocan los campos que
-// vienen en el payload; la fecha se puede corregir (AAAA-MM-DD).
+// vienen en el payload; la fecha del movimiento no se edita.
 func (s *ServicioGastos) ActualizarGasto(ctx context.Context, payload PayloadActualizarGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
 	cambios := CambiosGasto{
 		Monto:       payload.Monto,
@@ -88,25 +85,14 @@ func (s *ServicioGastos) ActualizarGasto(ctx context.Context, payload PayloadAct
 		Descripcion: payload.Descripcion,
 	}
 
-	// La fecha se parsea antes de mirar si el payload traía algo: si la fecha
-	// vino pero está mal formada, el error es de fecha y no de payload vacío.
-	if payload.Fecha != nil {
-		fecha, err := time.Parse(time.DateOnly, *payload.Fecha)
-
-		if err != nil {
-			return model.Expense{}, ErrorFechaInvalida
-		}
-
-		cambios.Fecha = &fecha
-	}
-
 	if cambios.Vacio() {
 		return model.Expense{}, ErrorSinCambios
 	}
 
-	// La categoría, si viene, tiene que existir y ser global o de la empresa.
+	// La categoría, si viene, tiene que existir, ser global o de la empresa y
+	// ser de tipo 'gasto'.
 	if payload.CategoryID != nil {
-		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID)
+		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID, model.CategoryTypeGasto)
 
 		if err != nil {
 			return model.Expense{}, err

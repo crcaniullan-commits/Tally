@@ -300,15 +300,13 @@ func TestExpensesHandler_Update(t *testing.T) {
 		handler := newTestHandler(service)
 
 		monto := int64(2500)
-		fecha := "2026-09-15"
 
 		service.On("ActualizarGasto", mock.Anything, PayloadActualizarGasto{
 			Monto: &monto,
-			Fecha: &fecha,
 		}, testExpenseID, testEmpresaID).Return(newTestExpense(), nil).Once()
 
 		w := httptest.NewRecorder()
-		handler.Actualizar(w, updateRequest(`{"monto":2500,"fecha":"2026-09-15"}`))
+		handler.Actualizar(w, updateRequest(`{"monto":2500}`))
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), `"monto":1500`)
@@ -329,18 +327,18 @@ func TestExpensesHandler_Update(t *testing.T) {
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
 	})
 
-	t.Run("responde 400 con una fecha invalida", func(t *testing.T) {
+	t.Run("responde 400 si el payload manda la fecha", func(t *testing.T) {
+		// La fecha no es un campo editable: mandarla es un campo desconocido y
+		// LeerJSON (DisallowUnknownFields) lo rechaza.
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		service.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(model.Expense{}, ErrorFechaInvalida).Once()
-
 		w := httptest.NewRecorder()
-		handler.Actualizar(w, updateRequest(`{"fecha":"15-09-2026"}`))
+		handler.Actualizar(w, updateRequest(`{"fecha":"2026-09-15"}`))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"la fecha debe tener el formato AAAA-MM-DD"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"json: unknown field \"fecha\""}`, w.Body.String())
+		service.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el gastoID no es un uuid", func(t *testing.T) {

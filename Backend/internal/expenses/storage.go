@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -57,15 +56,15 @@ func (s *AlmacenGastos) AgregarGasto(ctx context.Context, expense *model.Expense
 // ya actualizado.
 //
 // El WHERE lleva empresa_id: un gasto de otra empresa es indistinguible de uno
-// inexistente (404), igual que en el borrado.
+// inexistente (404), igual que en el borrado. La fecha no se toca: es la del
+// movimiento.
 func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
 	query := `
 		UPDATE expenses
 		SET monto = COALESCE($1::bigint, monto),
 			category_id = COALESCE($2::uuid, category_id),
-			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END,
-			fecha = COALESCE($5::date, fecha)
-		WHERE id = $6 AND empresa_id = $7
+			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END
+		WHERE id = $5 AND empresa_id = $6
 		RETURNING id, empresa_id, monto, category_id, descripcion, fecha, created_at
 	`
 
@@ -76,7 +75,6 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 		monto       *int64
 		categoriaID *uuid.UUID
 		descripcion *string
-		fecha       *string
 	)
 
 	if cambios.Monto != nil {
@@ -89,13 +87,6 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 
 	descripcion = cambios.Descripcion
 
-	if cambios.Fecha != nil {
-		// La fecha viaja como texto AAAA-MM-DD para no depender de la zona
-		// horaria de la sesión al castearla a date.
-		valor := cambios.Fecha.Format(time.DateOnly)
-		fecha = &valor
-	}
-
 	expense := model.Expense{}
 
 	err := s.db.QueryRowContext(ctx, query,
@@ -103,7 +94,6 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 		categoriaID,
 		cambios.Descripcion != nil,
 		descripcion,
-		fecha,
 		gastoID,
 		empresaID,
 	).Scan(
@@ -205,15 +195,16 @@ func (s *AlmacenGastos) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uu
 	return expenses, nil
 }
 
-// CategoriaExiste verifica que la categoría exista y sea visible para la
-// empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
-// no pasa el filtro y el service la trata como inexistente.
-func (s *AlmacenGastos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+// CategoriaExiste verifica que la categoría exista, sea visible para la
+// empresa (global o propia) y sea del tipo indicado. Una categoría de otra
+// empresa o de otro tipo no pasa el filtro y el service la trata como
+// inexistente.
+func (s *AlmacenGastos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID, tipo model.CategoryType) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1
 			FROM categories
-			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2)
+			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2) AND tipo = $3
 		)
 	`
 
@@ -222,7 +213,7 @@ func (s *AlmacenGastos) CategoriaExiste(ctx context.Context, categoryID uuid.UUI
 
 	var existe bool
 
-	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID).Scan(&existe); err != nil {
+	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID, tipo).Scan(&existe); err != nil {
 		return false, err
 	}
 

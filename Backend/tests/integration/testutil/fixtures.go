@@ -192,11 +192,13 @@ func CreateEmpresa(t *testing.T, user *User) model.Empresa {
 	return DecodeData[model.Empresa](t, res)
 }
 
-func CreateCategory(t *testing.T, user *User, empresaID uuid.UUID) model.Categorie {
+// CreateCategory crea una categoría del tipo indicado ("ingreso" o "gasto").
+func CreateCategory(t *testing.T, user *User, empresaID uuid.UUID, tipo model.CategoryType) model.Categorie {
 	t.Helper()
 
 	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/categorias"), user.Token, map[string]string{
 		"nombre": UniqueName("Cat"),
+		"tipo":   string(tipo),
 	})
 
 	RequireStatus(t, res, http.StatusCreated)

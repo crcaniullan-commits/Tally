@@ -419,7 +419,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con la categoría creada.",
+                "description": "Crea una nueva categoría asociada a la empresa autenticada. El campo \"tipo\" indica si la categoría aplica a los ingresos (\"ingreso\") o a los gastos (\"gasto\") y no se puede cambiar después. La respuesta viene envuelta en {\"datos\": ...} con la categoría creada.",
                 "consumes": [
                     "application/json"
                 ],
@@ -483,7 +483,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
+                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. El tipo de la categoría no se modifica: mandarlo en el payload es un 400 por campo desconocido. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -512,7 +512,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/categories.PayloadCategoria"
+                            "$ref": "#/definitions/categories.PayloadCambiarNombre"
                         }
                     }
                 ],
@@ -1237,7 +1237,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa de tipo \"gasto\"; si no existe, pertenece a otra empresa o es de tipo \"ingreso\" responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1367,7 +1367,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. \"fecha\" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el gasto ya actualizado.",
+                "description": "Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload (monto, category_id, descripcion): lo que se omite se queda como estaba. La categoría, si viene, debe ser de tipo \"gasto\". La fecha del movimiento NO se edita: mandarla en el payload es un 400 por campo desconocido. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el gasto ya actualizado.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1411,7 +1411,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, fecha inválida o categoría ajena",
+                        "description": "payload erróneo, sin campos o categoría ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1533,7 +1533,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
+                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa de tipo \"ingreso\"; si no existe, pertenece a otra empresa o es de tipo \"gasto\" responde 400.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1663,7 +1663,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Edita un ingreso de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. \"fecha\" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el ingreso no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el ingreso ya actualizado.",
+                "description": "Edita un ingreso de la empresa autenticada. Solo se modifican los campos que vienen en el payload (monto, payment_method, descripcion, category_id): lo que se omite se queda como estaba. La categoría, si viene, debe ser de tipo \"ingreso\". La fecha del movimiento NO se edita: mandarla en el payload es un 400 por campo desconocido. Si el ingreso no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el ingreso ya actualizado.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1707,7 +1707,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, fecha inválida o categoría ajena",
+                        "description": "payload erróneo, sin campos o categoría ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2734,7 +2734,7 @@ const docTemplate = `{
                 }
             }
         },
-        "categories.PayloadCategoria": {
+        "categories.PayloadCambiarNombre": {
             "type": "object",
             "required": [
                 "nombre"
@@ -2743,6 +2743,30 @@ const docTemplate = `{
                 "nombre": {
                     "type": "string",
                     "maxLength": 30
+                }
+            }
+        },
+        "categories.PayloadCategoria": {
+            "type": "object",
+            "required": [
+                "nombre",
+                "tipo"
+            ],
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "tipo": {
+                    "enum": [
+                        "ingreso",
+                        "gasto"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.CategoryType"
+                        }
+                    ]
                 }
             }
         },
@@ -2844,9 +2868,6 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
-                "fecha": {
-                    "type": "string"
-                },
                 "monto": {
                     "type": "integer"
                 }
@@ -2926,9 +2947,6 @@ const docTemplate = `{
                 "descripcion": {
                     "type": "string",
                     "maxLength": 100
-                },
-                "fecha": {
-                    "type": "string"
                 },
                 "monto": {
                     "type": "integer"
@@ -3023,8 +3041,22 @@ const docTemplate = `{
                 },
                 "nombre": {
                     "type": "string"
+                },
+                "tipo": {
+                    "$ref": "#/definitions/model.CategoryType"
                 }
             }
+        },
+        "model.CategoryType": {
+            "type": "string",
+            "enum": [
+                "ingreso",
+                "gasto"
+            ],
+            "x-enum-varnames": [
+                "CategoryTypeIngreso",
+                "CategoryTypeGasto"
+            ]
         },
         "model.Debtor": {
             "type": "object",

@@ -45,10 +45,10 @@ func (m *RepositorioIngresosMock) ObtenerIngresosDeEmpresa(ctx context.Context, 
 	return incomes, args.Error(1)
 }
 
-// CategoriaExiste indica si la categoría es visible para la empresa. El mock
-// devuelve lo que le configure el test.
-func (m *RepositorioIngresosMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
-	args := m.Called(ctx, categoryID, empresaID)
+// CategoriaExiste indica si la categoría es visible para la empresa y del tipo
+// pedido. El mock devuelve lo que le configure el test.
+func (m *RepositorioIngresosMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID, tipo model.CategoryType) (bool, error) {
+	args := m.Called(ctx, categoryID, empresaID, tipo)
 
 	existe, _ := args.Get(0).(bool)
 

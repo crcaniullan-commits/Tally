@@ -14,10 +14,10 @@ import (
 func TestExpensesFlow(t *testing.T) {
 	user := testutil.NewUser(t)
 	empresa := testutil.CreateEmpresa(t, user)
-	catA := testutil.CreateCategory(t, user, empresa.ID)
-	catB := testutil.CreateCategory(t, user, empresa.ID)
+	catA := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
+	catB := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeGasto)
 
-	var conCategoria, conGlobal model.Expense
+	var conCategoria, conOtraCategoria model.Expense
 
 	t.Run("crea un gasto con categoría y descripción", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
@@ -37,7 +37,20 @@ func TestExpensesFlow(t *testing.T) {
 		require.False(t, conCategoria.Fecha.IsZero())
 	})
 
-	t.Run("crea un gasto con una categoría global", func(t *testing.T) {
+	t.Run("crea un gasto con otra categoría propia", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
+			"monto":       7000,
+			"category_id": catB.ID.String(),
+		})
+
+		testutil.RequireStatus(t, res, http.StatusCreated)
+		conOtraCategoria = testutil.DecodeData[model.Expense](t, res)
+		require.Equal(t, catB.ID, conOtraCategoria.CategoryID)
+	})
+
+	t.Run("rechaza un gasto con una categoría global de tipo ingreso", func(t *testing.T) {
+		// Las categorías globales son de tipo 'ingreso', así que no se pueden
+		// usar en un gasto.
 		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
 		categorias := testutil.DecodeData[[]model.Categorie](t, list)
 
@@ -49,15 +62,14 @@ func TestExpensesFlow(t *testing.T) {
 			}
 		}
 		require.NotEqual(t, uuid.Nil, global.ID)
+		require.Equal(t, model.CategoryTypeIngreso, global.Tipo)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       7000,
 			"category_id": global.ID.String(),
 		})
 
-		testutil.RequireStatus(t, res, http.StatusCreated)
-		conGlobal = testutil.DecodeData[model.Expense](t, res)
-		require.Equal(t, global.ID, conGlobal.CategoryID)
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
 
 	t.Run("lista los gastos de la empresa", func(t *testing.T) {
@@ -71,13 +83,13 @@ func TestExpensesFlow(t *testing.T) {
 			ids[expense.ID] = true
 		}
 		require.True(t, ids[conCategoria.ID])
-		require.True(t, ids[conGlobal.ID])
+		require.True(t, ids[conOtraCategoria.ID])
 	})
 
 	t.Run("filtra por categoría", func(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, user)
-		catX := testutil.CreateCategory(t, user, otherEmpresa.ID)
-		catY := testutil.CreateCategory(t, user, otherEmpresa.ID)
+		catX := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeGasto)
+		catY := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeGasto)
 
 		withX := testutil.CreateExpense(t, user, otherEmpresa.ID, 1000, catX.ID)
 		testutil.CreateExpense(t, user, otherEmpresa.ID, 2000, catY.ID)
@@ -92,7 +104,7 @@ func TestExpensesFlow(t *testing.T) {
 
 	t.Run("filtra por rango de fechas", func(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, user)
-		cat := testutil.CreateCategory(t, user, otherEmpresa.ID)
+		cat := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeGasto)
 		created := testutil.CreateExpense(t, user, otherEmpresa.ID, 3000, cat.ID)
 
 		todayRes := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?desde="+dbDate(t, 0)+"&hasta="+dbDate(t, 0)), user.Token, nil)
@@ -112,7 +124,7 @@ func TestExpensesFlow(t *testing.T) {
 
 	t.Run("pagina los resultados", func(t *testing.T) {
 		otherEmpresa := testutil.CreateEmpresa(t, user)
-		cat := testutil.CreateCategory(t, user, otherEmpresa.ID)
+		cat := testutil.CreateCategory(t, user, otherEmpresa.ID, model.CategoryTypeGasto)
 		for i := 0; i < 3; i++ {
 			testutil.CreateExpense(t, user, otherEmpresa.ID, int64(1000*(i+1)), cat.ID)
 		}
@@ -134,15 +146,14 @@ func TestExpensesFlow(t *testing.T) {
 		require.Empty(t, testutil.DecodeData[[]model.Expense](t, beyond))
 	})
 
-	t.Run("edita un gasto y su fecha", func(t *testing.T) {
+	t.Run("edita un gasto sin tocar la fecha", func(t *testing.T) {
 		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
 
-		nuevaFecha := dbDate(t, -10)
+		fechaOriginal := editable.Fecha.Format(time.DateOnly)
 
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
 			"monto":       20000,
 			"descripcion": "compra corregida",
-			"fecha":       nuevaFecha,
 		})
 
 		testutil.RequireStatus(t, res, http.StatusOK)
@@ -152,20 +163,30 @@ func TestExpensesFlow(t *testing.T) {
 		require.Equal(t, int64(20000), actualizado.Monto)
 		require.NotNil(t, actualizado.Descripcion)
 		require.Equal(t, "compra corregida", *actualizado.Descripcion)
-		require.Equal(t, nuevaFecha, actualizado.Fecha.Format(time.DateOnly))
+
+		// La fecha no es un campo editable: el movimiento conserva la suya.
+		require.Equal(t, fechaOriginal, actualizado.Fecha.Format(time.DateOnly))
 
 		// Los campos que no se mandaron quedan como estaban.
 		require.Equal(t, catA.ID, actualizado.CategoryID)
 	})
 
+	t.Run("la edición rechaza una categoría de tipo ingreso", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+		ingresoCat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"category_id": ingresoCat.ID.String(),
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
+	})
+
 	t.Run("la edición se refleja en el listado", func(t *testing.T) {
 		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
 
-		nuevaFecha := dbDate(t, -5)
-
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
 			"monto": 33000,
-			"fecha": nuevaFecha,
 		})
 		testutil.RequireStatus(t, res, http.StatusOK)
 
@@ -177,10 +198,19 @@ func TestExpensesFlow(t *testing.T) {
 			if expense.ID == editable.ID {
 				encontrado = true
 				require.Equal(t, int64(33000), expense.Monto)
-				require.Equal(t, nuevaFecha, expense.Fecha.Format(time.DateOnly))
 			}
 		}
 		require.True(t, encontrado, "el gasto editado debe aparecer en el listado")
+	})
+
+	t.Run("la edición no acepta la fecha", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"fecha": dbDate(t, -5),
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, `json: unknown field "fecha"`)
 	})
 
 	t.Run("la edición valida el payload", func(t *testing.T) {
@@ -199,7 +229,7 @@ func TestExpensesFlow(t *testing.T) {
 			{
 				name:    "fecha con formato inválido",
 				body:    map[string]any{"fecha": "10-09-2026"},
-				message: "la fecha debe tener el formato AAAA-MM-DD",
+				message: `json: unknown field "fecha"`,
 			},
 			{
 				name:    "payload vacío",
@@ -219,7 +249,7 @@ func TestExpensesFlow(t *testing.T) {
 	t.Run("no puede editar un gasto de otra empresa", func(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
-		otherCat := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
+		otherCat := testutil.CreateCategory(t, otherUser, otherEmpresa.ID, model.CategoryTypeGasto)
 
 		ajeno := testutil.CreateExpense(t, otherUser, otherEmpresa.ID, 1000, otherCat.ID)
 
@@ -327,11 +357,21 @@ func TestExpensesFlow(t *testing.T) {
 	t.Run("rechaza una categoría de otra empresa", func(t *testing.T) {
 		otherUser := testutil.NewUser(t)
 		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
-		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
+		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID, model.CategoryTypeGasto)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
 			"monto":       1000,
 			"category_id": otherCategory.ID.String(),
+		})
+		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
+	})
+
+	t.Run("rechaza una categoría de tipo ingreso", func(t *testing.T) {
+		ingresoCat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
+
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
+			"monto":       1000,
+			"category_id": ingresoCat.ID.String(),
 		})
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
