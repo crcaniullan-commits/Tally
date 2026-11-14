@@ -38,11 +38,11 @@ func TestTenantIsolation(t *testing.T) {
 			path   string
 			body   any
 		}{
-			{name: "listar ingresos", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/incomes")},
-			{name: "listar gastos", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/expenses")},
-			{name: "listar categorías", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/categories")},
-			{name: "listar metas", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/goal")},
-			{name: "listar deudores", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/debtors")},
+			{name: "listar ingresos", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/ingresos")},
+			{name: "listar gastos", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/gastos")},
+			{name: "listar categorías", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/categorias")},
+			{name: "listar metas", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/metas")},
+			{name: "listar deudores", method: http.MethodGet, path: testutil.EmpresaPath(ownerEmpresa.ID, "/deudas")},
 			{
 				name:   "renombrar la empresa",
 				method: http.MethodPatch,
@@ -54,7 +54,7 @@ func TestTenantIsolation(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				res := testutil.Request(t, tc.method, tc.path, intruder.Token, tc.body)
-				testutil.RequireError(t, res, http.StatusNotFound, "not found")
+				testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 			})
 		}
 	})
@@ -69,32 +69,32 @@ func TestTenantIsolation(t *testing.T) {
 			{
 				name:   "ingreso ajeno",
 				method: http.MethodDelete,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/incomes/"+ownerIncome.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/ingresos/"+ownerIncome.ID.String()),
 			},
 			{
 				name:   "gasto ajeno",
 				method: http.MethodDelete,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/expenses/"+ownerExpense.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/gastos/"+ownerExpense.ID.String()),
 			},
 			{
 				name:   "meta ajena",
 				method: http.MethodGet,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/goal/"+ownerGoal.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/metas/"+ownerGoal.ID.String()),
 			},
 			{
 				name:   "estado de meta ajena",
 				method: http.MethodGet,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/goal/"+ownerGoal.ID.String()+"/state"),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/metas/"+ownerGoal.ID.String()+"/estado"),
 			},
 			{
 				name:   "borrar meta ajena",
 				method: http.MethodDelete,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/goal/"+ownerGoal.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/metas/"+ownerGoal.ID.String()),
 			},
 			{
 				name:   "actualizar deudor ajeno",
 				method: http.MethodPatch,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/debtors/"+ownerDebtor.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/deudas/"+ownerDebtor.ID.String()),
 				body: map[string]any{
 					"nombre":       "Intruso",
 					"monto":        1000,
@@ -104,62 +104,62 @@ func TestTenantIsolation(t *testing.T) {
 			{
 				name:   "marcar deudor ajeno como pagado",
 				method: http.MethodPatch,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/debtors/"+ownerDebtor.ID.String()+"/paid"),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/deudas/"+ownerDebtor.ID.String()+"/pagada"),
 			},
 			{
 				name:   "renombrar categoría ajena",
 				method: http.MethodPatch,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categories/"+ownerCat.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCat.ID.String()),
 				body:   map[string]string{"nombre": testutil.UniqueName("Intrusa")},
 			},
 			{
 				name:   "borrar categoría ajena",
 				method: http.MethodDelete,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categories/"+ownerCat.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCat.ID.String()),
 			},
 		}
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				res := testutil.Request(t, tc.method, tc.path, intruder.Token, tc.body)
-				testutil.RequireError(t, res, http.StatusNotFound, "not found")
+				testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 			})
 		}
 	})
 
 	t.Run("no puede usar una categoría de otra empresa", func(t *testing.T) {
-		income := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/incomes"), intruder.Token, map[string]any{
+		income := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/ingresos"), intruder.Token, map[string]any{
 			"monto":          1000,
 			"payment_method": "efectivo",
 			"category_id":    ownerCat.ID.String(),
 		})
-		testutil.RequireError(t, income, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, income, http.StatusBadRequest, "recurso no encontrado")
 
-		expense := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/expenses"), intruder.Token, map[string]any{
+		expense := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/gastos"), intruder.Token, map[string]any{
 			"monto":       1000,
 			"category_id": ownerCat.ID.String(),
 		})
-		testutil.RequireError(t, expense, http.StatusBadRequest, "resource not found")
+		testutil.RequireError(t, expense, http.StatusBadRequest, "recurso no encontrado")
 	})
 
 	t.Run("los listados del intruso solo traen sus datos", func(t *testing.T) {
-		incomes := testutil.DecodeData[[]model.Income](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/incomes"), intruder.Token, nil))
+		incomes := testutil.DecodeData[[]model.Income](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/ingresos"), intruder.Token, nil))
 		require.Len(t, incomes, 1)
 		require.Equal(t, intruderIncome.ID, incomes[0].ID)
 
-		expenses := testutil.DecodeData[[]model.Expense](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/expenses"), intruder.Token, nil))
+		expenses := testutil.DecodeData[[]model.Expense](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/gastos"), intruder.Token, nil))
 		require.Len(t, expenses, 1)
 		require.Equal(t, intruderExpense.ID, expenses[0].ID)
 
-		debtors := testutil.DecodeData[[]model.Debtor](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/debtors"), intruder.Token, nil))
+		debtors := testutil.DecodeData[[]model.Debtor](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/deudas"), intruder.Token, nil))
 		require.Len(t, debtors, 1)
 		require.Equal(t, intruderDebtor.ID, debtors[0].ID)
 
-		goals := testutil.DecodeData[[]model.Goal](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/goal"), intruder.Token, nil))
+		goals := testutil.DecodeData[[]model.Goal](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/metas"), intruder.Token, nil))
 		require.Len(t, goals, 1)
 		require.Equal(t, intruderGoal.ID, goals[0].ID)
 
-		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/categories"), intruder.Token, nil))
+		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/categorias"), intruder.Token, nil))
 		for _, c := range categorias {
 			require.NotEqual(t, ownerCat.ID, c.ID)
 		}
@@ -167,23 +167,23 @@ func TestTenantIsolation(t *testing.T) {
 	})
 
 	t.Run("el dueño sigue viendo sus propios datos", func(t *testing.T) {
-		incomes := testutil.DecodeData[[]model.Income](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/incomes"), owner.Token, nil))
+		incomes := testutil.DecodeData[[]model.Income](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/ingresos"), owner.Token, nil))
 		require.Len(t, incomes, 1)
 		require.Equal(t, ownerIncome.ID, incomes[0].ID)
 
-		expenses := testutil.DecodeData[[]model.Expense](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/expenses"), owner.Token, nil))
+		expenses := testutil.DecodeData[[]model.Expense](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/gastos"), owner.Token, nil))
 		require.Len(t, expenses, 1)
 		require.Equal(t, ownerExpense.ID, expenses[0].ID)
 
-		debtors := testutil.DecodeData[[]model.Debtor](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/debtors"), owner.Token, nil))
+		debtors := testutil.DecodeData[[]model.Debtor](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/deudas"), owner.Token, nil))
 		require.Len(t, debtors, 1)
 		require.Equal(t, ownerDebtor.ID, debtors[0].ID)
 
-		goals := testutil.DecodeData[[]model.Goal](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/goal"), owner.Token, nil))
+		goals := testutil.DecodeData[[]model.Goal](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/metas"), owner.Token, nil))
 		require.Len(t, goals, 1)
 		require.Equal(t, ownerGoal.ID, goals[0].ID)
 
-		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/categories"), owner.Token, nil))
+		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/categorias"), owner.Token, nil))
 		require.Contains(t, categorias, ownerCat)
 		for _, c := range categorias {
 			require.NotEqual(t, intruderCat.ID, c.ID)
@@ -193,11 +193,11 @@ func TestTenantIsolation(t *testing.T) {
 	t.Run("un municipal no accede a las empresas de los usuarios", func(t *testing.T) {
 		// EmpresaOfUser busca por (empresaID, userID): el municipal no tiene
 		// empresas, así que el middleware responde 404 antes del chequeo de rol.
-		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/incomes"), testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		res := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/ingresos"), testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 
-		list := testutil.Request(t, http.MethodGet, "/v1/app/empresas", testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, list, http.StatusForbidden, "forbidden")
+		list := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, list, http.StatusForbidden, "prohibido")
 	})
 
 }

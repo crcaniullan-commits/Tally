@@ -9,17 +9,17 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/crcaniullan-commits/Tally/internal/model"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var errDBBoom = errors.New("boom: fallo de la base de datos")
 
-// mockStore envuelve un StoreEmpresa sobre sqlmock y guarda el SQL que el
+// mockStore envuelve un AlmacenEmpresas sobre sqlmock y guarda el SQL que el
 // código realmente mandó a la base.
 type mockStore struct {
-	store *StoreEmpresa
+	store *AlmacenEmpresas
 	mock  sqlmock.Sqlmock
 	sql   string
 }
@@ -45,7 +45,7 @@ func newMockStore(t *testing.T) *mockStore {
 		_ = db.Close()
 	})
 
-	ms.store = NewStorage(db)
+	ms.store = NuevoAlmacenEmpresas(db)
 	ms.mock = mock
 
 	return ms
@@ -71,7 +71,7 @@ func TestStoreEmpresa_GetByID(t *testing.T) {
 			WithArgs(testEmpresaID, testUserID).
 			WillReturnRows(sqlmock.NewRows(empresaColumns()).AddRow(empresaRow()...))
 
-		empresa, err := ms.store.GetByID(context.Background(), testEmpresaID, testUserID)
+		empresa, err := ms.store.ObtenerPorID(context.Background(), testEmpresaID, testUserID)
 
 		require.NoError(t, err)
 		require.NotNil(t, empresa)
@@ -82,16 +82,16 @@ func TestStoreEmpresa_GetByID(t *testing.T) {
 		assert.Contains(t, ms.sql, "WHERE id = $1 and user_id = $2")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no encuentra la empresa", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no encuentra la empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
 			WithArgs(testEmpresaID, testUserID).
 			WillReturnError(sql.ErrNoRows)
 
-		empresa, err := ms.store.GetByID(context.Background(), testEmpresaID, testUserID)
+		empresa, err := ms.store.ObtenerPorID(context.Background(), testEmpresaID, testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		require.Nil(t, empresa)
 	})
 
@@ -102,7 +102,7 @@ func TestStoreEmpresa_GetByID(t *testing.T) {
 			WithArgs(testEmpresaID, testUserID).
 			WillReturnError(errDBBoom)
 
-		empresa, err := ms.store.GetByID(context.Background(), testEmpresaID, testUserID)
+		empresa, err := ms.store.ObtenerPorID(context.Background(), testEmpresaID, testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		require.Nil(t, empresa)
@@ -117,7 +117,7 @@ func TestStoreEmpresa_GetEmpresas(t *testing.T) {
 			WithArgs(testUserID).
 			WillReturnRows(sqlmock.NewRows(empresaColumns()).AddRow(empresaRow()...))
 
-		empresas, err := ms.store.GetEmpresas(context.Background(), testUserID)
+		empresas, err := ms.store.ObtenerEmpresas(context.Background(), testUserID)
 
 		require.NoError(t, err)
 		require.Len(t, empresas, 1)
@@ -136,7 +136,7 @@ func TestStoreEmpresa_GetEmpresas(t *testing.T) {
 			WithArgs(testUserID).
 			WillReturnError(errDBBoom)
 
-		empresas, err := ms.store.GetEmpresas(context.Background(), testUserID)
+		empresas, err := ms.store.ObtenerEmpresas(context.Background(), testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		require.Nil(t, empresas)
@@ -156,7 +156,7 @@ func TestStoreEmpresa_Create(t *testing.T) {
 			WithArgs("Mi Empresa", testUserID).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testEmpresaID))
 
-		err := ms.store.Create(context.Background(), empresa)
+		err := ms.store.Crear(context.Background(), empresa)
 
 		require.NoError(t, err)
 		assert.Equal(t, testEmpresaID, empresa.ID)
@@ -177,7 +177,7 @@ func TestStoreEmpresa_Create(t *testing.T) {
 			WithArgs("Mi Empresa", testUserID).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.Create(context.Background(), empresa)
+		err := ms.store.Crear(context.Background(), empresa)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -199,7 +199,7 @@ func TestStoreEmpresa_CambiarNombre(t *testing.T) {
 		assert.Contains(t, ms.sql, "WHERE id = $2 and user_id = $3")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se actualizo ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no se actualizo ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier UPDATE").
@@ -208,7 +208,7 @@ func TestStoreEmpresa_CambiarNombre(t *testing.T) {
 
 		err := ms.store.CambiarNombre(context.Background(), "Nueva Empresa", testEmpresaID, testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base de datos", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestStoreEmpresa_BorrarEmpresa(t *testing.T) {
 		assert.Contains(t, ms.sql, "WHERE id = $1 and user_id = $2")
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se elimino ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no se elimino ninguna fila", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectExec("cualquier DELETE").
@@ -260,7 +260,7 @@ func TestStoreEmpresa_BorrarEmpresa(t *testing.T) {
 
 		err := ms.store.BorrarEmpresa(context.Background(), testEmpresaID, testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base de datos", func(t *testing.T) {

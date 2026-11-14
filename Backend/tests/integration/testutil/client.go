@@ -65,16 +65,39 @@ func Request(t *testing.T, method, path, token string, body any) Result {
 	return res
 }
 
+// RequestRaw ejecuta una petición con el Content-Type que le pase el caller.
+// Sirve para los endpoints que no reciben JSON, como la subida de archivos
+// (multipart/form-data).
+func RequestRaw(t *testing.T, method, path, token, contentType string, body []byte) Result {
+	t.Helper()
+
+	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	rec := httptest.NewRecorder()
+	GetEnv().Router.ServeHTTP(rec, req)
+
+	return Result{
+		Status: rec.Code,
+		Body:   rec.Body.Bytes(),
+		Header: rec.Header(),
+	}
+}
+
 func DecodeData[T any](t *testing.T, r Result) T {
 	t.Helper()
 
 	var envelope struct {
-		Data T `json:"data"`
+		Datos T `json:"datos"`
 	}
 
 	require.NoError(t, json.Unmarshal(r.Body, &envelope), "respuesta no es JSON válido: %s", r.Body)
 
-	return envelope.Data
+	return envelope.Datos
 }
 
 func DecodeError(t *testing.T, r Result) string {

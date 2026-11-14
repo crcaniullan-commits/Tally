@@ -23,7 +23,7 @@ Todos desde este directorio (`Backend/`). Las herramientas están declaradas en 
 
 ```bash
 go tool task test        # go vet ./... + go test -race -cover ./...
-go tool task test TEST_FLAGS='-run TestCategorieService -v'   # test suelto
+go tool task test TEST_FLAGS='-run TestServicioCategorias -v'   # test suelto
 go tool task test-cover   # coverage.out + desglose por función
 go tool task clean-cover
 go tool task gen-docs     # regenera docs/
@@ -43,13 +43,13 @@ GOPROXY=off go test ./internal/categories/...   # cache de módulos ya está cal
 
 ## Migraciones
 
-`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración: `000008_add_default_global_categories`.
+`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_excel_files` es del módulo `excel`).
 
 `.envrc` está en `.gitignore` (tiene credenciales reales). Sin él, los tests igual corren; `migration-up` necesita `DB_ADDR`.
 
 ## Esquema de la base de datos
 
-Estado tras `000008`. El número entre paréntesis es la migración que introdujo el elemento.
+Estado tras `000010`. El número entre paréntesis es la migración que introdujo el elemento.
 
 ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`).
 
@@ -61,10 +61,12 @@ ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debit
 - `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
 - `debtors` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `monto BIGINT NOT NULL`, `descripcion`, `pagado BOOLEAN NOT NULL DEFAULT false`, `fecha_limite DATE` nullable, `created_at`.
 - `goals` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `periodo` (`goal_period`), `monto_meta BIGINT NOT NULL`, `created_at`.
+- `password_reset_codes` (`000010`) — `user_id NOT NULL → users` (`CASCADE`), `codigo VARCHAR(64) NOT NULL` (hash SHA-256 del código de 6 dígitos, nunca el código en claro), `expira_en TIMESTAMPTZ NOT NULL`, `verificado_en` y `usado_en` TIMESTAMPTZ nullable; índice `idx_password_reset_codes_user_id`. Es la tabla del flujo de recuperación de contraseña: el código pasa por *emitido → verificado → usado*.
+- `excel_files` (`000009`) — `id UUID PRIMARY KEY` (lo genera Go), `empresa_id NOT NULL → empresas` (`CASCADE`), `nombre TEXT NOT NULL` (nombre original del archivo), `storage_key TEXT NOT NULL UNIQUE` (clave del objeto en el storage), `size_bytes BIGINT NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`; índice `idx_excel_files_empresa (empresa_id, created_at DESC)`. La tabla guarda **solo el registro**: el binario vive en el storage (`internal/storage`).
 
 `000007` sacó `user_id` de `incomes`, `expenses`, `debtors`, `goals` y `categories`: la tenencia pasa a ser `empresa_id → empresas → users`. Crea los índices `idx_incomes_empresa_id`, `idx_expenses_empresa_id`, `idx_debtors_empresa_id`, `idx_goals_empresa_id` y `idx_categories_empresa_id`.
 
-**Unicidad de categorías (solo aplicación):** una empresa no puede repetir nombre de categoría, pero el mismo nombre sí puede existir en otra empresa. La regla vive en `CategorieService` (`normalizarNombre` + `validarNombreUnico`) y **no tiene índice ni constraint en la base**. La comparación ignora mayúsculas, acentos y espacios (`"Comida" == "comida" == "COMIDA"`, `"Áqui" == "aqui"`). Al ser un chequeo previo al `INSERT`, dos creates concurrentes de la misma empresa pueden colarse; cerrarlo requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
+**Unicidad de categorías (solo aplicación):** una empresa no puede repetir nombre de categoría, pero el mismo nombre sí puede existir en otra empresa. La regla vive en `ServicioCategorias` (`normalizarNombre` + `validarNombreUnico`) y **no tiene índice ni constraint en la base**. La comparación ignora mayúsculas, acentos y espacios (`"Comida" == "comida" == "COMIDA"`, `"Áqui" == "aqui"`). Al ser un chequeo previo al `INSERT`, dos creates concurrentes de la misma empresa pueden colarse; cerrarlo requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
 
 ## Montos de dinero: `int64`, nunca `float64`
 
@@ -86,13 +88,13 @@ validate:"required,oneof=debito credito ..." // ok
 validate:"omitempy,max=100"                  // PANIC: Undefined validation function 'omitempy'
 ```
 
-Un tag roto no devuelve 400: **el `Validate.Struct` entra en panic** y el `Recoverer` de chi lo convierte en un 500 sin cuerpo. Un tag roto tumba el endpoint entero. Sin espacios tras las comas.
+Un tag roto no devuelve 400: **el `Validador.Struct` entra en panic** y el `Recoverer` de chi lo convierte en un 500 sin cuerpo. Un tag roto tumba el endpoint entero. Sin espacios tras las comas.
 
-`util.Validate` es un `*validator.Validate` global creado con `validator.WithRequiredStructEnabled()`; por eso `required` aplica también a structs anidados.
+`utilidades.Validador` es un `*validator.Validate` global creado con `validator.WithRequiredStructEnabled()`; por eso `required` aplica también a structs anidados.
 
 ## Tests
 
-Paquetes con tests: `accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, `pagination`, `users` y `util`. Sin tests: `db`, `dbtx`, `excel`, `feed`, `email`, `env`, `error`, `middleware` y `model`.
+Paquetes con tests: `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `paginacion`, `users` y `utilidades`. Sin tests: `bd`, `bdtx`, `informe`, `correo`, `entorno`, `errores`, `intermediario`, `model` y `storage`.
 
 Convención, un archivo por capa dentro del paquete (tests en `package categories`, no `categories_test`):
 
@@ -100,16 +102,20 @@ Convención, un archivo por capa dentro del paquete (tests en `package categorie
 |---|---|
 | `mocks_test.go` | mocks de store y service + fixtures (`newTestX`, IDs compartidos) |
 | `service_test.go` | lógica del service contra el store mockeado |
-| `handler_test.go` | HTTP con `httptest` + `chi.NewRouteContext()` para URL params; contexto con `util.UserCtx` / `util.EmpresaCtx` |
+| `handler_test.go` | HTTP con `httptest` + `chi.NewRouteContext()` para URL params; contexto con `utilidades.ContextoUsuario` / `utilidades.ContextoEmpresa` |
 | `storage_test.go` | `go-sqlmock` sobre el store real |
+
+`excel` suma un `router_test.go`: prueba a nivel de ruta, montando `InitModule` en un router chi.
 
 `testify` (`assert` / `require` / `mock`) y `go-sqlmock` son dependencias directas.
 
-**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. Los tests de integración contra Postgres real viven en `tests/integration/` (ver sección siguiente).
+**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. Los tests de integración contra Postgres real viven en `tests/integration/` (ver sección siguiente).
 
-`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Create` y en `CambiarNombre`, y `GetCategoriasPorEmpresa` / `GetCategoriasVisibles` en el store.
+`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Crear` y en `CambiarNombre`, y `ObtenerCategoriasPorEmpresa` / `ObtenerCategoriasVisibles` en el store.
 
-`debtors` y `goals` tienen tests de service, handler y storage. `debtors` cubre CRUD, listado, `pagado` y mapeo de `ErrNotFound`; `goals` cubre el cálculo de estado y las rutas de detalle/estado.
+`debtors` y `goals` tienen tests de service, handler y storage. `debtors` cubre CRUD, listado, `pagado` y mapeo de `ErrorNoEncontrado`; `goals` cubre el cálculo de estado y las rutas de detalle/estado.
+
+`excel` sigue la convención: `mocks_test.go` (mocks de `fileStore`, `FileStorage` e `IServiceExcel` + fixtures), `service_test.go` (el service contra el store mockeado), `handler_test.go` (HTTP con `httptest` y `chi.NewRouteContext()` para el `{id}`, con el **service mockeado** vía `IServiceExcel`) y `storage_test.go` (`go-sqlmock` sobre el store real). Además tiene `router_test.go`, que prueba a nivel de **ruta** (monta `InitModule` en un router chi) con un `FileStorage` en memoria. El mock de sqlmock devuelve las filas que se le piden y no valida el SQL, así que `TestExcelStore_UsaLaEmpresaEnElWhere` audita a mano el SQL que se ejecuta.
 
 ### Tests de integración (`tests/integration/`)
 
@@ -122,19 +128,20 @@ bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
 - `TestMain` está en `tests/integration/main_test.go` y delega en `testutil.SetupSuite`.
 - `testutil/env.go` crea una base efímera `tally_it_<pid>` desde `DB_ADDR` (default `postgres://postgres:tally_database_env@localhost/tally_database_env?sslmode=disable`), aplica `migrations/*.up.sql` en orden y la dropea al terminar. `TEST_DB_ADDR` permite reutilizar una base existente sin crearla ni dropearla.
 - El router se replica en `testutil/env.go` desde `cmd/application/app.go`. **No** se modifica el archivo de producción para hacer pasar un test.
-- Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. `SendEmail` se reemplaza por un no-op.
+- El módulo `excel` va montado en el router del suite con un `storage.NewDisk` sobre un directorio temporal (el suite no puede escribir en `./data/files`).
+- Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. El remitente de correo se reemplaza por uno que **guarda los códigos enviados** (`testutil.UltimoCodigoDeRecuperacion`), para poder completar el flujo de recuperación de contraseña sin SMTP real.
 - `TestMain` registra un único usuario municipal; los tests lo obtienen con `testutil.MunicipalToken(t)` / `testutil.MunicipalRUT(t)`.
 
 **Archivos y nombres**
 
-- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `incomes_flow_test.go`, etc.).
+- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `password_recovery_flow_test.go`, `incomes_flow_test.go`, `excel_flow_test.go`, etc.).
 - El aislamiento multi-empresa vive en `tenant_isolation_test.go`.
 - Helpers compartidos en `helpers_test.go` (`requireProtected`, `dbDate`); entorno, cliente HTTP y fixtures en `testutil/`.
 - Los tests van en `package integration` (no `integration_test`).
 
 **Reglas de escritura**
 
-- HTTP en memoria con `httptest` a través de `testutil.Request`; no levantar un servidor real ni usar URLs externas.
+- HTTP en memoria con `httptest` a través de `testutil.Request`; no levantar un servidor real ni usar URLs externas. Para los endpoints que no reciben JSON (subida de archivos) está `testutil.RequestRaw`, que deja fijar el `Content-Type` (multipart).
 - Usar `testify` (`require` / `assert`). No agregar dependencias nuevas.
 - Flujo feliz secuencial reutilizando IDs generados; negativos en tablas con `t.Run`.
 - Validar **status exacto** y **mensaje exacto** (`testutil.RequireStatus` / `testutil.RequireError`). No inventar rutas, campos ni mensajes: el código es la fuente de verdad; swagger solo orienta.
@@ -162,41 +169,51 @@ Requiere PostgreSQL. Sin `TEST_DB_ADDR`, la suite crea y dropea su propia base.
 
 ## Arquitectura
 
-`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`StoreIncomes`, `ServiceIncomes`, etc.) definidas en service/handler. Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*dbtx.Transactor` y la config JWT; `accessKeys` recibe el `SendEmail`; `empresas.InitModule` no recibe router y devuelve `Routes` + `middleware.EmpresaFinder`.
+`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`RepositorioIngresos`, `IServiceIngresos`, `IServiceExcel`, etc.) definidas en service/handler. El handler depende siempre de la **interfaz** del service, no del service concreto: el service real se inyecta en el `router.go` (`NuevoHandlerExcel(svc, err)`). Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*bdtx.Transactor` y la config JWT; `clavesAcceso` recibe el `SendEmail`; `excel` recibe el `FileStorage` (la implementación del binario); `empresas.InitModule` no recibe router y devuelve `Routes` + `intermediario.BuscadorEmpresa`.
 
-Los módulos `excel` y `feed` son esqueletos: tienen `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas. `excel` generará un archivo Excel y lo guardará en S3 por usuario y empresa; `feed` obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa.
+Los módulos `excel` e `informe` están en estados distintos. `informe` es un esqueleto: tiene `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas; obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa. `excel` está implementado y montado: sube, lista, descarga y borra archivos `.xlsx` por empresa, con el binario en el storage (`internal/storage`) y solo el registro en la tabla `excel_files`.
 
 Cableado actual en `cmd/application/app.go`:
 
 - `/v1/swagger/*` — UI de Swagger.
-- `/v1/auth` — `POST /` (registro con código de acceso), `POST /login`, `POST /municipal`. Sin JWT.
-- `/v1/app` — todo lo demás, detrás de `AuthTokenMiddleware`:
-  - `/users` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
-  - `/key` — `POST /` (emitir), `POST /AccessID/{keyID}` (reenviar), `POST /revoke/{code}` (revocar). Solo rol municipal.
+- `/v1/autenticacion` — `POST /` (registro con código de acceso), `POST /inicio-sesion`, `POST /municipal`, más el flujo de recuperación de contraseña (`POST /recuperar-password` emite el código de 6 dígitos y lo manda por correo, `POST /recuperar-password/verificar` lo valida, `POST /recuperar-password/confirmar` cambia la contraseña). Sin JWT.
+- `/v1/aplicacion` — todo lo demás, detrás de `MiddlewareTokenAutenticacion`:
+  - `/usuarios` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
+  - `/claves` — `POST /` (emitir), `POST /IDAcceso/{claveID}` (reenviar), `POST /revocar/{codigo}` (revocar). Solo rol municipal.
   - `/empresas` — `POST /` y `GET /`.
-  - `/empresas/{empresaID}` — detrás de `EmpresaMiddleware.EmpresaOfUser`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `incomes`, `expenses`, `categories` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `goals` (prefijo `/goal`: `POST /`, `GET /`, `GET /{goalID}`, `DELETE /{goalID}`, `GET /{goalID}/state`) y `debtors` (prefijo `/debtors`: `POST /`, `GET /`, `PATCH /{debtorID}`, `PATCH /{debtorID}/paid`).
+  - `/empresas/{empresaID}` — detrás de `MiddlewareEmpresa.EmpresaDelUsuario`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `ingresos` (`POST /`, `GET /`, `PATCH /{ingresoID}`, `DELETE /{ingresoID}`), `gastos` (`POST /`, `GET /`, `PATCH /{gastoID}`, `DELETE /{gastoID}`), `categorias` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `metas` (prefijo `/metas`: `POST /`, `GET /`, `GET /{metaID}`, `DELETE /{metaID}`, `GET /{metaID}/estado`), `deudas` (prefijo `/deudas`: `POST /`, `GET /`, `PATCH /{deudorID}`, `PATCH /{deudorID}/pagada`) y `excel` (prefijo `/excel`: `POST /` sube un `.xlsx` en multipart, `GET /` lista, `GET /{id}` descarga, `DELETE /{id}` borra).
 
-**No montados:** `excel` y `feed` (esqueletos sin lógica ni rutas). El resto de los módulos con lógica (`accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, `users`) está montado.
+**No montados:** `informe` (esqueleto sin lógica ni rutas). El resto de los módulos con lógica (`clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `users`) está montado.
 
 Middlewares:
-- `middleware.GlobalMiddlewares()`: `RequestID`, `ClientIPFromHeader("X-Real-IP")`, `Logger`, `Recoverer`.
-- `AuthMiddleware.AuthTokenMiddleware`: valida `Authorization: Bearer <jwt>`, saca `sub` del claim, carga el usuario y lo inyecta en `util.UserCtx`.
-- `AuthMiddleware.CheckOwnership(rol, handler)`: valida **rol**, no pertenencia. El acotado por usuario/empresa va en el `WHERE` del store.
-- `EmpresaMiddleware.EmpresaOfUser`: parsea `{empresaID}` y busca la empresa por `(empresaID, userID)`, inyectándola en `util.EmpresaCtx`.
+- `intermediario.MiddlewaresGlobales()`: `RequestID`, `ClientIPFromHeader("X-Real-IP")`, `Logger`, `Recoverer`.
+- `MiddlewareAutenticacion.MiddlewareTokenAutenticacion`: valida `Authorization: Bearer <jwt>`, saca `sub` del claim, carga el usuario y lo inyecta en `utilidades.ContextoUsuario`.
+- `MiddlewareAutenticacion.VerificarRol(rol, handler)`: valida **rol**, no pertenencia. El acotado por usuario/empresa va en el `WHERE` del store.
+- `MiddlewareEmpresa.EmpresaDelUsuario`: parsea `{empresaID}` y busca la empresa por `(empresaID, userID)`, inyectándola en `utilidades.ContextoEmpresa`.
 
-El usuario y la empresa del request se sacan del contexto con `util.GetUserFromContext(r)` y `util.GetEmpresaFromContext(r)` (no hay helpers en `users`). Devuelven `nil` si el middleware no los inyectó; usarlos sin el middleware correspondiente produce panic.
+El usuario y la empresa del request se sacan del contexto con `utilidades.ObtenerUsuarioDelContexto(r)` y `utilidades.ObtenerEmpresaDelContexto(r)` (no hay helpers en `users`). Devuelven `nil` si el middleware no los inyectó; usarlos sin el middleware correspondiente produce panic.
 
-`dbtx.Transactor` (`internal/dbtx`) envuelve `BeginTx`/`Commit`/`Rollback`. Los stores que participan de una transacción deben usar `dbtx.FromContext(ctx, s.db)` en vez de `s.db`; hoy lo hacen `auth` y `accessKeys`. `auth.RegisterUser` crea el usuario, canjea la llave y setea `plan_expires_at` en una sola transacción.
+`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito: `PATCH /v1/aplicacion/usuarios` reescribe la fila con ese usuario, así que si el hash no viniera el UPDATE escribiría un hash vacío en una columna `NOT NULL` y el endpoint devolvía 500. `ObtenerPorRUT` no lo trae: es solo de lectura.
 
-Respuestas siempre envueltas en `{"data": ...}` vía `util.JsonResponse`; errores como `{"error": "..."}` vía `util.WriteJSONError`. `util.ReadJSON` usa `DisallowUnknownFields` y el handler traduce el fallo a **400**. `util.ErrNotFound` / `util.ErrConflict` son los errores de dominio compartidos; `internal/error` mapea a 400/401/403/404/409/500.
+`bdtx.Transactor` (`internal/bdtx`) envuelve `BeginTx`/`Commit`/`Rollback`. Los stores que participan de una transacción deben usar `bdtx.FromContext(ctx, s.db)` en vez de `s.db`; hoy lo hacen `auth` y `clavesAcceso`. `auth.RegistrarUsuario` crea el usuario, canjea la llave y setea `plan_expires_at` en una sola transacción.
 
-Paginación: `pagination.IncomePaginationQuery` (compartida por `incomes` y `expenses`): `limit` default y máximo 30, `offset`, `since`/`until` en `AAAA-MM-DD` y `category_id` UUID. Un parámetro inválido devuelve error → 400.
+Respuestas siempre envueltas en `{"datos": ...}` vía `utilidades.RespuestaJSON`; errores como `{"error": "..."}` vía `utilidades.EscribirErrorJSON`. `utilidades.LeerJSON` usa `DisallowUnknownFields` y el handler traduce el fallo a **400**. `utilidades.ErrorNoEncontrado` / `utilidades.ErrorConflicto` son los errores de dominio compartidos; `internal/errores` mapea a 400/401/403/404/409/500.
 
-Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoryExists` que la categoría sea global (`empresa_id IS NULL`) o de la empresa; si no existe o es de otra empresa, el handler responde **400**. En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
+Paginación: `paginacion.ConsultaPaginacionIngresos` (compartida por `incomes` y `expenses`): `limite` default y máximo 30, `desplazamiento`, `desde`/`hasta` en `AAAA-MM-DD` y `categoria_id` UUID. Un parámetro inválido devuelve error → 400.
+
+Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoriaExiste` que la categoría sea global (`empresa_id IS NULL`) o de la empresa; si no existe o es de otra empresa, el handler responde **400**. En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
+
+Edición de movimientos (`PATCH .../ingresos/{ingresoID}` y `PATCH .../gastos/{gastoID}`): el payload trae **punteros** y lo que no se manda se queda como está. `fecha` es opcional y va en `AAAA-MM-DD` (formato inválido → **400** `la fecha debe tener el formato AAAA-MM-DD`). Un payload sin ningún campo → **400** `no se enviaron campos para actualizar`. Un movimiento que no existe o es de otra empresa → **404**. La fecha viaja a la base como texto (`$n::date`) para no depender de la zona horaria de la sesión.
+
+Recuperación de contraseña (`internal/auth`): el código de 6 dígitos se genera con `crypto/rand` y **se guarda hasheado (SHA-256)**, nunca en claro. El estado vive en `password_reset_codes`: *emitido → verificado → usado*. Pedir un código nuevo invalida el anterior. Los errores del dominio (`ErrorCodigoRecuperacionInvalido`, `...Vencido`, `...Usado`, `...NoVerificado`) y el email no registrado (`utilidades.ErrorNoEncontrado`) responden **400**. El remitente es la interfaz `auth.Remitente` (`SendPasswordResetCode`), que implementan `correo.Client`, `correo.ClienteGmail` y el mock de `cmd/application/app.go`.
+
+Borrado de categorías: una categoría con ingresos o gastos asociados **no se puede borrar** (`409` `la categoría tiene movimientos asociados y no se puede eliminar`), porque `expenses.category_id` es `NOT NULL` con `ON DELETE CASCADE` y `incomes.category_id` tiene `ON DELETE SET NULL`. El chequeo (`TieneMovimientos`) filtra por la empresa de la categoría: una categoría ajena sigue respondiendo **404**, no 409.
+
+Archivos `.xlsx` (`internal/excel`): el binario vive en el storage (`internal/storage`, hoy disco en `./data/files`, después S3) y en la base solo queda el registro de `excel_files`. La subida es `multipart/form-data` con el campo `file`, tope de **10 MB** (`http.MaxBytesReader`) y validación de los magic bytes (`PK`): un archivo que no sea un zip válido es **400**, no 500. La clave del objeto es `usuarioID/empresaID/uuid.xlsx`. El service guarda **primero el objeto y después el registro**: si el `INSERT` falla, borra el objeto para no dejar basura (si el borrado del objeto falla al eliminar, queda un huérfano sin registro). El listado usa `limit` (default 20, máximo 100) y `offset`, y devuelve `{"datos": [...]}`. El borrado responde **204** y el `ErrNotFound` (archivo inexistente o de otra empresa) se traduce a **404**.
 
 ## Swagger
 
-Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `accessKeys`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes` y `users`. `excel` y `feed` no tienen endpoints todavía.
+Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes` y `users`. `informe` no tiene endpoints todavía.
 
 `docs/docs.go`, `docs/swagger.json` y `docs/swagger.yaml` son **generados**: después de tocar anotaciones o tipos, `go tool task gen-docs` y commiteá el resultado. La UI queda en `/v1/swagger/`. El root de swagger se anota en `cmd/main.go` (`@BasePath /v1`, `@securityDefinitions.apiKey`).
 
@@ -209,7 +226,10 @@ El job levanta un service container `postgres:16` (usuario `postgres`, contrase�
 ## Deuda técnica conocida (verificada, sin arreglar)
 
 - La unicidad de categorías es solo a nivel aplicación: hay ventana de carrera entre el chequeo y el `INSERT` (ver esquema). Cerrarla requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
-- `excel` y `feed` son solo esqueletos: no tienen handlers, services, stores, rutas, tests ni cliente S3 implementados.
+- `informe` es solo un esqueleto: no tiene handlers, services, stores, rutas ni tests implementados.
+- El storage de archivos es disco (`internal/storage.DiskStorage`): el cliente S3 queda pendiente. Además, el borrado de un archivo borra el registro y el objeto, pero si el borrado del objeto falla queda un huérfano en el storage (sin registro, invisible para la API).
+- En la edición de movimientos no se puede **borrar** un campo: mandar `"descripcion": null` o `"category_id": null` equivale a "no tocarlo". Para quitar la categoría de un ingreso hay que hacerlo por otra vía.
+- `GET /v1/aplicacion/usuarios/municipal/{rut}` sigue devolviendo `created_at` y `updated_at` en cero: `ObtenerPorRUT` no selecciona esas columnas (bug conocido, documentado en `tests/report.md`).
 
 ## Otros
 
@@ -218,4 +238,4 @@ El job levanta un service container `postgres:16` (usuario `postgres`, contrase�
 - `docker/` tiene `Dockerfile`, `docker-compose.yml` y `entrypoint.sh` para desplegar la API; el `docker-compose.yml` de la raíz solo levanta Postgres.
 - `.air.toml` configura live reload con `go build -o ./bin/main ./cmd` (la ruta correcta del entrypoint).
 - `gofmt` no está enganchado a ningún hook: corré `gofmt -w` sobre lo que toques.
-- `internal/auth/swagger.go` sale sin formatear de `gofmt` y es preexistente, no lo reformatees de paso.
+- Todos los archivos, incluido `internal/auth/swagger.go`, están formateados con `gofmt`.

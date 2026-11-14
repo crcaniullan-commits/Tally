@@ -10,15 +10,15 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/crcaniullan-commits/Tally/internal/util"
+	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var errDBBoom = errors.New("boom: fallo de la base de datos")
 
-// newMockStore levanta un UserStore sobre una conexión sqlmockeada.
-func newMockStore(t *testing.T) (*UserStore, sqlmock.Sqlmock) {
+// newMockStore levanta un AlmacenUsuarios sobre una conexión sqlmockeada.
+func newMockStore(t *testing.T) (*AlmacenUsuarios, sqlmock.Sqlmock) {
 	t.Helper()
 
 	db, mock, err := sqlmock.New()
@@ -32,7 +32,7 @@ func newMockStore(t *testing.T) (*UserStore, sqlmock.Sqlmock) {
 		_ = db.Close()
 	})
 
-	return NewStorage(db), mock
+	return NuevoAlmacenUsuarios(db), mock
 }
 
 // Fragments de las queries reales, para no duplicar el SQL en cada test.
@@ -46,9 +46,22 @@ var (
 )
 
 // columnas de la query de lectura: id, email, nombre, rut, role,
-// plan_expires_at. El orden tiene que calzar con el Scan de GetByID / GetByRut.
+// plan_expires_at. El orden tiene que calzar con el Scan de ObtenerPorRUT.
 func userColumns() []string {
 	return []string{"id", "email", "nombre", "rut", "role", "plan_expires_at"}
+}
+
+// userColumnsConPassword son las columnas de ObtenerPorID, que además trae el
+// hash de la contraseña: el middleware de autenticación usa ese usuario y
+// PATCH /usuarios reescribe la fila con el hash que viene de ahí.
+func userColumnsConPassword() []string {
+	return []string{"id", "email", "nombre", "rut", "role", "plan_expires_at", "password_hash"}
+}
+
+// userRowConPassword es userRow() con el hash al final.
+func userRowConPassword() []driver.Value {
+	row := userRow()
+	return append(row, []byte("hash-de-prueba"))
 }
 
 func userRow() []driver.Value {
@@ -57,7 +70,7 @@ func userRow() []driver.Value {
 		"emprendedor@correo.cl",
 		"Nombre Original",
 		"19.234.567-K",
-		string(util.UserRoleUsuario),
+		string(utilidades.RolUsuario),
 		testPlanExpiresAt,
 	}
 }
@@ -68,62 +81,79 @@ func TestUserStore_GetByID(t *testing.T) {
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.NoError(t, err)
 		assert.Equal(t, testUserID, user.ID)
 		assert.Equal(t, "emprendedor@correo.cl", user.Email)
 		assert.Equal(t, "Nombre Original", user.Nombre)
-		assert.Equal(t, util.UserRoleUsuario, user.Role)
-		assert.Equal(t, util.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
+		assert.Equal(t, utilidades.RolUsuario, user.Role)
+		assert.Equal(t, utilidades.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
 		require.NotNil(t, user.PlanExpiresAt)
 		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
+	})
+
+	t.Run("devuelve el hash de la contraseña para que el PATCH no lo borre", func(t *testing.T) {
+		// El middleware de autenticación arma el usuario del contexto con este
+		// método y PATCH /usuarios reescribe la fila con ese usuario: si el hash
+		// no viniera, la actualización escribiría un hash vacío en una columna
+		// NOT NULL y el endpoint devolvía 500.
+		store, mock := newMockStore(t)
+
+		mock.ExpectQuery(regexGetByID).
+			WithArgs(testUserID).
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
+
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, user.PasswordHash.GetHash())
 	})
 
 	t.Run("acepta el rut sin separadores", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[3] = "19234567K"
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.NoError(t, err)
-		assert.Equal(t, util.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
+		assert.Equal(t, utilidades.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
 	})
 
-	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
+	t.Run("traduce sql.ErrNoRows a utilidades.ErrorNoEncontrado", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		assert.Nil(t, user)
 	})
 
-	t.Run("devuelve util.ErrFormatoInvalido si el rut de la base no tiene formato", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrFormatoInvalido si el rut de la base no tiene formato", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[3] = "rut-corrupto"
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
-		require.ErrorIs(t, err, util.ErrFormatoInvalido)
+		require.ErrorIs(t, err, utilidades.ErrFormatoInvalido)
 		assert.Nil(t, user)
 	})
 
@@ -134,7 +164,7 @@ func TestUserStore_GetByID(t *testing.T) {
 			WithArgs(testUserID).
 			WillReturnError(errDBBoom)
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, user)
@@ -149,25 +179,25 @@ func TestUserStore_GetByRut(t *testing.T) {
 			WithArgs("19.234.567-K").
 			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
 
-		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+		user, err := store.ObtenerPorRUT(context.Background(), "19.234.567-K")
 
 		require.NoError(t, err)
 		assert.Equal(t, testUserID, user.ID)
-		assert.Equal(t, util.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
+		assert.Equal(t, utilidades.RUT{Cuerpo: 19234567, DV: "K"}, user.Rut)
 		require.NotNil(t, user.PlanExpiresAt)
 		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
-	t.Run("traduce sql.ErrNoRows a util.ErrNotFound", func(t *testing.T) {
+	t.Run("traduce sql.ErrNoRows a utilidades.ErrorNoEncontrado", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		mock.ExpectQuery(regexGetByRut).
 			WithArgs("19.234.567-K").
 			WillReturnRows(sqlmock.NewRows(userColumns()))
 
-		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+		user, err := store.ObtenerPorRUT(context.Background(), "19.234.567-K")
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		assert.Nil(t, user)
 	})
 
@@ -178,7 +208,7 @@ func TestUserStore_GetByRut(t *testing.T) {
 			WithArgs("19.234.567-K").
 			WillReturnError(errDBBoom)
 
-		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+		user, err := store.ObtenerPorRUT(context.Background(), "19.234.567-K")
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.Nil(t, user)
@@ -196,12 +226,12 @@ func TestUserStore_Update(t *testing.T) {
 			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := store.Update(context.Background(), user)
+		err := store.Actualizar(context.Background(), user)
 
 		require.NoError(t, err)
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se actualizo ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no se actualizo ninguna fila", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		user := newTestUser()
@@ -210,9 +240,9 @@ func TestUserStore_Update(t *testing.T) {
 			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := store.Update(context.Background(), user)
+		err := store.Actualizar(context.Background(), user)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base sin convertirlo", func(t *testing.T) {
@@ -224,10 +254,10 @@ func TestUserStore_Update(t *testing.T) {
 			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
 			WillReturnError(errDBBoom)
 
-		err := store.Update(context.Background(), user)
+		err := store.Actualizar(context.Background(), user)
 
 		require.ErrorIs(t, err, errDBBoom)
-		assert.NotErrorIs(t, err, util.ErrNotFound, "un error de DB no es 'no encontrado'")
+		assert.NotErrorIs(t, err, utilidades.ErrorNoEncontrado, "un error de DB no es 'no encontrado'")
 	})
 }
 
@@ -239,21 +269,21 @@ func TestUserStore_Delete(t *testing.T) {
 			WithArgs(testUserID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := store.Delete(context.Background(), testUserID)
+		err := store.Eliminar(context.Background(), testUserID)
 
 		require.NoError(t, err)
 	})
 
-	t.Run("devuelve util.ErrNotFound si no se elimino ninguna fila", func(t *testing.T) {
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no se elimino ninguna fila", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		mock.ExpectExec(regexDelete).
 			WithArgs(testUserID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := store.Delete(context.Background(), testUserID)
+		err := store.Eliminar(context.Background(), testUserID)
 
-		require.ErrorIs(t, err, util.ErrNotFound)
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 
 	t.Run("propaga el error de la base sin convertirlo", func(t *testing.T) {
@@ -263,10 +293,10 @@ func TestUserStore_Delete(t *testing.T) {
 			WithArgs(testUserID).
 			WillReturnError(errDBBoom)
 
-		err := store.Delete(context.Background(), testUserID)
+		err := store.Eliminar(context.Background(), testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
-		assert.NotErrorIs(t, err, util.ErrNotFound)
+		assert.NotErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
 }
 
@@ -276,15 +306,15 @@ func TestUserStore_ContextCancelado(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		store := NewStorage(db)
+		store := NuevoAlmacenUsuarios(db)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err = store.GetByID(ctx, testUserID)
+		_, err = store.ObtenerPorID(ctx, testUserID)
 		require.ErrorIs(t, err, context.Canceled)
 
-		require.ErrorIs(t, store.Delete(ctx, testUserID), context.Canceled)
+		require.ErrorIs(t, store.Eliminar(ctx, testUserID), context.Canceled)
 	})
 }
 
@@ -292,7 +322,7 @@ func TestUserStore_ContextCancelado(t *testing.T) {
 // SQL realmente ejecutado. sqlmock no parsea SQL (solo compara strings), asi que
 // sin esto una coma de menos o una columna cambiada de lugar pasarian los tests
 // en verde y reventarian recien contra Postgres.
-func newCapturingMockStore(t *testing.T) (*UserStore, sqlmock.Sqlmock, *string) {
+func newCapturingMockStore(t *testing.T) (*AlmacenUsuarios, sqlmock.Sqlmock, *string) {
 	t.Helper()
 
 	var capturada string
@@ -313,7 +343,7 @@ func newCapturingMockStore(t *testing.T) (*UserStore, sqlmock.Sqlmock, *string) 
 		_ = db.Close()
 	})
 
-	return NewStorage(db), mock, &capturada
+	return NuevoAlmacenUsuarios(db), mock, &capturada
 }
 
 // columnasDe extrae la lista de proyeccion de un SELECT y la parte por coma.
@@ -332,19 +362,33 @@ func columnasDe(query string) []string {
 }
 
 func TestUserStore_lectura_query(t *testing.T) {
-	// GetByID y GetByRut comparten la misma proyección, así que si cantidad u
-	// orden de columnas y del Scan difieren, el Scan se come el valor de la
-	// columna vecina: sqlmock no lo detecta (solo compara strings) y contra
-	// Postgres es "expected N destination arguments in Scan, not M" en todas las
-	// filas. Como GetByID es lo que usa el middleware de autenticación, eso
-	// tumbaba todos los endpoints bajo /v1/app.
-	t.Run("la proyección de GetByID está en el mismo orden que el Scan", func(t *testing.T) {
+	// Si la cantidad o el orden de columnas de la proyección difieren del Scan,
+	// el Scan se come el valor de la columna vecina: sqlmock no lo detecta
+	// (solo compara strings) y contra Postgres es "expected N destination
+	// arguments in Scan, not M" en todas las filas. Como ObtenerPorID es lo que
+	// usa el middleware de autenticación, eso tumbaba todos los endpoints bajo
+	// /v1/app.
+	t.Run("la proyección de ObtenerPorID está en el mismo orden que el Scan", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
+
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
+
+		require.NoError(t, err)
+		assert.Equal(t, userColumnsConPassword(), columnasDe(*sql))
+		require.NotNil(t, user.PlanExpiresAt)
+		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
+	})
+
+	t.Run("la proyección de ObtenerPorRUT está en el mismo orden que el Scan", func(t *testing.T) {
 		store, mock, sql := newCapturingMockStore(t)
 
 		mock.ExpectQuery("").
 			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorRUT(context.Background(), "19.234.567-K")
 
 		require.NoError(t, err)
 		assert.Equal(t, userColumns(), columnasDe(*sql))
@@ -352,42 +396,28 @@ func TestUserStore_lectura_query(t *testing.T) {
 		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
-	t.Run("la proyección de GetByRut está en el mismo orden que el Scan", func(t *testing.T) {
-		store, mock, sql := newCapturingMockStore(t)
-
-		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
-
-		user, err := store.GetByRut(context.Background(), "19.234.567-K")
-
-		require.NoError(t, err)
-		assert.Equal(t, userColumns(), columnasDe(*sql))
-		require.NotNil(t, user.PlanExpiresAt)
-		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
-	})
-
-	t.Run("GetByID deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
+	t.Run("ObtenerPorID deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
 		// plan_expires_at es nullable a propósito (migrations/000004) y NULL es
 		// "plan gratuito", o sea el caso de casi todos los usuarios. Por eso
 		// PlanExpiresAt es *time.Time y no time.Time: escanear NULL en un
 		// time.Time falla con "unsupported Scan, storing driver.Value type
-		// <nil> into type *time.Time" y tumbaba el AuthTokenMiddleware.
+		// <nil> into type *time.Time" y tumbaba el MiddlewareTokenAutenticacion.
 		store, mock, sql := newCapturingMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[5] = nil
 
 		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
-		user, err := store.GetByID(context.Background(), testUserID)
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.NoError(t, err)
-		assert.Equal(t, userColumns(), columnasDe(*sql))
+		assert.Equal(t, userColumnsConPassword(), columnasDe(*sql))
 		assert.Nil(t, user.PlanExpiresAt)
 	})
 
-	t.Run("GetByRut deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
+	t.Run("ObtenerPorRUT deja PlanExpiresAt en nil si el usuario no tiene plan", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
 		row := userRow()
@@ -397,7 +427,7 @@ func TestUserStore_lectura_query(t *testing.T) {
 			WithArgs("19.234.567-K").
 			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
 
-		user, err := store.GetByRut(context.Background(), "19.234.567-K")
+		user, err := store.ObtenerPorRUT(context.Background(), "19.234.567-K")
 
 		require.NoError(t, err)
 		assert.Nil(t, user.PlanExpiresAt)

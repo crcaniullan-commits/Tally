@@ -9,19 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// requireProtected verifica que una ruta detrás de AuthTokenMiddleware
+// requireProtected verifica que una ruta detrás de MiddlewareTokenAutenticacion
 // responda 401 tanto sin header Authorization como con un token inválido.
 func requireProtected(t *testing.T, method, path string) {
 	t.Helper()
 
 	t.Run("sin token responde 401", func(t *testing.T) {
 		res := testutil.Request(t, method, path, "", nil)
-		testutil.RequireError(t, res, http.StatusUnauthorized, "unauthorized")
+		testutil.RequireError(t, res, http.StatusUnauthorized, "no autorizado")
 	})
 
 	t.Run("token inválido responde 401", func(t *testing.T) {
 		res := testutil.Request(t, method, path, "not-a-token", nil)
-		testutil.RequireError(t, res, http.StatusUnauthorized, "unauthorized")
+		testutil.RequireError(t, res, http.StatusUnauthorized, "no autorizado")
 	})
 }
 

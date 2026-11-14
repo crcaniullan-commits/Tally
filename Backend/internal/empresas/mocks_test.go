@@ -8,28 +8,28 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// StoreEmpresasMock es un mock de la capa de persistencia (StoreEmpresas) usado
-// para probar EmpresaService sin tocar la base de datos.
-type StoreEmpresasMock struct {
+// RepositorioEmpresasMock es un mock de la capa de persistencia (RepositorioEmpresas) usado
+// para probar ServicioEmpresas sin tocar la base de datos.
+type RepositorioEmpresasMock struct {
 	mock.Mock
 }
 
-func (m *StoreEmpresasMock) Create(ctx context.Context, empresa *model.Empresa) error {
+func (m *RepositorioEmpresasMock) Crear(ctx context.Context, empresa *model.Empresa) error {
 	args := m.Called(ctx, empresa)
 	return args.Error(0)
 }
 
-func (m *StoreEmpresasMock) CambiarNombre(ctx context.Context, nombre string, empresaID uuid.UUID, userID uuid.UUID) error {
+func (m *RepositorioEmpresasMock) CambiarNombre(ctx context.Context, nombre string, empresaID uuid.UUID, userID uuid.UUID) error {
 	args := m.Called(ctx, nombre, empresaID, userID)
 	return args.Error(0)
 }
 
-func (m *StoreEmpresasMock) BorrarEmpresa(ctx context.Context, empresaID uuid.UUID, userID uuid.UUID) error {
+func (m *RepositorioEmpresasMock) BorrarEmpresa(ctx context.Context, empresaID uuid.UUID, userID uuid.UUID) error {
 	args := m.Called(ctx, empresaID, userID)
 	return args.Error(0)
 }
 
-func (m *StoreEmpresasMock) GetEmpresas(ctx context.Context, userID uuid.UUID) ([]model.Empresa, error) {
+func (m *RepositorioEmpresasMock) ObtenerEmpresas(ctx context.Context, userID uuid.UUID) ([]model.Empresa, error) {
 	args := m.Called(ctx, userID)
 
 	empresas, _ := args.Get(0).([]model.Empresa)
@@ -37,13 +37,13 @@ func (m *StoreEmpresasMock) GetEmpresas(ctx context.Context, userID uuid.UUID) (
 	return empresas, args.Error(1)
 }
 
-// ServiceEmpresasMock es un mock de la capa de servicio (ServiceEmpresas) usado
-// para probar EmpresasHandler de forma aislada.
-type ServiceEmpresasMock struct {
+// IServiceEmpresasMock es un mock de la capa de servicio (IServiceEmpresas) usado
+// para probar HandlerEmpresas de forma aislada.
+type IServiceEmpresasMock struct {
 	mock.Mock
 }
 
-func (m *ServiceEmpresasMock) Create(ctx context.Context, payload empresaPayload) (model.Empresa, error) {
+func (m *IServiceEmpresasMock) Crear(ctx context.Context, payload PayloadEmpresa) (model.Empresa, error) {
 	args := m.Called(ctx, payload)
 
 	empresa, _ := args.Get(0).(model.Empresa)
@@ -51,17 +51,17 @@ func (m *ServiceEmpresasMock) Create(ctx context.Context, payload empresaPayload
 	return empresa, args.Error(1)
 }
 
-func (m *ServiceEmpresasMock) CambiarNombre(ctx context.Context, nombre string, empresaID uuid.UUID, userID uuid.UUID) error {
+func (m *IServiceEmpresasMock) CambiarNombre(ctx context.Context, nombre string, empresaID uuid.UUID, userID uuid.UUID) error {
 	args := m.Called(ctx, nombre, empresaID, userID)
 	return args.Error(0)
 }
 
-func (m *ServiceEmpresasMock) BorrarEmpresa(ctx context.Context, empresaID uuid.UUID, userID uuid.UUID) error {
+func (m *IServiceEmpresasMock) BorrarEmpresa(ctx context.Context, empresaID uuid.UUID, userID uuid.UUID) error {
 	args := m.Called(ctx, empresaID, userID)
 	return args.Error(0)
 }
 
-func (m *ServiceEmpresasMock) GetEmpresas(ctx context.Context, userID uuid.UUID) ([]model.Empresa, error) {
+func (m *IServiceEmpresasMock) ObtenerEmpresas(ctx context.Context, userID uuid.UUID) ([]model.Empresa, error) {
 	args := m.Called(ctx, userID)
 
 	empresas, _ := args.Get(0).([]model.Empresa)
@@ -84,9 +84,9 @@ func newTestEmpresa() model.Empresa {
 }
 
 // newTestPayloadEmpresa arma el payload de alta con valores que pasan la validación.
-func newTestPayloadEmpresa() empresaPayload {
-	return empresaPayload{
-		Nombre_empresa: "Mi Empresa",
-		user_id:        testUserID,
+func newTestPayloadEmpresa() PayloadEmpresa {
+	return PayloadEmpresa{
+		NombreEmpresa: "Mi Empresa",
+		userID:        testUserID,
 	}
 }

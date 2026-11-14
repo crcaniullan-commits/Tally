@@ -11,19 +11,22 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
-	accesskeys "github.com/crcaniullan-commits/Tally/internal/accessKeys"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
+	"github.com/crcaniullan-commits/Tally/internal/bdtx"
 	"github.com/crcaniullan-commits/Tally/internal/categories"
-	"github.com/crcaniullan-commits/Tally/internal/dbtx"
+	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
 	"github.com/crcaniullan-commits/Tally/internal/debtors"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
-	errorhandler "github.com/crcaniullan-commits/Tally/internal/error"
+	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/excel"
 	"github.com/crcaniullan-commits/Tally/internal/expenses"
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
-	"github.com/crcaniullan-commits/Tally/internal/middleware"
+	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
 	chimit "github.com/go-chi/chi/v5/middleware"
@@ -45,6 +48,10 @@ type TestEnv struct {
 
 var current *TestEnv
 
+// remitente es el cliente de correo que usa el router de la suite: guarda los
+// códigos enviados para que los tests puedan usarlos.
+var remitente *remitenteRecorder
+
 func GetEnv() *TestEnv {
 	if current == nil {
 		panic("testutil: el entorno no fue inicializado; llamá a SetupSuite desde TestMain")
@@ -58,21 +65,35 @@ func newEnv() (*TestEnv, func(), error) {
 		return nil, nil, err
 	}
 
-	return &TestEnv{DB: db, Router: buildRouter(db)}, cleanup, nil
+	// los archivos de excel se guardan en un directorio temporal: el suite no
+	// puede escribir en ./data/files.
+	dir, err := os.MkdirTemp("", "tally-excel-*")
+	if err != nil {
+		cleanup()
+
+		return nil, nil, fmt.Errorf("creando el directorio temporal de excel: %w", err)
+	}
+
+	return &TestEnv{DB: db, Router: buildRouter(db, storage.NewDisk(dir))}, func() {
+		cleanup()
+		_ = os.RemoveAll(dir)
+	}, nil
 }
 
-func buildRouter(db *sql.DB) http.Handler {
+func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 	logger := zap.NewNop().Sugar()
 
-	middl := middleware.NewAuthMiddleware(
-		errorhandler.NewErrorResponse(logger),
+	middl := intermediario.NuevoMiddlewareAutenticacion(
+		errores.NuevaRespuestaErrores(logger),
 		auth.NewJWTAuthenticator(jwtSecret, jwtIssuer, jwtIssuer),
-		users.NewStorage(db),
+		users.NuevoAlmacenUsuarios(db),
 	)
 
 	empresaRoute, finder := empresas.InitModule(db, logger, middl)
-	emMiddl := middleware.NewEmpresaMiddleware(logger, finder)
-	transactor := dbtx.NewTransactor(db)
+	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, finder)
+	transactor := bdtx.NewTransactor(db)
+
+	remitente = newRemitenteRecorder()
 
 	r := chi.NewRouter()
 	r.Use(
@@ -82,19 +103,19 @@ func buildRouter(db *sql.DB) http.Handler {
 	)
 
 	r.Route("/v1", func(r chi.Router) {
-		auth.InitModule(r, db, logger, transactor, jwtSecret, jwtIssuer, jwtExp)
+		auth.InitModule(r, db, logger, transactor, jwtSecret, jwtIssuer, jwtExp, remitente)
 
-		r.Route("/app", func(r chi.Router) {
-			r.Use(middl.AuthTokenMiddleware)
+		r.Route("/aplicacion", func(r chi.Router) {
+			r.Use(middl.MiddlewareTokenAutenticacion)
 
 			users.InitModule(r, db, logger, middl)
-			accesskeys.InitModule(r, db, logger, middl, noopSender{})
+			clavesacceso.InitModule(r, db, logger, middl, remitente)
 
 			r.Route("/empresas", func(r chi.Router) {
 				empresaRoute.Collection(r)
 
 				r.Route("/{empresaID}", func(r chi.Router) {
-					r.Use(emMiddl.EmpresaOfUser)
+					r.Use(emMiddl.EmpresaDelUsuario)
 
 					empresaRoute.Item(r)
 					incomes.InitModule(r, db, logger, middl)
@@ -102,6 +123,7 @@ func buildRouter(db *sql.DB) http.Handler {
 					categories.InitModule(r, db, logger, middl)
 					goals.InitModule(r, db, logger, middl)
 					debtors.InitModule(r, db, logger, middl)
+					excel.InitModule(r, db, files, logger, middl)
 				})
 			})
 		})
@@ -110,10 +132,50 @@ func buildRouter(db *sql.DB) http.Handler {
 	return r
 }
 
-type noopSender struct{}
+// remitenteRecorder guarda los códigos que el servidor "envía" por correo, para
+// que los tests puedan completar el flujo de recuperación de contraseña.
+type remitenteRecorder struct {
+	mu      sync.Mutex
+	codigos []string
+}
 
-func (noopSender) SendActivationCode(context.Context, string, string, time.Time) error {
+func newRemitenteRecorder() *remitenteRecorder {
+	return &remitenteRecorder{}
+}
+
+func (s *remitenteRecorder) SendActivationCode(context.Context, string, string, time.Time) error {
 	return nil
+}
+
+func (s *remitenteRecorder) SendPasswordResetCode(_ context.Context, _ string, code string, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.codigos = append(s.codigos, code)
+
+	return nil
+}
+
+// UltimoCodigo devuelve el último código de recuperación enviado.
+func (s *remitenteRecorder) UltimoCodigo() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.codigos) == 0 {
+		return ""
+	}
+
+	return s.codigos[len(s.codigos)-1]
+}
+
+// UltimoCodigoDeRecuperacion devuelve el último código de recuperación de
+// contraseña enviado por el servidor.
+func UltimoCodigoDeRecuperacion() string {
+	if remitente == nil {
+		return ""
+	}
+
+	return remitente.UltimoCodigo()
 }
 
 func prepareDB() (*sql.DB, func(), error) {

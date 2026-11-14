@@ -18,7 +18,7 @@ func TestEmpresasFlow(t *testing.T) {
 	var empresa model.Empresa
 
 	t.Run("crea una empresa", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/empresas", user.Token, map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/empresas", user.Token, map[string]string{
 			"nombre_empresa": name,
 		})
 
@@ -30,7 +30,7 @@ func TestEmpresasFlow(t *testing.T) {
 	})
 
 	t.Run("lista las empresas del usuario", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", user.Token, nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		empresas := testutil.DecodeData[[]model.Empresa](t, res)
@@ -42,9 +42,9 @@ func TestEmpresasFlow(t *testing.T) {
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/"+url.PathEscape(newName)), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Nombre acualizado", testutil.DecodeData[string](t, res))
+		require.Equal(t, "Nombre actualizado", testutil.DecodeData[string](t, res))
 
-		list := testutil.Request(t, http.MethodGet, "/v1/app/empresas", user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", user.Token, nil)
 		empresas := testutil.DecodeData[[]model.Empresa](t, list)
 		require.Contains(t, empresas, model.Empresa{ID: empresa.ID, NombreEmpresa: newName, UserID: user.ID})
 	})
@@ -57,7 +57,7 @@ func TestEmpresasFlow(t *testing.T) {
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/"+longName), user.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Nombre acualizado", testutil.DecodeData[string](t, res))
+		require.Equal(t, "Nombre actualizado", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("borra la empresa", func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestEmpresasFlow(t *testing.T) {
 		testutil.RequireStatus(t, res, http.StatusOK)
 		require.Equal(t, "empresa borrada", testutil.DecodeData[string](t, res))
 
-		list := testutil.Request(t, http.MethodGet, "/v1/app/empresas", user.Token, nil)
+		list := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", user.Token, nil)
 		empresas := testutil.DecodeData[[]model.Empresa](t, list)
 		for _, e := range empresas {
 			require.NotEqual(t, empresa.ID, e.ID)
@@ -75,14 +75,14 @@ func TestEmpresasFlow(t *testing.T) {
 
 	t.Run("borrar de nuevo devuelve 404", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, ""), user.Token, nil)
-		testutil.RequireError(t, res, http.StatusNotFound, "not found")
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("un usuario sin empresas recibe data null", func(t *testing.T) {
-		// DISCREPANCIA: el swagger documenta 404 para GET /app/empresas cuando
+		// DISCREPANCIA: el swagger documenta 404 para GET /aplicacion/empresas cuando
 		// no hay empresas; el handler responde 200 con data null.
 		empty := testutil.NewUser(t)
-		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", empty.Token, nil)
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", empty.Token, nil)
 
 		testutil.RequireStatus(t, res, http.StatusOK)
 		require.Nil(t, testutil.DecodeData[[]model.Empresa](t, res))
@@ -97,17 +97,17 @@ func TestEmpresasFlow(t *testing.T) {
 			{
 				name:    "nombre faltante",
 				body:    map[string]any{},
-				message: "Key: 'empresaPayload.Nombre_empresa' Error:Field validation for 'Nombre_empresa' failed on the 'required' tag",
+				message: "Key: 'PayloadEmpresa.NombreEmpresa' Error:Field validation for 'NombreEmpresa' failed on the 'required' tag",
 			},
 			{
 				name:    "nombre demasiado largo",
 				body:    map[string]string{"nombre_empresa": "1234567890123456789012345678901"},
-				message: "Key: 'empresaPayload.Nombre_empresa' Error:Field validation for 'Nombre_empresa' failed on the 'max' tag",
+				message: "Key: 'PayloadEmpresa.NombreEmpresa' Error:Field validation for 'NombreEmpresa' failed on the 'max' tag",
 			},
 			{
 				name:    "tipo incorrecto",
 				body:    `{"nombre_empresa":123}`,
-				message: "json: cannot unmarshal number into Go struct field empresaPayload.nombre_empresa of type string",
+				message: "json: cannot unmarshal number into Go struct field PayloadEmpresa.nombre_empresa of type string",
 			},
 			{
 				name:    "campo desconocido",
@@ -118,22 +118,22 @@ func TestEmpresasFlow(t *testing.T) {
 
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				res := testutil.Request(t, http.MethodPost, "/v1/app/empresas", user.Token, tc.body)
+				res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/empresas", user.Token, tc.body)
 				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
 			})
 		}
 	})
 
 	t.Run("un municipal no puede crear empresas", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodPost, "/v1/app/empresas", testutil.MunicipalToken(t), map[string]string{
+		res := testutil.Request(t, http.MethodPost, "/v1/aplicacion/empresas", testutil.MunicipalToken(t), map[string]string{
 			"nombre_empresa": "Empresa Municipal",
 		})
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("un municipal no puede listar empresas", func(t *testing.T) {
-		res := testutil.Request(t, http.MethodGet, "/v1/app/empresas", testutil.MunicipalToken(t), nil)
-		testutil.RequireError(t, res, http.StatusForbidden, "forbidden")
+		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", testutil.MunicipalToken(t), nil)
+		testutil.RequireError(t, res, http.StatusForbidden, "prohibido")
 	})
 
 	t.Run("no puede tocar la empresa de otro usuario", func(t *testing.T) {
@@ -142,10 +142,10 @@ func TestEmpresasFlow(t *testing.T) {
 		intruder := testutil.NewUser(t)
 
 		patch := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(owned.ID, "/Intruso"), intruder.Token, nil)
-		testutil.RequireError(t, patch, http.StatusNotFound, "not found")
+		testutil.RequireError(t, patch, http.StatusNotFound, "no encontrado")
 
 		del := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(owned.ID, ""), intruder.Token, nil)
-		testutil.RequireError(t, del, http.StatusNotFound, "not found")
+		testutil.RequireError(t, del, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("errores de ruta", func(t *testing.T) {
@@ -159,14 +159,14 @@ func TestEmpresasFlow(t *testing.T) {
 			{
 				name:    "delete con uuid inválido",
 				method:  http.MethodDelete,
-				path:    "/v1/app/empresas/no-uuid",
+				path:    "/v1/aplicacion/empresas/no-uuid",
 				status:  http.StatusBadRequest,
 				message: "invalid UUID length: 7",
 			},
 			{
 				name:    "patch con uuid inválido",
 				method:  http.MethodPatch,
-				path:    "/v1/app/empresas/no-uuid/Nueva",
+				path:    "/v1/aplicacion/empresas/no-uuid/Nueva",
 				status:  http.StatusBadRequest,
 				message: "invalid UUID length: 7",
 			},
@@ -175,14 +175,14 @@ func TestEmpresasFlow(t *testing.T) {
 				method:  http.MethodDelete,
 				path:    testutil.EmpresaPath(uuid.New(), ""),
 				status:  http.StatusNotFound,
-				message: "not found",
+				message: "no encontrado",
 			},
 			{
 				name:    "patch inexistente",
 				method:  http.MethodPatch,
 				path:    testutil.EmpresaPath(uuid.New(), "/Nueva"),
 				status:  http.StatusNotFound,
-				message: "not found",
+				message: "no encontrado",
 			},
 		}
 
@@ -194,7 +194,7 @@ func TestEmpresasFlow(t *testing.T) {
 		}
 	})
 
-	requireProtected(t, http.MethodGet, "/v1/app/empresas")
-	requireProtected(t, http.MethodPost, "/v1/app/empresas")
+	requireProtected(t, http.MethodGet, "/v1/aplicacion/empresas")
+	requireProtected(t, http.MethodPost, "/v1/aplicacion/empresas")
 	requireProtected(t, http.MethodDelete, testutil.EmpresaPath(uuid.New(), ""))
 }
