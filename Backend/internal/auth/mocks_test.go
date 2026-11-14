@@ -34,6 +34,46 @@ func (m *AuthStoreMock) establecerVencimiento(ctx context.Context, expiresAt tim
 	return m.Called(ctx, expiresAt, userID).Error(0)
 }
 
+func (m *AuthStoreMock) CrearCodigoRecuperacion(ctx context.Context, codigo *model.CodigoRecuperacion) error {
+	return m.Called(ctx, codigo).Error(0)
+}
+
+func (m *AuthStoreMock) ObtenerCodigoRecuperacion(ctx context.Context, userID uuid.UUID) (*model.CodigoRecuperacion, error) {
+	args := m.Called(ctx, userID)
+
+	codigo, _ := args.Get(0).(*model.CodigoRecuperacion)
+
+	return codigo, args.Error(1)
+}
+
+func (m *AuthStoreMock) MarcarCodigoVerificado(ctx context.Context, codigoID uuid.UUID) error {
+	return m.Called(ctx, codigoID).Error(0)
+}
+
+func (m *AuthStoreMock) MarcarCodigoUsado(ctx context.Context, codigoID uuid.UUID) error {
+	return m.Called(ctx, codigoID).Error(0)
+}
+
+func (m *AuthStoreMock) ActualizarPassword(ctx context.Context, userID uuid.UUID, hash []byte) error {
+	return m.Called(ctx, userID, hash).Error(0)
+}
+
+// RemitenteMock mockea la interfaz Remitente (envío del código de recuperación
+// por correo) y guarda el último código enviado.
+type RemitenteMock struct {
+	mock.Mock
+
+	UltimoCodigo  string
+	UltimoDestino string
+}
+
+func (m *RemitenteMock) SendPasswordResetCode(ctx context.Context, to, code string, expiresAt time.Time) error {
+	m.UltimoCodigo = code
+	m.UltimoDestino = to
+
+	return m.Called(ctx, to, code, expiresAt).Error(0)
+}
+
 // CanjeadorMock mockea la interfaz Canjeador (resuelve el canje de una llave). En
 // produccion la implementa el store de accessKeys.
 type CanjeadorMock struct {
@@ -87,13 +127,27 @@ func (m *IServiceAuthMock) CrearMunicipal(ctx context.Context, payload *PayloadC
 	return args.String(0), args.Error(1)
 }
 
+func (m *IServiceAuthMock) SolicitarRecuperacion(ctx context.Context, email string) error {
+	return m.Called(ctx, email).Error(0)
+}
+
+func (m *IServiceAuthMock) VerificarCodigoRecuperacion(ctx context.Context, email, codigo string) error {
+	return m.Called(ctx, email, codigo).Error(0)
+}
+
+func (m *IServiceAuthMock) ConfirmarRecuperacion(ctx context.Context, email, codigo, password string) error {
+	return m.Called(ctx, email, codigo, password).Error(0)
+}
+
 var (
-	testUserID        = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
-	testMunicipalID   = uuid.MustParse("1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f")
-	testAccessKeyID   = uuid.MustParse("7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d")
-	testAccessKeyCode = "CODIGO-DE-PRUEBA"
-	testPassword      = "ClaveSegura123"
-	testToken         = "jwt.token.de.prueba"
+	testUserID               = uuid.MustParse("6f1a1b3c-2d4e-4f60-8a9b-0c1d2e3f4a5b")
+	testMunicipalID          = uuid.MustParse("1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f")
+	testAccessKeyID          = uuid.MustParse("7a8b9c0d-1e2f-4a3b-8c9d-0e1f2a3b4c5d")
+	testAccessKeyCode        = "CODIGO-DE-PRUEBA"
+	testPassword             = "ClaveSegura123"
+	testToken                = "jwt.token.de.prueba"
+	testCodigoRecuperacion   = "123456"
+	testCodigoRecuperacionID = uuid.MustParse("2b3c4d5e-6f70-4812-93a4-b5c6d7e8f901")
 )
 
 // newTestUser construye un usuario valido con password ya hasheada.
@@ -140,5 +194,17 @@ func newTestMunicipalPayload() *PayloadCrearMunicipal {
 		Password: testPassword,
 		Nombre:   "Nombre Municipal",
 		Rut:      "19.234.567-K",
+	}
+}
+
+// newTestCodigoRecuperacion arma un código de recuperación vigente, sin
+// verificar y sin usar.
+func newTestCodigoRecuperacion() *model.CodigoRecuperacion {
+	return &model.CodigoRecuperacion{
+		ID:        testCodigoRecuperacionID,
+		UserID:    testUserID,
+		Codigo:    hashearCodigo(testCodigoRecuperacion),
+		ExpiraEn:  time.Now().Add(15 * time.Minute),
+		CreatedAt: time.Now(),
 	}
 }

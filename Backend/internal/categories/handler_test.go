@@ -350,6 +350,23 @@ func TestCategoriesHandler_BorrarCategoria(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
+	t.Run("responde 409 cuando la categoria tiene movimientos", func(t *testing.T) {
+		service := new(IServiceCategoriesMock)
+		handler := newTestHandler(service)
+
+		service.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).
+			Return(ErrorCategoriaConMovimientos).Once()
+
+		r := requestWithCategoriaParam(http.MethodDelete, "/categories/"+testCategoriaID.String(), testCategoriaID.String())
+
+		w := httptest.NewRecorder()
+		handler.BorrarCategoria(w, r)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.JSONEq(t, `{"error":"la categoría tiene movimientos asociados y no se puede eliminar"}`, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
 	t.Run("responde 400 si el categoriaID es invalido", func(t *testing.T) {
 		service := new(IServiceCategoriesMock)
 		handler := newTestHandler(service)

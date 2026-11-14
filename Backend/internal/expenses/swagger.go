@@ -16,6 +16,24 @@ package expenses
 //	@Router			/aplicacion/empresas/{empresaID}/gastos	[post]
 func Create() {}
 
+// Update
+//
+//	@Summary		Editar gasto
+//	@Description	Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. "fecha" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el gasto ya actualizado.
+//	@Tags			Gastos
+//	@Accept			json
+//	@Produce		json
+//	@Param			empresaID	path		string					true	"ID de la empresa"
+//	@Param			gastoID		path		string					true	"ID del gasto"
+//	@Param			payload		body		PayloadActualizarGasto	true	"campos a actualizar"
+//	@Success		200			{object}	model.Expense			"gasto actualizado"
+//	@Failure		400			{object}	map[string]string		"payload erróneo, fecha inválida o categoría ajena"
+//	@Failure		404			{object}	map[string]string		"gasto no encontrado"
+//	@Failure		500			{object}	map[string]string		"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/aplicacion/empresas/{empresaID}/gastos/{gastoID}	[patch]
+func Update() {}
+
 // Delete
 //
 //	@Summary		Eliminar gasto

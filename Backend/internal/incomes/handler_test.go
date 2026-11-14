@@ -762,3 +762,126 @@ func TestIncomesHandler_ServiceAndHandlerWiring(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func TestIncomesHandler_UpdateIncome(t *testing.T) {
+	t.Run("responde 200 con el ingreso actualizado", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		monto := int64(2500)
+		fecha := "2026-09-15"
+
+		service.On("ActualizarIngreso", mock.Anything, PayloadActualizarIngreso{
+			Monto: &monto,
+			Fecha: &fecha,
+		}, testIncomeID, testEmpresaID).Return(newTestIncome(), nil).Once()
+
+		body := `{"monto":2500,"fecha":"2026-09-15"}`
+
+		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(body))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("ingresoID", testIncomeID.String())
+
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+		usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
+		empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
+		ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+		ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), `"monto":1500`)
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 404 si el ingreso no existe", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Income{}, ErrorMovimientoNoEncontrado).Once()
+
+		body := `{"monto":2500}`
+
+		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(body))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("ingresoID", testIncomeID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+		usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
+		empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
+		ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+		ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.JSONEq(t, bodyNotFound, w.Body.String())
+	})
+
+	t.Run("responde 400 con una fecha invalida", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Income{}, ErrorFechaInvalida).Once()
+
+		body := `{"fecha":"15-09-2026"}`
+
+		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(body))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("ingresoID", testIncomeID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+		usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
+		empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
+		ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+		ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"la fecha debe tener el formato AAAA-MM-DD"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si el ingresoID no es un uuid", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		req := httptest.NewRequest(http.MethodPatch, "/ingresos/no-es-uuid", strings.NewReader(`{"monto":2500}`))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("ingresoID", "no-es-uuid")
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si el payload no tiene campos", func(t *testing.T) {
+		service := new(IServiceIncomesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Income{}, ErrorSinCambios).Once()
+
+		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(`{}`))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("ingresoID", testIncomeID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+		usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
+		empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
+		ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+		ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"no se enviaron campos para actualizar"}`, w.Body.String())
+	})
+}

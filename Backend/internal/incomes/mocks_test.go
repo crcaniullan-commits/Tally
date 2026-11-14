@@ -27,6 +27,14 @@ func (m *RepositorioIngresosMock) EliminarIngreso(ctx context.Context, ingresoID
 	return args.Error(0)
 }
 
+func (m *RepositorioIngresosMock) ActualizarIngreso(ctx context.Context, cambios CambiosIngreso, ingresoID uuid.UUID, empresaID uuid.UUID) (model.Income, error) {
+	args := m.Called(ctx, cambios, ingresoID, empresaID)
+
+	income, _ := args.Get(0).(model.Income)
+
+	return income, args.Error(1)
+}
+
 // ObtenerIngresosDeEmpresa pasa la paginación a m.Called como tercer argumento para
 // que los tests puedan assertear los query params que llegaron al store.
 func (m *RepositorioIngresosMock) ObtenerIngresosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Income, error) {
@@ -64,6 +72,14 @@ func (m *IServiceIncomesMock) AgregarIngreso(ctx context.Context, payload Payloa
 func (m *IServiceIncomesMock) EliminarIngreso(ctx context.Context, ingresoID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, ingresoID, empresaID)
 	return args.Error(0)
+}
+
+func (m *IServiceIncomesMock) ActualizarIngreso(ctx context.Context, payload PayloadActualizarIngreso, ingresoID uuid.UUID, empresaID uuid.UUID) (model.Income, error) {
+	args := m.Called(ctx, payload, ingresoID, empresaID)
+
+	income, _ := args.Get(0).(model.Income)
+
+	return income, args.Error(1)
 }
 
 func (m *IServiceIncomesMock) ObtenerIngresosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Income, error) {

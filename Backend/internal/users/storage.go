@@ -19,8 +19,12 @@ func NuevoAlmacenUsuarios(db *sql.DB) *AlmacenUsuarios {
 }
 
 func (s *AlmacenUsuarios) ObtenerPorID(ctx context.Context, userID uuid.UUID) (*model.User, error) {
+	// password_hash viene en el SELECT a propósito: el middleware de
+	// autenticación usa este mismo método para armar el usuario del contexto, y
+	// PATCH /usuarios reescribe la fila con ese usuario. Si el hash no viniera,
+	// la actualización escribiría un hash vacío en una columna NOT NULL.
 	query := `
-		SELECT id, email, nombre, rut, role, plan_expires_at
+		SELECT id, email, nombre, rut, role, plan_expires_at, password_hash
 		FROM users
 		WHERE id = $1
 	`
@@ -39,6 +43,7 @@ func (s *AlmacenUsuarios) ObtenerPorID(ctx context.Context, userID uuid.UUID) (*
 		&rawRut,
 		&user.Role,
 		&user.PlanExpiresAt,
+		&user.PasswordHash.Hash,
 	)
 
 	if err != nil {

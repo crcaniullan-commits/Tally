@@ -63,25 +63,42 @@ func TestUsersFlow(t *testing.T) {
 		require.NotEmpty(t, testutil.DecodeData[string](t, res))
 	})
 
-	t.Run("actualizar solo el nombre falla con 500", func(t *testing.T) {
-		// BUG: MiddlewareTokenAutenticacion carga el usuario con
-		// AlmacenUsuarios.ObtenerPorID, que no selecciona password_hash.
-		// Actualizar escribe user.PasswordHash.Hash
-		// (nil) en una columna NOT NULL y PostgreSQL rechaza el UPDATE. El
-		// nombre no se actualiza y el handler responde 500.
+	t.Run("actualiza solo el nombre", func(t *testing.T) {
+		// El nombre se actualiza sin tocar la contraseña: el usuario del
+		// contexto lo carga el middleware con ObtenerPorID, que sí trae el
+		// hash, así que el UPDATE no escribe NULL en una columna NOT NULL.
 		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
 			"nombre": "Solo Nombre",
 		})
 
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Usuario actualizado con éxito", testutil.DecodeData[string](t, res))
+
+		var nombre string
+		require.NoError(t, testutil.GetEnv().DB.QueryRow(`SELECT nombre FROM users WHERE email = $1`, user.Email).Scan(&nombre))
+		require.Equal(t, "Solo Nombre", nombre)
 	})
 
-	t.Run("un payload vacío también falla con 500", func(t *testing.T) {
-		// Mismo bug: con ambos campos vacíos el service igual llama al store,
-		// que intenta escribir password_hash NULL.
+	t.Run("un payload vacío no rompe nada", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]any{})
 
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Usuario actualizado con éxito", testutil.DecodeData[string](t, res))
+	})
+
+	t.Run("actualizar solo el nombre deja la contraseña intacta", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
+			"nombre": "Nombre Con Password",
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		login := testutil.Request(t, http.MethodPost, "/v1/autenticacion/inicio-sesion", "", map[string]string{
+			"email":    user.Email,
+			"password": secondPassword,
+		})
+
+		testutil.RequireStatus(t, login, http.StatusAccepted)
 	})
 
 	t.Run("un municipal consulta un usuario por RUT", func(t *testing.T) {
@@ -92,7 +109,13 @@ func TestUsersFlow(t *testing.T) {
 		data := testutil.DecodeData[map[string]any](t, res)
 		require.Equal(t, user.ID.String(), data["id"])
 		require.Equal(t, user.Email, data["email"])
-		require.Equal(t, updatedName, data["nombre"])
+
+		// El nombre es el que tenga el usuario en la base: otros subtests del
+		// flujo lo cambian.
+		var nombreActual string
+		require.NoError(t, testutil.GetEnv().DB.QueryRow(`SELECT nombre FROM users WHERE email = $1`, user.Email).Scan(&nombreActual))
+		require.Equal(t, nombreActual, data["nombre"])
+
 		require.Equal(t, "usuario", data["role"])
 		require.NotNil(t, data["plan_expires_at"])
 

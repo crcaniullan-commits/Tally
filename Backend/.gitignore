@@ -9,3 +9,6 @@
 *.test
 coverage.out
 coverage.html
+
+# Carpetas
+data/

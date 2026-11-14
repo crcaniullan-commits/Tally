@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/crcaniullan-commits/Tally/internal/bdtx"
@@ -37,13 +38,19 @@ func newTxService(t *testing.T, store RepositorioAuth, redeemer Canjeador, auth 
 		_ = db.Close()
 	})
 
-	return NuevoServicioAuth(store, auth, bdtx.NewTransactor(db), redeemer), sqlm
+	return NuevoServicioAuth(store, auth, bdtx.NewTransactor(db), redeemer, new(RemitenteMock)), sqlm
 }
 
-// newPlainService arma un ServicioAuth sin transactor: Login y CrearMunicipal
-// no abren transaccion, asi que nil es seguro.
+// newPlainService arma un ServicioAuth sin transactor: Login, CrearMunicipal y
+// el flujo de recuperacion no abren transaccion, asi que nil es seguro.
 func newPlainService(store RepositorioAuth, auth Authenticator) *ServicioAuth {
-	return NuevoServicioAuth(store, auth, nil, nil)
+	return NuevoServicioAuth(store, auth, nil, nil, new(RemitenteMock))
+}
+
+// newServiceConRemitente arma un ServicioAuth con un remitente mockeado, para
+// poder assertar el código que se manda por correo.
+func newServiceConRemitente(store RepositorioAuth, email Remitente) *ServicioAuth {
+	return NuevoServicioAuth(store, new(AutenticadorMock), nil, nil, email)
 }
 
 func TestAuthService_RegisterUser(t *testing.T) {
@@ -334,5 +341,206 @@ func TestAuthService_CreateMunicipal(t *testing.T) {
 		_, err := service.CrearMunicipal(context.Background(), newTestMunicipalPayload())
 
 		require.ErrorIs(t, err, users.ErrDuplicateEmail)
+	})
+}
+
+func TestAuthService_SolicitarRecuperacion(t *testing.T) {
+	t.Run("guarda el codigo hasheado y lo manda por correo", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		email := new(RemitenteMock)
+		service := newServiceConRemitente(store, email)
+
+		var registro *model.CodigoRecuperacion
+
+		store.On("ObtenerPorEmail", mock.Anything, "emprendedor@correo.cl").
+			Return(newTestUser(), nil).Once()
+
+		store.On("CrearCodigoRecuperacion", mock.Anything, mock.Anything).
+			Run(func(args mock.Arguments) {
+				registro = args.Get(1).(*model.CodigoRecuperacion)
+			}).Return(nil).Once()
+
+		email.On("SendPasswordResetCode", mock.Anything, "emprendedor@correo.cl", mock.Anything, mock.Anything).
+			Return(nil).Once()
+
+		require.NoError(t, service.SolicitarRecuperacion(context.Background(), "emprendedor@correo.cl"))
+
+		assert.Len(t, email.UltimoCodigo, longitudCodigoRecuperacion)
+		for _, digito := range email.UltimoCodigo {
+			assert.True(t, digito >= '0' && digito <= '9', "el codigo debe ser numerico: %s", email.UltimoCodigo)
+		}
+
+		// Lo que se guarda es el hash del codigo, no el codigo.
+		require.NotNil(t, registro)
+		assert.NotEqual(t, email.UltimoCodigo, registro.Codigo)
+		assert.Equal(t, hashearCodigo(email.UltimoCodigo), registro.Codigo)
+		assert.Equal(t, testUserID, registro.UserID)
+		assert.True(t, registro.ExpiraEn.After(time.Now()))
+
+		store.AssertExpectations(t)
+		email.AssertExpectations(t)
+	})
+
+	t.Run("propaga el error si el email no esta registrado", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		email := new(RemitenteMock)
+		service := newServiceConRemitente(store, email)
+
+		store.On("ObtenerPorEmail", mock.Anything, "nadie@correo.cl").
+			Return(nil, utilidades.ErrorNoEncontrado).Once()
+
+		err := service.SolicitarRecuperacion(context.Background(), "nadie@correo.cl")
+
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
+		store.AssertNotCalled(t, "CrearCodigoRecuperacion", mock.Anything, mock.Anything)
+		email.AssertNotCalled(t, "SendPasswordResetCode", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("no manda el correo si no se pudo guardar el codigo", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		email := new(RemitenteMock)
+		service := newServiceConRemitente(store, email)
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("CrearCodigoRecuperacion", mock.Anything, mock.Anything).Return(errServiceBoom).Once()
+
+		err := service.SolicitarRecuperacion(context.Background(), "emprendedor@correo.cl")
+
+		require.ErrorIs(t, err, errServiceBoom)
+		email.AssertNotCalled(t, "SendPasswordResetCode", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("propaga el error si el correo no se pudo enviar", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		email := new(RemitenteMock)
+		service := newServiceConRemitente(store, email)
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("CrearCodigoRecuperacion", mock.Anything, mock.Anything).Return(nil).Once()
+		email.On("SendPasswordResetCode", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(errServiceBoom).Once()
+
+		err := service.SolicitarRecuperacion(context.Background(), "emprendedor@correo.cl")
+
+		require.ErrorIs(t, err, errServiceBoom)
+	})
+}
+
+func TestAuthService_VerificarCodigoRecuperacion(t *testing.T) {
+	t.Run("marca el codigo como verificado", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		store.On("ObtenerPorEmail", mock.Anything, "emprendedor@correo.cl").
+			Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, testUserID).
+			Return(newTestCodigoRecuperacion(), nil).Once()
+		store.On("MarcarCodigoVerificado", mock.Anything, testCodigoRecuperacionID).Return(nil).Once()
+
+		require.NoError(t, service.VerificarCodigoRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion))
+
+		store.AssertExpectations(t)
+	})
+
+	t.Run("rechaza un codigo que no coincide", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, mock.Anything).
+			Return(newTestCodigoRecuperacion(), nil).Once()
+
+		err := service.VerificarCodigoRecuperacion(context.Background(), "emprendedor@correo.cl", "000000")
+
+		require.ErrorIs(t, err, ErrorCodigoRecuperacionInvalido)
+		store.AssertNotCalled(t, "MarcarCodigoVerificado", mock.Anything, mock.Anything)
+	})
+
+	t.Run("rechaza un codigo vencido", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		codigo := newTestCodigoRecuperacion()
+		codigo.ExpiraEn = time.Now().Add(-time.Minute)
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, mock.Anything).Return(codigo, nil).Once()
+
+		err := service.VerificarCodigoRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion)
+
+		require.ErrorIs(t, err, ErrorCodigoRecuperacionVencido)
+	})
+
+	t.Run("rechaza un codigo ya usado", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		codigo := newTestCodigoRecuperacion()
+		usado := time.Now().Add(-time.Minute)
+		codigo.UsadoEn = &usado
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, mock.Anything).Return(codigo, nil).Once()
+
+		err := service.VerificarCodigoRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion)
+
+		require.ErrorIs(t, err, ErrorCodigoRecuperacionUsado)
+	})
+}
+
+func TestAuthService_ConfirmarRecuperacion(t *testing.T) {
+	t.Run("cambia la password y consume el codigo", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		codigo := newTestCodigoRecuperacion()
+		verificado := time.Now().Add(-time.Minute)
+		codigo.VerificadoEn = &verificado
+
+		store.On("ObtenerPorEmail", mock.Anything, "emprendedor@correo.cl").
+			Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, testUserID).Return(codigo, nil).Once()
+		store.On("ActualizarPassword", mock.Anything, testUserID, mock.Anything).
+			Run(func(args mock.Arguments) {
+				hash := args.Get(2).([]byte)
+				require.NoError(t, bcrypt.CompareHashAndPassword(hash, []byte(testPassword)))
+			}).Return(nil).Once()
+		store.On("MarcarCodigoUsado", mock.Anything, testCodigoRecuperacionID).Return(nil).Once()
+
+		require.NoError(t, service.ConfirmarRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion, testPassword))
+
+		store.AssertExpectations(t)
+	})
+
+	t.Run("exige que el codigo este verificado antes", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, mock.Anything).
+			Return(newTestCodigoRecuperacion(), nil).Once()
+
+		err := service.ConfirmarRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion, testPassword)
+
+		require.ErrorIs(t, err, ErrorCodigoRecuperacionNoVerificado)
+		store.AssertNotCalled(t, "ActualizarPassword", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("no cambia la password si falla la escritura", func(t *testing.T) {
+		store := new(AuthStoreMock)
+		service := newPlainService(store, new(AutenticadorMock))
+
+		codigo := newTestCodigoRecuperacion()
+		verificado := time.Now().Add(-time.Minute)
+		codigo.VerificadoEn = &verificado
+
+		store.On("ObtenerPorEmail", mock.Anything, mock.Anything).Return(newTestUser(), nil).Once()
+		store.On("ObtenerCodigoRecuperacion", mock.Anything, mock.Anything).Return(codigo, nil).Once()
+		store.On("ActualizarPassword", mock.Anything, mock.Anything, mock.Anything).Return(errServiceBoom).Once()
+
+		err := service.ConfirmarRecuperacion(context.Background(), "emprendedor@correo.cl", testCodigoRecuperacion, testPassword)
+
+		require.ErrorIs(t, err, errServiceBoom)
+		store.AssertNotCalled(t, "MarcarCodigoUsado", mock.Anything, mock.Anything)
 	})
 }

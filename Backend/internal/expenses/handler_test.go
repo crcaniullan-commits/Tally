@@ -276,3 +276,100 @@ func TestExpensesHandler_GetExpensesOfEmpresa(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 }
+
+func TestExpensesHandler_Update(t *testing.T) {
+	// updateRequest arma una request PATCH con el URL param "gastoID" y el
+	// contexto del middleware de empresa.
+	updateRequest := func(body string) *http.Request {
+		req := httptest.NewRequest(http.MethodPatch, "/gastos/"+testExpenseID.String(), strings.NewReader(body))
+
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("gastoID", testExpenseID.String())
+
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+		usuario := &model.User{ID: testUserID, Nombre: "Emprendedor", Role: utilidades.RolUsuario}
+		empresa := &model.Empresa{ID: testEmpresaID, NombreEmpresa: "Mi Empresa", UserID: testUserID}
+		ctx = context.WithValue(ctx, utilidades.ContextoUsuario, usuario)
+		ctx = context.WithValue(ctx, utilidades.ContextoEmpresa, empresa)
+
+		return req.WithContext(ctx)
+	}
+
+	t.Run("responde 200 con el gasto actualizado", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		monto := int64(2500)
+		fecha := "2026-09-15"
+
+		service.On("ActualizarGasto", mock.Anything, PayloadActualizarGasto{
+			Monto: &monto,
+			Fecha: &fecha,
+		}, testExpenseID, testEmpresaID).Return(newTestExpense(), nil).Once()
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{"monto":2500,"fecha":"2026-09-15"}`))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), `"monto":1500`)
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 404 si el gasto no existe", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Expense{}, ErrorMovimientoNoEncontrado).Once()
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{"monto":2500}`))
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.JSONEq(t, bodyNotFound, w.Body.String())
+	})
+
+	t.Run("responde 400 con una fecha invalida", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Expense{}, ErrorFechaInvalida).Once()
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{"fecha":"15-09-2026"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"la fecha debe tener el formato AAAA-MM-DD"}`, w.Body.String())
+	})
+
+	t.Run("responde 400 si el gastoID no es un uuid", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		req := httptest.NewRequest(http.MethodPatch, "/gastos/no-es-uuid", strings.NewReader(`{"monto":2500}`))
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("gastoID", "no-es-uuid")
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, req.WithContext(ctx))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si el payload no tiene campos", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		service.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Expense{}, ErrorSinCambios).Once()
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.JSONEq(t, `{"error":"no se enviaron campos para actualizar"}`, w.Body.String())
+	})
+}

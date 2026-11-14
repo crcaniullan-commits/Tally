@@ -144,6 +144,9 @@ func (h *HandlerCategorias) BorrarCategoria(w http.ResponseWriter, r *http.Reque
 
 	if err := h.service.BorrarCategoria(r.Context(), categoriaID, empresa.ID); err != nil {
 		switch err {
+		case ErrorCategoriaConMovimientos:
+			h.errors.ErrorConflicto(w, r, err)
+			return
 		case utilidades.ErrorNoEncontrado:
 			h.errors.ErrorNoEncontrado(w, r, err)
 			return

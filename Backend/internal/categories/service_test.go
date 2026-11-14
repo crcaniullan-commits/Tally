@@ -279,6 +279,7 @@ func TestCategorieService_BorrarCategoria(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
+		store.On("TieneMovimientos", mock.Anything, testCategoriaID, testEmpresaID).Return(false, nil).Once()
 		store.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(nil).Once()
 
 		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)
@@ -287,10 +288,35 @@ func TestCategorieService_BorrarCategoria(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
+	t.Run("no borra una categoria que tiene movimientos", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		store.On("TieneMovimientos", mock.Anything, testCategoriaID, testEmpresaID).Return(true, nil).Once()
+
+		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorCategoriaConMovimientos)
+		store.AssertNotCalled(t, "BorrarCategoria", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("propaga el error del chequeo de movimientos", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		store.On("TieneMovimientos", mock.Anything, testCategoriaID, testEmpresaID).Return(false, errStoreBoom).Once()
+
+		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		store.AssertNotCalled(t, "BorrarCategoria", mock.Anything, mock.Anything, mock.Anything)
+	})
+
 	t.Run("propaga utilidades.ErrorNoEncontrado cuando la categoria no existe", func(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
+		store.On("TieneMovimientos", mock.Anything, testCategoriaID, testEmpresaID).Return(false, nil).Once()
 		store.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)
@@ -304,6 +330,7 @@ func TestCategorieService_BorrarCategoria(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
+		store.On("TieneMovimientos", mock.Anything, testCategoriaID, testEmpresaID).Return(false, nil).Once()
 		store.On("BorrarCategoria", mock.Anything, testCategoriaID, testEmpresaID).Return(errStoreBoom).Once()
 
 		err := service.BorrarCategoria(context.Background(), testCategoriaID, testEmpresaID)

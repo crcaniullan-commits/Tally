@@ -167,6 +167,58 @@ func TestCategoriesFlow(t *testing.T) {
 		testutil.RequireError(t, del, http.StatusNotFound, "no encontrado")
 	})
 
+	t.Run("no se puede borrar una categoría con gastos", func(t *testing.T) {
+		cat := testutil.CreateCategory(t, user, empresa.ID)
+
+		gasto := testutil.CreateExpense(t, user, empresa.ID, 5000, cat.ID)
+		require.NotEqual(t, uuid.Nil, gasto.ID)
+
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+cat.ID.String()), user.Token, nil)
+
+		testutil.RequireError(t, res, http.StatusConflict, "la categoría tiene movimientos asociados y no se puede eliminar")
+
+		// La categoría sigue existiendo y el gasto también.
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
+		testutil.RequireStatus(t, list, http.StatusOK)
+
+		var sigue bool
+		for _, c := range testutil.DecodeData[[]model.Categorie](t, list) {
+			if c.ID == cat.ID {
+				sigue = true
+			}
+		}
+		require.True(t, sigue, "la categoría no debe borrarse")
+
+		gastos := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, nil)
+		testutil.RequireStatus(t, gastos, http.StatusOK)
+
+		var gastoVivo bool
+		for _, g := range testutil.DecodeData[[]model.Expense](t, gastos) {
+			if g.ID == gasto.ID {
+				gastoVivo = true
+			}
+		}
+		require.True(t, gastoVivo, "el gasto no debe borrarse junto con la categoría")
+	})
+
+	t.Run("no se puede borrar una categoría con ingresos", func(t *testing.T) {
+		cat := testutil.CreateCategory(t, user, empresa.ID)
+
+		ingreso := testutil.CreateIncome(t, user, empresa.ID, 7000, &cat.ID)
+		require.NotEqual(t, uuid.Nil, ingreso.ID)
+
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+cat.ID.String()), user.Token, nil)
+
+		testutil.RequireError(t, res, http.StatusConflict, "la categoría tiene movimientos asociados y no se puede eliminar")
+	})
+
+	t.Run("se puede borrar una categoría sin movimientos", func(t *testing.T) {
+		cat := testutil.CreateCategory(t, user, empresa.ID)
+
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+cat.ID.String()), user.Token, nil)
+		testutil.RequireStatus(t, res, http.StatusOK)
+	})
+
 	t.Run("borra la categoría", func(t *testing.T) {
 		toDelete := testutil.CreateCategory(t, user, empresa.ID)
 		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/categorias/"+toDelete.ID.String()), user.Token, nil)

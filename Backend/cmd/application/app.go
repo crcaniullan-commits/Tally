@@ -89,7 +89,7 @@ func (app *Application) Run() error {
 		users.NuevoAlmacenUsuarios(app.db),
 	)
 
-	var smtp clavesacceso.SendEmail
+	var smtp remitidorCorreo
 
 	if apikey := entorno.ObtenerCadena("GMAIL_SMTP_PASSWORD", ""); apikey != "" {
 		NewSmtp, err := correo.NuevoClienteGmail(
@@ -120,7 +120,7 @@ func (app *Application) Run() error {
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		auth.InitModule(r, app.db, app.logger, transactor,
-			app.config.ConfigJWT.Secret, app.config.ConfigJWT.Iss, app.config.ConfigJWT.Exp)
+			app.config.ConfigJWT.Secret, app.config.ConfigJWT.Iss, app.config.ConfigJWT.Exp, smtp)
 		r.Route("/aplicacion", func(r chi.Router) {
 			r.Use(middl.MiddlewareTokenAutenticacion)
 			users.InitModule(r, app.db, app.logger, middl)
@@ -158,6 +158,14 @@ func (app *Application) Run() error {
 
 type remitenteSimulado struct{}
 
+// remitidorCorreo es lo que el servidor espera del cliente de correo: el envío
+// de códigos de activación (claves de acceso) y el de códigos de recuperación
+// de contraseña (auth).
+type remitidorCorreo interface {
+	clavesacceso.SendEmail
+	auth.Remitente
+}
+
 func NuevoRemitenteSimulado() *remitenteSimulado {
 	return &remitenteSimulado{}
 }
@@ -165,6 +173,14 @@ func NuevoRemitenteSimulado() *remitenteSimulado {
 func (e *remitenteSimulado) SendActivationCode(ctx context.Context, to, code string, expiresAt time.Time) error {
 	log.Printf(
 		"[MOCK EMAIL] Para: %s | Código: %s | Vence: %s",
+		to, code, expiresAt.Format("02/01/2006 15:04"),
+	)
+	return nil
+}
+
+func (e *remitenteSimulado) SendPasswordResetCode(ctx context.Context, to, code string, expiresAt time.Time) error {
+	log.Printf(
+		"[MOCK EMAIL] Recuperación de contraseña para: %s | Código: %s | Vence: %s",
 		to, code, expiresAt.Format("02/01/2006 15:04"),
 	)
 	return nil

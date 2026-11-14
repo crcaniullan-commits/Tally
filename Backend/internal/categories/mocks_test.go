@@ -29,6 +29,14 @@ func (m *CategoriaStoreMock) BorrarCategoria(ctx context.Context, categoriaID uu
 	return args.Error(0)
 }
 
+func (m *CategoriaStoreMock) TieneMovimientos(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, categoriaID, empresaID)
+
+	tiene, _ := args.Get(0).(bool)
+
+	return tiene, args.Error(1)
+}
+
 func (m *CategoriaStoreMock) ObtenerCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	args := m.Called(ctx, empresaID)
 	categorias, _ := args.Get(0).([]model.Categorie)

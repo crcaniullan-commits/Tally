@@ -1,5 +1,21 @@
 basePath: /v1
 definitions:
+  auth.PayloadConfirmarRecuperacion:
+    properties:
+      codigo:
+        type: string
+      email:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - codigo
+    - email
+    - password
+    type: object
   auth.PayloadCrearMunicipal:
     properties:
       email:
@@ -59,6 +75,25 @@ definitions:
     - email
     - password
     type: object
+  auth.PayloadSolicitarRecuperacion:
+    properties:
+      email:
+        maxLength: 100
+        type: string
+    required:
+    - email
+    type: object
+  auth.PayloadVerificarRecuperacion:
+    properties:
+      codigo:
+        type: string
+      email:
+        maxLength: 100
+        type: string
+    required:
+    - codigo
+    - email
+    type: object
   categories.PayloadCategoria:
     properties:
       nombre:
@@ -114,6 +149,18 @@ definitions:
     required:
     - nombre_empresa
     type: object
+  expenses.PayloadActualizarGasto:
+    properties:
+      category_id:
+        type: string
+      descripcion:
+        maxLength: 100
+        type: string
+      fecha:
+        type: string
+      monto:
+        type: integer
+    type: object
   expenses.PayloadGasto:
     properties:
       category_id:
@@ -156,6 +203,26 @@ definitions:
     - monto_meta
     - nombre
     - periodo
+    type: object
+  incomes.PayloadActualizarIngreso:
+    properties:
+      category_id:
+        type: string
+      descripcion:
+        maxLength: 100
+        type: string
+      fecha:
+        type: string
+      monto:
+        type: integer
+      payment_method:
+        allOf:
+        - $ref: '#/definitions/model.PaymentMethod'
+        enum:
+        - debito
+        - credito
+        - transferencia
+        - efectivo
     type: object
   incomes.PayloadIngreso:
     properties:
@@ -732,7 +799,9 @@ paths:
   /aplicacion/empresas/{empresaID}/categorias/{categoria}:
     delete:
       description: 'Elimina una categoría, siempre que pertenezca a la empresa autenticada.
-        La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.'
+        Si la categoría tiene ingresos o gastos asociados no se puede borrar: responde
+        409 y la categoría sigue existiendo. La respuesta viene envuelta en {"datos":
+        ...} con el mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -759,6 +828,12 @@ paths:
             type: object
         "404":
           description: categoría no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: la categoría tiene movimientos asociados
           schema:
             additionalProperties:
               type: string
@@ -1157,6 +1232,61 @@ paths:
       summary: Eliminar gasto
       tags:
       - Gastos
+    patch:
+      consumes:
+      - application/json
+      description: 'Edita un gasto de la empresa autenticada. Solo se modifican los
+        campos que vienen en el payload: lo que se omite se queda como estaba. "fecha"
+        (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido
+        responde 400. Si el gasto no existe o es de otra empresa responde 404. La
+        respuesta viene envuelta en {"datos": ...} con el gasto ya actualizado.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del gasto
+        in: path
+        name: gastoID
+        required: true
+        type: string
+      - description: campos a actualizar
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/expenses.PayloadActualizarGasto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: gasto actualizado
+          schema:
+            $ref: '#/definitions/model.Expense'
+        "400":
+          description: payload erróneo, fecha inválida o categoría ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: gasto no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Editar gasto
+      tags:
+      - Gastos
   /aplicacion/empresas/{empresaID}/ingresos:
     get:
       description: 'Devuelve una página de los ingresos de la empresa autenticada,
@@ -1308,6 +1438,61 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Eliminar ingreso
+      tags:
+      - Ingresos
+    patch:
+      consumes:
+      - application/json
+      description: 'Edita un ingreso de la empresa autenticada. Solo se modifican
+        los campos que vienen en el payload: lo que se omite se queda como estaba.
+        "fecha" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato
+        inválido responde 400. Si el ingreso no existe o es de otra empresa responde
+        404. La respuesta viene envuelta en {"datos": ...} con el ingreso ya actualizado.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del ingreso
+        in: path
+        name: ingresoID
+        required: true
+        type: string
+      - description: campos a actualizar
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/incomes.PayloadActualizarIngreso'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ingreso actualizado
+          schema:
+            $ref: '#/definitions/model.Income'
+        "400":
+          description: payload erróneo, fecha inválida o categoría ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: ingreso no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Editar ingreso
       tags:
       - Ingresos
   /aplicacion/empresas/{empresaID}/metas:
@@ -1735,6 +1920,113 @@ paths:
               type: string
             type: object
       summary: Registrar usuario municipal
+      tags:
+      - Autenticacion
+  /autenticacion/recuperar-password:
+    post:
+      consumes:
+      - application/json
+      description: Genera un código numérico de 6 dígitos y lo manda por correo al
+        email indicado. El código sirve para verificar al usuario y después cambiar
+        su contraseña. Si el email no está registrado responde 400.
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.PayloadSolicitarRecuperacion'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: código enviado
+          schema:
+            type: string
+        "400":
+          description: payload erróneo o email no registrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Pedir código de recuperación de contraseña
+      tags:
+      - Autenticacion
+  /autenticacion/recuperar-password/confirmar:
+    post:
+      consumes:
+      - application/json
+      description: Cambia la contraseña del usuario con el código de recuperación
+        ya verificado. El código queda consumido y no se puede reusar.
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.PayloadConfirmarRecuperacion'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: contraseña actualizada
+          schema:
+            type: string
+        "400":
+          description: payload erróneo o código inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Confirmar recuperación de contraseña
+      tags:
+      - Autenticacion
+  /autenticacion/recuperar-password/verificar:
+    post:
+      consumes:
+      - application/json
+      description: Verifica el código de 6 dígitos recibido por correo. Un código
+        verificado habilita el cambio de contraseña. Un código incorrecto, vencido
+        o ya usado responde 400.
+      parameters:
+      - description: payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/auth.PayloadVerificarRecuperacion'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: código verificado
+          schema:
+            type: string
+        "400":
+          description: payload erróneo o código inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verificar código de recuperación
       tags:
       - Autenticacion
 securityDefinitions:

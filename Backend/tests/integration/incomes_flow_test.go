@@ -3,6 +3,7 @@ package integration
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/tests/integration/testutil"
@@ -146,6 +147,116 @@ func TestIncomesFlow(t *testing.T) {
 		beyond := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/ingresos?desplazamiento=10"), user.Token, nil)
 		testutil.RequireStatus(t, beyond, http.StatusOK)
 		require.Empty(t, testutil.DecodeData[[]model.Income](t, beyond))
+	})
+
+	t.Run("edita un ingreso y su fecha", func(t *testing.T) {
+		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, &catA.ID)
+
+		nuevaFecha := dbDate(t, -10)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
+			"monto":       20000,
+			"descripcion": "venta corregida",
+			"fecha":       nuevaFecha,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		actualizado := testutil.DecodeData[model.Income](t, res)
+		require.Equal(t, editable.ID, actualizado.ID)
+		require.Equal(t, int64(20000), actualizado.Monto)
+		require.NotNil(t, actualizado.Descripcion)
+		require.Equal(t, "venta corregida", *actualizado.Descripcion)
+		require.Equal(t, nuevaFecha, actualizado.Fecha.Format(time.DateOnly))
+
+		// Los campos que no se mandaron quedan como estaban.
+		require.Equal(t, model.PaymentMethodEfectivo, actualizado.PaymentMethod)
+		require.NotNil(t, actualizado.CategoryID)
+		require.Equal(t, catA.ID, *actualizado.CategoryID)
+	})
+
+	t.Run("la edición se refleja en el listado", func(t *testing.T) {
+		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, nil)
+
+		nuevaFecha := dbDate(t, -5)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, map[string]any{
+			"monto": 33000,
+			"fecha": nuevaFecha,
+		})
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/ingresos"), user.Token, nil)
+		testutil.RequireStatus(t, list, http.StatusOK)
+
+		var encontrado bool
+		for _, income := range testutil.DecodeData[[]model.Income](t, list) {
+			if income.ID == editable.ID {
+				encontrado = true
+				require.Equal(t, int64(33000), income.Monto)
+				require.Equal(t, nuevaFecha, income.Fecha.Format(time.DateOnly))
+			}
+		}
+		require.True(t, encontrado, "el ingreso editado debe aparecer en el listado")
+	})
+
+	t.Run("la edición valida el payload", func(t *testing.T) {
+		editable := testutil.CreateIncome(t, user, empresa.ID, 15000, nil)
+
+		cases := []struct {
+			name    string
+			body    any
+			message string
+		}{
+			{
+				name:    "monto en cero",
+				body:    map[string]any{"monto": 0},
+				message: "Key: 'PayloadActualizarIngreso.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
+			},
+			{
+				name:    "método de pago inválido",
+				body:    map[string]any{"payment_method": "bitcoin"},
+				message: "Key: 'PayloadActualizarIngreso.PaymentMethod' Error:Field validation for 'PaymentMethod' failed on the 'oneof' tag",
+			},
+			{
+				name:    "fecha con formato inválido",
+				body:    map[string]any{"fecha": "10-09-2026"},
+				message: "la fecha debe tener el formato AAAA-MM-DD",
+			},
+			{
+				name:    "payload vacío",
+				body:    map[string]any{},
+				message: "no se enviaron campos para actualizar",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+editable.ID.String()), user.Token, tc.body)
+				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
+			})
+		}
+	})
+
+	t.Run("no puede editar un ingreso de otra empresa", func(t *testing.T) {
+		otherUser := testutil.NewUser(t)
+		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
+
+		ajeno := testutil.CreateIncome(t, otherUser, otherEmpresa.ID, 1000, nil)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+ajeno.ID.String()), user.Token, map[string]any{
+			"monto": 9999,
+		})
+
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
+	})
+
+	t.Run("no puede editar un ingreso inexistente", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/ingresos/"+uuid.New().String()), user.Token, map[string]any{
+			"monto": 9999,
+		})
+
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("borra un ingreso", func(t *testing.T) {

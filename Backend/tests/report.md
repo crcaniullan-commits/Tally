@@ -34,21 +34,22 @@ Requisitos:
 
 ## Resultado actual
 
-Última corrida completa: **OK**, 10 flujos y 189 subtests directos (~3 s).
+Última corrida completa: **OK**, 11 flujos y 353 subtests directos (~3 s).
 `gofmt -l tests/integration/` y `go vet ./tests/integration/...` sin hallazgos.
 
 | Flujo | Archivo | Resultado | Subtests |
 |---|---|---|---|
-| Auth | `integration/auth_flow_test.go` | PASS | 21 |
-| Claves de acceso | `integration/accesskeys_flow_test.go` | PASS | 19 |
-| Empresas | `integration/empresas_flow_test.go` | PASS | 18 |
-| Categorías | `integration/categories_flow_test.go` | PASS | 20 |
-| Ingresos | `integration/incomes_flow_test.go` | PASS | 21 |
-| Gastos | `integration/expenses_flow_test.go` | PASS | 20 |
-| Deudores | `integration/debtors_flow_test.go` | PASS | 19 |
-| Metas | `integration/goals_flow_test.go` | PASS | 23 |
-| Usuarios | `integration/users_flow_test.go` | PASS | 22 |
-| Aislamiento multi-empresa | `integration/tenant_isolation_test.go` | PASS | 6 |
+| Auth | `integration/auth_flow_test.go` | PASS | 36 |
+| Recuperación de contraseña | `integration/password_recovery_flow_test.go` | PASS | 12 |
+| Claves de acceso | `integration/accesskeys_flow_test.go` | PASS | 20 |
+| Empresas | `integration/empresas_flow_test.go` | PASS | 27 |
+| Categorías | `integration/categories_flow_test.go` | PASS | 31 |
+| Ingresos | `integration/incomes_flow_test.go` | PASS | 51 |
+| Gastos | `integration/expenses_flow_test.go` | PASS | 48 |
+| Deudores | `integration/debtors_flow_test.go` | PASS | 37 |
+| Metas | `integration/goals_flow_test.go` | PASS | 40 |
+| Usuarios | `integration/users_flow_test.go` | PASS | 28 |
+| Aislamiento multi-empresa | `integration/tenant_isolation_test.go` | PASS | 23 |
 
 Todos los flujos verifican al menos una ruta protegida sin token y con token
 inválido (`401 no autorizado`).
@@ -62,6 +63,7 @@ tests/
     ├── main_test.go              # TestMain -> testutil.SetupSuite
     ├── helpers_test.go           # requireProtected, dbDate
     ├── <flujo>_flow_test.go      # un archivo por flujo
+    ├── password_recovery_flow_test.go
     ├── tenant_isolation_test.go
     └── testutil/
         ├── env.go                # base efímera, migraciones, router real
@@ -75,25 +77,31 @@ tests/
 - **Auth:** registro municipal, registro canjeando llave, `plan_expires_at`,
   login, llave reutilizada/inexistente, email/RUT duplicado, RUT inválido,
   validaciones de payload y acceso a ruta protegida.
+- **Recuperación de contraseña:** envío del código de 6 dígitos por correo,
+  email no registrado (`400`), código incorrecto, expirado o ya usado, verificación
+  previa al cambio de contraseña, login con la contraseña nueva y con la vieja.
 - **Access keys:** emisión, reenvío por ID, revocación por código, canje de llave
   revocada, permisos de rol y validaciones.
 - **Empresas:** creación, listado, renombrado, borrado, doble borrado, listado
   vacío, validaciones, rol municipal y aislamiento entre usuarios.
 - **Categorías:** creación, listado propio + globales, renombrado, duplicados
   ignorando mayúsculas/acentos, mismo nombre en otra empresa, categorías
-  globales no modificables desde la empresa, borrado y validaciones.
+  globales no modificables desde la empresa, borrado, borrado bloqueado (`409`)
+  cuando la categoría tiene ingresos o gastos, y validaciones.
 - **Ingresos:** creación con/sin categoría, categoría global, listado, filtros
-  por categoría y fechas, paginación, borrado, categoría inexistente/ajena y
-  validaciones de payload/query.
+  por categoría y fechas, paginación, edición (con fecha), borrado, categoría
+  inexistente/ajena y validaciones de payload/query.
 - **Gastos:** creación con categoría y descripción, categoría global, listado,
-  filtros, paginación, borrado, categoría inexistente/ajena y validaciones.
+  filtros, paginación, edición (con fecha), borrado, categoría inexistente/ajena
+  y validaciones.
 - **Deudores:** creación, listado, actualización, marcado como pagado, campos
   desconocidos, validaciones y errores de ruta.
 - **Metas:** creación por período, listado, detalle, cálculo de estado con
   ingresos del día/semana/mes, pendiente no negativo, borrado y validaciones.
 - **Usuarios:** actualización de nombre+contraseña, login con nueva contraseña,
-  actualización solo de contraseña, consulta municipal por RUT, validaciones,
-  borrado de cuenta e invalidación del token.
+  actualización solo de contraseña, actualización solo de nombre, payload vacío,
+  consulta municipal por RUT, validaciones, borrado de cuenta e invalidación
+  del token.
 - **Aislamiento multi-empresa:** acceso a empresa ajena (`404` en middleware),
   recursos ajenos por ID desde la empresa propia (`404` en el `WHERE`), listados
   que excluyen datos ajenos, categoría ajena rechazada y rol municipal sin
@@ -102,14 +110,21 @@ tests/
 ## Bugs del backend documentados
 
 Los tests pasan assertando el comportamiento actual. No se corrigió código de
-producción. Cada caso está marcado con `BUG:` o `DISCREPANCIA:` en el test.
+producción en los flujos que no son parte de un cambio pedido. Cada caso está
+marcado con `BUG:` o `DISCREPANCIA:` en el test.
 
 | # | Ruta | Esperado | Actual | Causa |
 |---|---|---|---|---|
-| 1 | `POST /v1/autenticacion` y `POST /v1/autenticacion/municipal` con email/RUT duplicado | `400` con `ya existe un usuario con ese correo` / `ya existe un usuario con ese RUT` | `500 {"error":"el servidor encontró un problema"}` | `internal/auth/storage.go` compara `err.Error()` contra el texto exacto de pq, pero lib/pq agrega ` (23505)`. |
-| 2 | `POST /v1/autenticacion` y `POST /v1/autenticacion/municipal` con RUT mal formado | `400` con `el formato del RUT no es válido` | `500 {"error":"el servidor encontró un problema"}` | El handler de auth no mapea `model.ErrFormatoInvalido`. |
-| 3 | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío | `200` actualizando el nombre / no-op | `500 {"error":"el servidor encontró un problema"}` | `MiddlewareTokenAutenticacion` usa `ObtenerPorID`, que no selecciona `password_hash`; `Actualizar` escribe `NULL` en una columna `NOT NULL`. |
-| 4 | `GET /v1/aplicacion/usuarios/municipal/{rut}` | `created_at` y `updated_at` reales | `0001-01-01T00:00:00Z` | `ObtenerPorRUT` no selecciona esas columnas. |
+| 1 | `GET /v1/aplicacion/usuarios/municipal/{rut}` | `created_at` y `updated_at` reales | `0001-01-01T00:00:00Z` | `ObtenerPorRUT` no selecciona esas columnas. |
+
+### Bugs ya corregidos
+
+| # | Ruta | Antes | Ahora | Causa |
+|---|---|---|---|---|
+| 2 | `POST /v1/autenticacion` y `POST /v1/autenticacion/municipal` con email/RUT duplicado | `500 {"error":"el servidor encontró un problema"}` | `400` con `ya existe un usuario con ese correo` / `ya existe un usuario con ese RUT` | `internal/auth/storage.go` comparaba `err.Error()` contra el texto exacto de pq, pero lib/pq agrega ` (23505)`. Ahora se mira el error tipado `*pq.Error` (código `23505` + constraint) con un fallback por texto. |
+| 3 | `POST /v1/autenticacion` y `POST /v1/autenticacion/municipal` con RUT mal formado | `500 {"error":"el servidor encontró un problema"}` | `400` con `el formato del RUT no es válido` | El `ParseRUT` vive en el service y el handler de auth no mapeaba `utilidades.ErrFormatoInvalido`. |
+| 4 | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío | `500 {"error":"el servidor encontró un problema"}` | `200` y el nombre queda actualizado | `MiddlewareTokenAutenticacion` usa `ObtenerPorID`, que no seleccionaba `password_hash`; el UPDATE escribía un hash vacío en una columna `NOT NULL`. Ahora `ObtenerPorID` trae el hash. |
+| 5 | `DELETE /v1/aplicacion/empresas/{empresaID}/categorias/{categoria}` con movimientos | `200` y los gastos de la categoría borrados en cascada | `409` y la categoría intacta | La categoría se borraba sin mirar si tenía ingresos o gastos asociados. |
 
 ## Diferencias entre swagger y código
 
@@ -126,7 +141,10 @@ producción. Cada caso está marcado con `BUG:` o `DISCREPANCIA:` en el test.
 
 - Expiración/refresh de JWT: no hay endpoint de refresh y esperar la expiración
   haría el test lento; solo se prueba token inválido.
-- Envío real de correo SMTP: los tests usan un `SendEmail` no-op.
+- Envío real de correo SMTP: los tests usan un remitente que solo guarda el
+  código enviado (`testutil.UltimoCodigoDeRecuperacion`).
+- Vencimiento del código de recuperación (15 minutos): no se prueba esperando el
+  reloj; se cubre la unidad de tiempo del código en el service.
 - `excel` e `informe`: son esqueletos sin rutas ni lógica.
 - Carrera de unicidad de categorías: deuda técnica conocida y no determinista.
 - Borrado en cascada de empresas/ingresos/gastos al borrar un usuario: solo se

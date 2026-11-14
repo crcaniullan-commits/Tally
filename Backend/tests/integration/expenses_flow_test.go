@@ -3,6 +3,7 @@ package integration
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/tests/integration/testutil"
@@ -131,6 +132,110 @@ func TestExpensesFlow(t *testing.T) {
 		beyond := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(otherEmpresa.ID, "/gastos?desplazamiento=10"), user.Token, nil)
 		testutil.RequireStatus(t, beyond, http.StatusOK)
 		require.Empty(t, testutil.DecodeData[[]model.Expense](t, beyond))
+	})
+
+	t.Run("edita un gasto y su fecha", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		nuevaFecha := dbDate(t, -10)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"monto":       20000,
+			"descripcion": "compra corregida",
+			"fecha":       nuevaFecha,
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		actualizado := testutil.DecodeData[model.Expense](t, res)
+		require.Equal(t, editable.ID, actualizado.ID)
+		require.Equal(t, int64(20000), actualizado.Monto)
+		require.NotNil(t, actualizado.Descripcion)
+		require.Equal(t, "compra corregida", *actualizado.Descripcion)
+		require.Equal(t, nuevaFecha, actualizado.Fecha.Format(time.DateOnly))
+
+		// Los campos que no se mandaron quedan como estaban.
+		require.Equal(t, catA.ID, actualizado.CategoryID)
+	})
+
+	t.Run("la edición se refleja en el listado", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		nuevaFecha := dbDate(t, -5)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"monto": 33000,
+			"fecha": nuevaFecha,
+		})
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, nil)
+		testutil.RequireStatus(t, list, http.StatusOK)
+
+		var encontrado bool
+		for _, expense := range testutil.DecodeData[[]model.Expense](t, list) {
+			if expense.ID == editable.ID {
+				encontrado = true
+				require.Equal(t, int64(33000), expense.Monto)
+				require.Equal(t, nuevaFecha, expense.Fecha.Format(time.DateOnly))
+			}
+		}
+		require.True(t, encontrado, "el gasto editado debe aparecer en el listado")
+	})
+
+	t.Run("la edición valida el payload", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		cases := []struct {
+			name    string
+			body    any
+			message string
+		}{
+			{
+				name:    "monto en cero",
+				body:    map[string]any{"monto": 0},
+				message: "Key: 'PayloadActualizarGasto.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
+			},
+			{
+				name:    "fecha con formato inválido",
+				body:    map[string]any{"fecha": "10-09-2026"},
+				message: "la fecha debe tener el formato AAAA-MM-DD",
+			},
+			{
+				name:    "payload vacío",
+				body:    map[string]any{},
+				message: "no se enviaron campos para actualizar",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, tc.body)
+				testutil.RequireError(t, res, http.StatusBadRequest, tc.message)
+			})
+		}
+	})
+
+	t.Run("no puede editar un gasto de otra empresa", func(t *testing.T) {
+		otherUser := testutil.NewUser(t)
+		otherEmpresa := testutil.CreateEmpresa(t, otherUser)
+		otherCat := testutil.CreateCategory(t, otherUser, otherEmpresa.ID)
+
+		ajeno := testutil.CreateExpense(t, otherUser, otherEmpresa.ID, 1000, otherCat.ID)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+ajeno.ID.String()), user.Token, map[string]any{
+			"monto": 9999,
+		})
+
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
+	})
+
+	t.Run("no puede editar un gasto inexistente", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+uuid.New().String()), user.Token, map[string]any{
+			"monto": 9999,
+		})
+
+		testutil.RequireError(t, res, http.StatusNotFound, "no encontrado")
 	})
 
 	t.Run("borra un gasto", func(t *testing.T) {

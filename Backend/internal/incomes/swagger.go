@@ -16,6 +16,24 @@ package incomes
 //	@Router			/aplicacion/empresas/{empresaID}/ingresos	[post]
 func AgregarIngreso() {}
 
+// ActualizarIngreso
+//
+//	@Summary		Editar ingreso
+//	@Description	Edita un ingreso de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. "fecha" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el ingreso no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el ingreso ya actualizado.
+//	@Tags			Ingresos
+//	@Accept			json
+//	@Produce		json
+//	@Param			empresaID	path		string						true	"ID de la empresa"
+//	@Param			ingresoID	path		string						true	"ID del ingreso"
+//	@Param			payload		body		PayloadActualizarIngreso	true	"campos a actualizar"
+//	@Success		200			{object}	model.Income				"ingreso actualizado"
+//	@Failure		400			{object}	map[string]string			"payload erróneo, fecha inválida o categoría ajena"
+//	@Failure		404			{object}	map[string]string			"ingreso no encontrado"
+//	@Failure		500			{object}	map[string]string			"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/aplicacion/empresas/{empresaID}/ingresos/{ingresoID}	[patch]
+func Actualizar() {}
+
 // EliminarIngreso
 //
 //	@Summary		Eliminar ingreso

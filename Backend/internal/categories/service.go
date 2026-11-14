@@ -14,6 +14,7 @@ type RepositorioCategorias interface {
 	Crear(context.Context, *model.Categorie) error
 	CambiarNombre(context.Context, string, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
+	TieneMovimientos(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 	ObtenerCategoriasPorEmpresa(context.Context, uuid.UUID) ([]model.Categorie, error)
 	ObtenerCategoriasVisibles(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
@@ -56,6 +57,19 @@ func (s *ServicioCategorias) CambiarNombre(ctx context.Context, payload PayloadC
 }
 
 func (s *ServicioCategorias) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+	// Una categoría con movimientos no se puede borrar: expenses.category_id es
+	// NOT NULL con ON DELETE CASCADE (el borrado se llevaría los gastos) e
+	// incomes.category_id tiene ON DELETE SET NULL (los ingresos quedarían sin
+	// categoría). Es mejor un 409 explícito que perder movimientos en silencio.
+	tieneMovimientos, err := s.store.TieneMovimientos(ctx, categoriaID, empresaID)
+
+	if err != nil {
+		return err
+	}
+
+	if tieneMovimientos {
+		return ErrorCategoriaConMovimientos
+	}
 
 	if err := s.store.BorrarCategoria(ctx, categoriaID, empresaID); err != nil {
 		return err

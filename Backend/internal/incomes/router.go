@@ -18,6 +18,7 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utili
 
 	r.Route("/ingresos", func(r chi.Router) {
 		r.Post("/", middl.VerificarRol(utilidades.RolUsuario, hdl.AgregarIngreso))
+		r.Patch("/{ingresoID}", middl.VerificarRol(utilidades.RolUsuario, hdl.Actualizar))
 		r.Delete("/{ingresoID}", middl.VerificarRol(utilidades.RolUsuario, hdl.Eliminar))
 		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerIngresosDeEmpresa))
 	})

@@ -111,11 +111,7 @@ func TestAuthFlow(t *testing.T) {
 			"code":     otherKey.Code,
 		})
 
-		// BUG: auth.AlmacenAuth.Crear compara err.Error() contra el texto exacto
-		// de pq, pero lib/pq agrega " (23505)". El error no matchea y el
-		// handler responde 500 en vez del 400 "ya existe un usuario con ese
-		// correo" que declara users.ErrDuplicateEmail.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireError(t, res, http.StatusBadRequest, "ya existe un usuario con ese correo")
 	})
 
 	t.Run("rechaza un RUT ya registrado", func(t *testing.T) {
@@ -128,9 +124,7 @@ func TestAuthFlow(t *testing.T) {
 			"code":     otherKey.Code,
 		})
 
-		// Mismo bug que el email duplicado: el sufijo " (23505)" impide que
-		// el error se traduzca a users.ErrDuplicateRut.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireError(t, res, http.StatusBadRequest, "ya existe un usuario con ese RUT")
 	})
 
 	t.Run("rechaza un RUT con formato inválido", func(t *testing.T) {
@@ -142,9 +136,20 @@ func TestAuthFlow(t *testing.T) {
 			"code":     "cualquiera",
 		})
 
-		// BUG: el handler de auth no mapea model.ErrFormatoInvalido, así que
-		// ParseRUT termina en un 500 en vez de un 400 con el mensaje de dominio.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireError(t, res, http.StatusBadRequest, "el formato del RUT no es válido")
+	})
+
+	t.Run("rechaza un RUT con formato inválido en el municipal", func(t *testing.T) {
+		// "abcdefghi" pasa la validación de largo (min=9) pero no el formato del
+		// RUT: el regex espera dígitos.
+		res := testutil.Request(t, http.MethodPost, "/v1/autenticacion/municipal", "", map[string]string{
+			"email":    testutil.UniqueEmail("municipal_bad_rut"),
+			"password": municipalPassword,
+			"nombre":   "Municipal RUT Inválido",
+			"rut":      "abcdefghi",
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "el formato del RUT no es válido")
 	})
 
 	t.Run("login rechaza una contraseña incorrecta", func(t *testing.T) {
@@ -286,8 +291,7 @@ func TestAuthFlow(t *testing.T) {
 			"rut":      testutil.NewRUT(),
 		})
 
-		// Mismo bug de comparación de errores pq que en el registro normal.
-		testutil.RequireError(t, res, http.StatusInternalServerError, "el servidor encontró un problema")
+		testutil.RequireError(t, res, http.StatusBadRequest, "ya existe un usuario con ese correo")
 	})
 
 	t.Run("el token permite acceder a una ruta protegida", func(t *testing.T) {

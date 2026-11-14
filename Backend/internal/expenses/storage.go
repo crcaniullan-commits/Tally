@@ -3,6 +3,8 @@ package expenses
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -49,6 +51,80 @@ func (s *AlmacenGastos) AgregarGasto(ctx context.Context, expense *model.Expense
 	}
 
 	return nil
+}
+
+// ActualizarGasto modifica los campos indicados en cambios y devuelve el gasto
+// ya actualizado.
+//
+// El WHERE lleva empresa_id: un gasto de otra empresa es indistinguible de uno
+// inexistente (404), igual que en el borrado.
+func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
+	query := `
+		UPDATE expenses
+		SET monto = COALESCE($1::bigint, monto),
+			category_id = COALESCE($2::uuid, category_id),
+			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END,
+			fecha = COALESCE($5::date, fecha)
+		WHERE id = $6 AND empresa_id = $7
+		RETURNING id, empresa_id, monto, category_id, descripcion, fecha, created_at
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
+	defer cancel()
+
+	var (
+		monto       *int64
+		categoriaID *uuid.UUID
+		descripcion *string
+		fecha       *string
+	)
+
+	if cambios.Monto != nil {
+		monto = cambios.Monto
+	}
+
+	if cambios.CategoryID != nil {
+		categoriaID = cambios.CategoryID
+	}
+
+	descripcion = cambios.Descripcion
+
+	if cambios.Fecha != nil {
+		// La fecha viaja como texto AAAA-MM-DD para no depender de la zona
+		// horaria de la sesión al castearla a date.
+		valor := cambios.Fecha.Format(time.DateOnly)
+		fecha = &valor
+	}
+
+	expense := model.Expense{}
+
+	err := s.db.QueryRowContext(ctx, query,
+		monto,
+		categoriaID,
+		cambios.Descripcion != nil,
+		descripcion,
+		fecha,
+		gastoID,
+		empresaID,
+	).Scan(
+		&expense.ID,
+		&expense.EmpresaID,
+		&expense.Monto,
+		&expense.CategoryID,
+		&expense.Descripcion,
+		&expense.Fecha,
+		&expense.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.Expense{}, utilidades.ErrorNoEncontrado
+		}
+
+		return model.Expense{}, err
+	}
+
+	return expense, nil
 }
 
 func (s *AlmacenGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {

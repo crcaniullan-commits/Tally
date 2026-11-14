@@ -3,6 +3,8 @@ package incomes
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -48,6 +50,94 @@ func (s *AlmacenIngresos) AgregarIngreso(ctx context.Context, income *model.Inco
 	}
 
 	return nil
+}
+
+// ActualizarIngreso modifica los campos indicados en cambios y devuelve el
+// ingreso ya actualizado.
+//
+// El WHERE lleva empresa_id: un ingreso de otra empresa es indistinguible de uno
+// inexistente (404), igual que en el borrado.
+//
+// Los COALESCE/CASE dejan intactos los campos que no vienen en el payload:
+// COALESCE para los escalares y CASE WHEN ... THEN para los que necesitan
+// distinguir "no enviado" de "NULL".
+func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios CambiosIngreso, ingresoID uuid.UUID, empresaID uuid.UUID) (model.Income, error) {
+	query := `
+		UPDATE incomes
+		SET monto = COALESCE($1::bigint, monto),
+			payment_method = COALESCE($2::payment_method, payment_method),
+			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END,
+			category_id = CASE WHEN $5::boolean THEN $6::uuid ELSE category_id END,
+			fecha = COALESCE($7::date, fecha)
+		WHERE id = $8 AND empresa_id = $9
+		RETURNING id, empresa_id, monto, payment_method, descripcion, fecha, created_at, category_id
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
+	defer cancel()
+
+	var (
+		monto       *int64
+		metodoPago  *string
+		descripcion *string
+		categoriaID *uuid.UUID
+		fecha       *string
+	)
+
+	if cambios.Monto != nil {
+		monto = cambios.Monto
+	}
+
+	if cambios.PaymentMethod != nil {
+		metodo := string(*cambios.PaymentMethod)
+		metodoPago = &metodo
+	}
+
+	descripcion = cambios.Descripcion
+
+	if cambios.CategoryID != nil {
+		categoriaID = cambios.CategoryID
+	}
+
+	if cambios.Fecha != nil {
+		// La fecha viaja como texto AAAA-MM-DD para no depender de la zona
+		// horaria de la sesión al castearla a date.
+		valor := cambios.Fecha.Format(time.DateOnly)
+		fecha = &valor
+	}
+
+	income := model.Income{}
+
+	err := s.db.QueryRowContext(ctx, query,
+		monto,
+		metodoPago,
+		cambios.Descripcion != nil,
+		descripcion,
+		cambios.CategoryID != nil,
+		categoriaID,
+		fecha,
+		ingresoID,
+		empresaID,
+	).Scan(
+		&income.ID,
+		&income.EmpresaID,
+		&income.Monto,
+		&income.PaymentMethod,
+		&income.Descripcion,
+		&income.Fecha,
+		&income.CreatedAt,
+		&income.CategoryID,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.Income{}, utilidades.ErrorNoEncontrado
+		}
+
+		return model.Income{}, err
+	}
+
+	return income, nil
 }
 
 // CategoriaExiste verifica que la categoría exista y sea visible para la

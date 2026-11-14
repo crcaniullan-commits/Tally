@@ -222,3 +222,59 @@ func TestStoreExpense_CategoryExists(t *testing.T) {
 		assert.False(t, existe)
 	})
 }
+
+func TestStoreExpense_UpdateExpense(t *testing.T) {
+	t.Run("actualiza solo los campos enviados y devuelve el gasto", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		monto := int64(2500)
+		fecha := time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC)
+
+		ms.mock.ExpectQuery("cualquier UPDATE").
+			WillReturnRows(sqlmock.NewRows(expenseColumns()).AddRow(expenseRow()...))
+
+		expense, err := ms.store.ActualizarGasto(context.Background(), CambiosGasto{
+			Monto: &monto,
+			Fecha: &fecha,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testExpenseID, expense.ID)
+		assert.Equal(t, testEmpresaID, expense.EmpresaID)
+	})
+
+	t.Run("traduce sql.ErrNoRows a utilidades.ErrorNoEncontrado", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		monto := int64(2500)
+
+		ms.mock.ExpectQuery("cualquier UPDATE").
+			WillReturnRows(sqlmock.NewRows(expenseColumns()))
+
+		_, err := ms.store.ActualizarGasto(context.Background(), CambiosGasto{
+			Monto: &monto,
+		}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
+	})
+
+	t.Run("filtra por id y empresa_id y no toca los campos no enviados", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		monto := int64(2500)
+
+		ms.mock.ExpectQuery("cualquier UPDATE").
+			WillReturnRows(sqlmock.NewRows(expenseColumns()).AddRow(expenseRow()...))
+
+		_, err := ms.store.ActualizarGasto(context.Background(), CambiosGasto{
+			Monto: &monto,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+
+		assert.Contains(t, ms.sql, "WHERE id = $6 AND empresa_id = $7")
+		assert.Contains(t, ms.sql, "monto = COALESCE($1::bigint, monto)")
+		assert.Contains(t, ms.sql, "fecha = COALESCE($5::date, fecha)")
+		assert.Contains(t, ms.sql, "category_id = COALESCE($2::uuid, category_id)")
+	})
+}

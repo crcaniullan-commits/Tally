@@ -396,3 +396,59 @@ func TestStoreCategorie_BorrarCategoria(t *testing.T) {
 		require.ErrorIs(t, err, errDBBoom)
 	})
 }
+
+func TestStoreCategorie_TieneMovimientos(t *testing.T) {
+	t.Run("detecta los gastos que referencian la categoria", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoriaID, testEmpresaID).
+			WillReturnRows(sqlmock.NewRows([]string{"tiene"}).AddRow(true))
+
+		tiene, err := ms.store.TieneMovimientos(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.True(t, tiene)
+		assert.Contains(t, ms.sql, "FROM expenses e")
+		assert.Contains(t, ms.sql, "FROM incomes i")
+		assert.Contains(t, ms.sql, "c.empresa_id = $2")
+	})
+
+	t.Run("detecta los ingresos que referencian la categoria", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoriaID, testEmpresaID).
+			WillReturnRows(sqlmock.NewRows([]string{"tiene"}).AddRow(true))
+
+		tiene, err := ms.store.TieneMovimientos(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.True(t, tiene)
+	})
+
+	t.Run("devuelve false cuando no hay movimientos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoriaID, testEmpresaID).
+			WillReturnRows(sqlmock.NewRows([]string{"tiene"}).AddRow(false))
+
+		tiene, err := ms.store.TieneMovimientos(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.False(t, tiene)
+	})
+
+	t.Run("propaga el error de la base de datos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectQuery("cualquier SELECT").
+			WithArgs(testCategoriaID, testEmpresaID).
+			WillReturnError(errDBBoom)
+
+		_, err := ms.store.TieneMovimientos(context.Background(), testCategoriaID, testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
+	})
+}

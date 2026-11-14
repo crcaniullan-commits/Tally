@@ -43,13 +43,13 @@ GOPROXY=off go test ./internal/categories/...   # cache de módulos ya está cal
 
 ## Migraciones
 
-`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración: `000008_add_default_global_categories`.
+`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_exel_files` es del módulo `excel`, en desarrollo).
 
 `.envrc` está en `.gitignore` (tiene credenciales reales). Sin él, los tests igual corren; `migration-up` necesita `DB_ADDR`.
 
 ## Esquema de la base de datos
 
-Estado tras `000008`. El número entre paréntesis es la migración que introdujo el elemento.
+Estado tras `000010`. El número entre paréntesis es la migración que introdujo el elemento.
 
 ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`).
 
@@ -61,6 +61,7 @@ ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debit
 - `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
 - `debtors` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `monto BIGINT NOT NULL`, `descripcion`, `pagado BOOLEAN NOT NULL DEFAULT false`, `fecha_limite DATE` nullable, `created_at`.
 - `goals` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `periodo` (`goal_period`), `monto_meta BIGINT NOT NULL`, `created_at`.
+- `password_reset_codes` (`000010`) — `user_id NOT NULL → users` (`CASCADE`), `codigo VARCHAR(64) NOT NULL` (hash SHA-256 del código de 6 dígitos, nunca el código en claro), `expira_en TIMESTAMPTZ NOT NULL`, `verificado_en` y `usado_en` TIMESTAMPTZ nullable; índice `idx_password_reset_codes_user_id`. Es la tabla del flujo de recuperación de contraseña: el código pasa por *emitido → verificado → usado*.
 
 `000007` sacó `user_id` de `incomes`, `expenses`, `debtors`, `goals` y `categories`: la tenencia pasa a ser `empresa_id → empresas → users`. Crea los índices `idx_incomes_empresa_id`, `idx_expenses_empresa_id`, `idx_debtors_empresa_id`, `idx_goals_empresa_id` y `idx_categories_empresa_id`.
 
@@ -122,12 +123,12 @@ bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
 - `TestMain` está en `tests/integration/main_test.go` y delega en `testutil.SetupSuite`.
 - `testutil/env.go` crea una base efímera `tally_it_<pid>` desde `DB_ADDR` (default `postgres://postgres:tally_database_env@localhost/tally_database_env?sslmode=disable`), aplica `migrations/*.up.sql` en orden y la dropea al terminar. `TEST_DB_ADDR` permite reutilizar una base existente sin crearla ni dropearla.
 - El router se replica en `testutil/env.go` desde `cmd/application/app.go`. **No** se modifica el archivo de producción para hacer pasar un test.
-- Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. `SendEmail` se reemplaza por un no-op.
+- Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. El remitente de correo se reemplaza por uno que **guarda los códigos enviados** (`testutil.UltimoCodigoDeRecuperacion`), para poder completar el flujo de recuperación de contraseña sin SMTP real.
 - `TestMain` registra un único usuario municipal; los tests lo obtienen con `testutil.MunicipalToken(t)` / `testutil.MunicipalRUT(t)`.
 
 **Archivos y nombres**
 
-- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `incomes_flow_test.go`, etc.).
+- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `password_recovery_flow_test.go`, `incomes_flow_test.go`, etc.).
 - El aislamiento multi-empresa vive en `tenant_isolation_test.go`.
 - Helpers compartidos en `helpers_test.go` (`requireProtected`, `dbDate`); entorno, cliente HTTP y fixtures en `testutil/`.
 - Los tests van en `package integration` (no `integration_test`).
@@ -169,12 +170,12 @@ Los módulos `excel` y `informe` son esqueletos: tienen `handler.go`, `service.g
 Cableado actual en `cmd/application/app.go`:
 
 - `/v1/swagger/*` — UI de Swagger.
-- `/v1/autenticacion` — `POST /` (registro con código de acceso), `POST /inicio-sesion`, `POST /municipal`. Sin JWT.
+- `/v1/autenticacion` — `POST /` (registro con código de acceso), `POST /inicio-sesion`, `POST /municipal`, más el flujo de recuperación de contraseña (`POST /recuperar-password` emite el código de 6 dígitos y lo manda por correo, `POST /recuperar-password/verificar` lo valida, `POST /recuperar-password/confirmar` cambia la contraseña). Sin JWT.
 - `/v1/aplicacion` — todo lo demás, detrás de `MiddlewareTokenAutenticacion`:
   - `/usuarios` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
   - `/claves` — `POST /` (emitir), `POST /IDAcceso/{claveID}` (reenviar), `POST /revocar/{codigo}` (revocar). Solo rol municipal.
   - `/empresas` — `POST /` y `GET /`.
-  - `/empresas/{empresaID}` — detrás de `MiddlewareEmpresa.EmpresaDelUsuario`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `ingresos`, `gastos`, `categorias` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `metas` (prefijo `/metas`: `POST /`, `GET /`, `GET /{metaID}`, `DELETE /{metaID}`, `GET /{metaID}/estado`) y `deudas` (prefijo `/deudas`: `POST /`, `GET /`, `PATCH /{deudorID}`, `PATCH /{deudorID}/pagada`).
+  - `/empresas/{empresaID}` — detrás de `MiddlewareEmpresa.EmpresaDelUsuario`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `ingresos` (`POST /`, `GET /`, `PATCH /{ingresoID}`, `DELETE /{ingresoID}`), `gastos` (`POST /`, `GET /`, `PATCH /{gastoID}`, `DELETE /{gastoID}`), `categorias` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `metas` (prefijo `/metas`: `POST /`, `GET /`, `GET /{metaID}`, `DELETE /{metaID}`, `GET /{metaID}/estado`) y `deudas` (prefijo `/deudas`: `POST /`, `GET /`, `PATCH /{deudorID}`, `PATCH /{deudorID}/pagada`).
 
 **No montados:** `excel` y `informe` (esqueletos sin lógica ni rutas). El resto de los módulos con lógica (`clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, `users`) está montado.
 
@@ -186,6 +187,8 @@ Middlewares:
 
 El usuario y la empresa del request se sacan del contexto con `utilidades.ObtenerUsuarioDelContexto(r)` y `utilidades.ObtenerEmpresaDelContexto(r)` (no hay helpers en `users`). Devuelven `nil` si el middleware no los inyectó; usarlos sin el middleware correspondiente produce panic.
 
+`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito: `PATCH /v1/aplicacion/usuarios` reescribe la fila con ese usuario, así que si el hash no viniera el UPDATE escribiría un hash vacío en una columna `NOT NULL` y el endpoint devolvía 500. `ObtenerPorRUT` no lo trae: es solo de lectura.
+
 `bdtx.Transactor` (`internal/bdtx`) envuelve `BeginTx`/`Commit`/`Rollback`. Los stores que participan de una transacción deben usar `bdtx.FromContext(ctx, s.db)` en vez de `s.db`; hoy lo hacen `auth` y `clavesAcceso`. `auth.RegistrarUsuario` crea el usuario, canjea la llave y setea `plan_expires_at` en una sola transacción.
 
 Respuestas siempre envueltas en `{"datos": ...}` vía `utilidades.RespuestaJSON`; errores como `{"error": "..."}` vía `utilidades.EscribirErrorJSON`. `utilidades.LeerJSON` usa `DisallowUnknownFields` y el handler traduce el fallo a **400**. `utilidades.ErrorNoEncontrado` / `utilidades.ErrorConflicto` son los errores de dominio compartidos; `internal/errores` mapea a 400/401/403/404/409/500.
@@ -193,6 +196,12 @@ Respuestas siempre envueltas en `{"datos": ...}` vía `utilidades.RespuestaJSON`
 Paginación: `paginacion.ConsultaPaginacionIngresos` (compartida por `incomes` y `expenses`): `limite` default y máximo 30, `desplazamiento`, `desde`/`hasta` en `AAAA-MM-DD` y `categoria_id` UUID. Un parámetro inválido devuelve error → 400.
 
 Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoriaExiste` que la categoría sea global (`empresa_id IS NULL`) o de la empresa; si no existe o es de otra empresa, el handler responde **400**. En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
+
+Edición de movimientos (`PATCH .../ingresos/{ingresoID}` y `PATCH .../gastos/{gastoID}`): el payload trae **punteros** y lo que no se manda se queda como está. `fecha` es opcional y va en `AAAA-MM-DD` (formato inválido → **400** `la fecha debe tener el formato AAAA-MM-DD`). Un payload sin ningún campo → **400** `no se enviaron campos para actualizar`. Un movimiento que no existe o es de otra empresa → **404**. La fecha viaja a la base como texto (`$n::date`) para no depender de la zona horaria de la sesión.
+
+Recuperación de contraseña (`internal/auth`): el código de 6 dígitos se genera con `crypto/rand` y **se guarda hasheado (SHA-256)**, nunca en claro. El estado vive en `password_reset_codes`: *emitido → verificado → usado*. Pedir un código nuevo invalida el anterior. Los errores del dominio (`ErrorCodigoRecuperacionInvalido`, `...Vencido`, `...Usado`, `...NoVerificado`) y el email no registrado (`utilidades.ErrorNoEncontrado`) responden **400**. El remitente es la interfaz `auth.Remitente` (`SendPasswordResetCode`), que implementan `correo.Client`, `correo.ClienteGmail` y el mock de `cmd/application/app.go`.
+
+Borrado de categorías: una categoría con ingresos o gastos asociados **no se puede borrar** (`409` `la categoría tiene movimientos asociados y no se puede eliminar`), porque `expenses.category_id` es `NOT NULL` con `ON DELETE CASCADE` y `incomes.category_id` tiene `ON DELETE SET NULL`. El chequeo (`TieneMovimientos`) filtra por la empresa de la categoría: una categoría ajena sigue respondiendo **404**, no 409.
 
 ## Swagger
 
@@ -210,6 +219,8 @@ El job levanta un service container `postgres:16` (usuario `postgres`, contrase�
 
 - La unicidad de categorías es solo a nivel aplicación: hay ventana de carrera entre el chequeo y el `INSERT` (ver esquema). Cerrarla requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
 - `excel` e `informe` son solo esqueletos: no tienen handlers, services, stores, rutas, tests ni cliente S3 implementados.
+- En la edición de movimientos no se puede **borrar** un campo: mandar `"descripcion": null` o `"category_id": null` equivale a "no tocarlo". Para quitar la categoría de un ingreso hay que hacerlo por otra vía.
+- `GET /v1/aplicacion/usuarios/municipal/{rut}` sigue devolviendo `created_at` y `updated_at` en cero: `ObtenerPorRUT` no selecciona esas columnas (bug conocido, documentado en `tests/report.md`).
 
 ## Otros
 

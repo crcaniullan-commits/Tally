@@ -15,6 +15,9 @@ type IServiceAuth interface {
 	RegistrarUsuario(context.Context, *PayloadCrearUsuario) (string, error)
 	Login(context.Context, *PayloadInicioSesion) (string, error)
 	CrearMunicipal(context.Context, *PayloadCrearMunicipal) (string, error)
+	SolicitarRecuperacion(context.Context, string) error
+	VerificarCodigoRecuperacion(context.Context, string, string) error
+	ConfirmarRecuperacion(context.Context, string, string, string) error
 }
 
 type HandlerAuth struct {
@@ -61,6 +64,10 @@ func (h *HandlerAuth) Registrar(w http.ResponseWriter, r *http.Request) {
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		case clavesacceso.ErrorCodigoNoCanjeable:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
+		case utilidades.ErrFormatoInvalido:
+			// El RUT no tiene formato válido: es un 400, no un 500.
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
@@ -128,6 +135,10 @@ func (h *HandlerAuth) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
 		case users.ErrDuplicateRut:
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
+		case utilidades.ErrFormatoInvalido:
+			// El RUT no tiene formato válido: es un 400, no un 500.
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
 		default:
 			h.errors.ErrorInterno(w, r, err)
 			return
@@ -139,4 +150,114 @@ func (h *HandlerAuth) CrearMunicipal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+// PayloadSolicitarRecuperacion pide el envío del código de recuperación.
+type PayloadSolicitarRecuperacion struct {
+	Email string `json:"email" validate:"required,max=100,email"`
+}
+
+// PayloadVerificarRecuperacion verifica el código recibido por correo.
+type PayloadVerificarRecuperacion struct {
+	Email  string `json:"email" validate:"required,max=100,email"`
+	Codigo string `json:"codigo" validate:"required,len=6,numeric"`
+}
+
+// PayloadConfirmarRecuperacion cambia la contraseña con el código verificado.
+type PayloadConfirmarRecuperacion struct {
+	Email    string `json:"email" validate:"required,max=100,email"`
+	Codigo   string `json:"codigo" validate:"required,len=6,numeric"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
+}
+
+/*
+*	Pide el código de recuperación de contraseña y lo manda por correo
+ */
+func (h *HandlerAuth) SolicitarRecuperacion(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadSolicitarRecuperacion
+
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	if err := h.service.SolicitarRecuperacion(r.Context(), payload.Email); err != nil {
+		switch err {
+		case utilidades.ErrorNoEncontrado:
+			// El email no está registrado: es un 400, no un 500.
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
+		default:
+			h.errors.ErrorInterno(w, r, err)
+			return
+		}
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusAccepted, "código de recuperación enviado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
+}
+
+/*
+*	Verifica el código de recuperación recibido por correo
+ */
+func (h *HandlerAuth) VerificarCodigoRecuperacion(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadVerificarRecuperacion
+
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	if err := h.service.VerificarCodigoRecuperacion(r.Context(), payload.Email, payload.Codigo); err != nil {
+		switch err {
+		case utilidades.ErrorNoEncontrado,
+			ErrorCodigoRecuperacionInvalido,
+			ErrorCodigoRecuperacionVencido,
+			ErrorCodigoRecuperacionUsado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
+		default:
+			h.errors.ErrorInterno(w, r, err)
+			return
+		}
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "código verificado"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
+}
+
+/*
+*	Confirma la recuperación: cambia la contraseña del usuario
+ */
+func (h *HandlerAuth) ConfirmarRecuperacion(w http.ResponseWriter, r *http.Request) {
+	var payload PayloadConfirmarRecuperacion
+
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	if err := h.service.ConfirmarRecuperacion(r.Context(), payload.Email, payload.Codigo, payload.Password); err != nil {
+		switch err {
+		case utilidades.ErrorNoEncontrado,
+			ErrorCodigoRecuperacionInvalido,
+			ErrorCodigoRecuperacionVencido,
+			ErrorCodigoRecuperacionUsado,
+			ErrorCodigoRecuperacionNoVerificado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
+		default:
+			h.errors.ErrorInterno(w, r, err)
+			return
+		}
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "contraseña actualizada"); err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
 }

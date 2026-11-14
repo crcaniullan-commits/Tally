@@ -142,6 +142,42 @@ func (s *AlmacenCategorias) CambiarNombre(ctx context.Context, nombre string, ca
 	return nil
 }
 
+// TieneMovimientos indica si la categoría está referenciada por ingresos o
+// gastos de la empresa dueña.
+//
+// Cuenta los dos lados: los gastos la referencian de forma obligatoria (NOT
+// NULL) y los ingresos de forma opcional.
+//
+// Filtra por la empresa de la categoría a propósito: una categoría de otra
+// empresa tiene que seguir respondiendo 404 al borrado, no un 409 que delata
+// que tiene movimientos.
+func (s *AlmacenCategorias) TieneMovimientos(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM expenses e
+			JOIN categories c ON c.id = e.category_id
+			WHERE e.category_id = $1 AND c.empresa_id = $2
+		) OR EXISTS (
+			SELECT 1
+			FROM incomes i
+			JOIN categories c ON c.id = i.category_id
+			WHERE i.category_id = $1 AND c.empresa_id = $2
+		)
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
+	defer cancel()
+
+	var tiene bool
+
+	if err := s.db.QueryRowContext(ctx, query, categoriaID, empresaID).Scan(&tiene); err != nil {
+		return false, err
+	}
+
+	return tiene, nil
+}
+
 func (s *AlmacenCategorias) BorrarCategoria(ctx context.Context, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	query := `
 		DELETE FROM categories

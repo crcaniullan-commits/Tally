@@ -49,7 +49,7 @@ func CambiarNombre() {}
 // BorrarCategoria
 //
 //	@Summary		Eliminar categoría
-//	@Description	Elimina una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Description	Elimina una categoría, siempre que pertenezca a la empresa autenticada. Si la categoría tiene ingresos o gastos asociados no se puede borrar: responde 409 y la categoría sigue existiendo. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
 //	@Tags			Categorias
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
@@ -57,6 +57,7 @@ func CambiarNombre() {}
 //	@Success		200			{object}	string				"categoría eliminada"
 //	@Failure		400			{object}	map[string]string	"categoria invalido"
 //	@Failure		404			{object}	map[string]string	"categoría no encontrada"
+//	@Failure		409			{object}	map[string]string	"la categoría tiene movimientos asociados"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/categorias/{categoria}	[delete]

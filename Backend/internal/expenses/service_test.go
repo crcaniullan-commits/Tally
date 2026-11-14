@@ -168,3 +168,106 @@ func TestExpenseService_GetAllExpensesOfEmpresa(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 }
+
+func TestExpenseService_UpdateExpense(t *testing.T) {
+	t.Run("manda al store solo los campos del payload", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		monto := int64(2500)
+		descripcion := "Compra de insumos"
+		fecha := "2026-09-15"
+
+		store.On("ActualizarGasto", mock.Anything,
+			mock.MatchedBy(func(c CambiosGasto) bool {
+				return c.Monto != nil && *c.Monto == monto &&
+					c.CategoryID == nil &&
+					c.Descripcion != nil && *c.Descripcion == descripcion &&
+					c.Fecha != nil && c.Fecha.Format("2006-01-02") == fecha
+			}),
+			testExpenseID, testEmpresaID,
+		).Return(newTestExpense(), nil).Once()
+
+		expense, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			Monto:       &monto,
+			Descripcion: &descripcion,
+			Fecha:       &fecha,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testExpenseID, expense.ID)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("rechaza una fecha con formato invalido", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		fecha := "15-09-2026"
+
+		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			Fecha: &fecha,
+		}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorFechaInvalida)
+		store.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("rechaza un payload sin campos", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorSinCambios)
+		store.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("valida la categoria antes de actualizar", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		categoria := uuid.New()
+
+		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID).Return(false, nil).Once()
+
+		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			CategoryID: &categoria,
+		}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
+		store.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("traduce el gasto inexistente a ErrorMovimientoNoEncontrado", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		monto := int64(2500)
+
+		store.On("ActualizarGasto", mock.Anything, mock.Anything, testExpenseID, testEmpresaID).
+			Return(model.Expense{}, utilidades.ErrorNoEncontrado).Once()
+
+		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			Monto: &monto,
+		}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorMovimientoNoEncontrado)
+	})
+
+	t.Run("propaga el error del store", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		monto := int64(2500)
+
+		store.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Expense{}, errStoreBoom).Once()
+
+		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			Monto: &monto,
+		}, testExpenseID, testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+	})
+}

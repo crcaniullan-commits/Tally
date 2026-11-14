@@ -312,3 +312,107 @@ func TestIncomeService_GetAllIncomesOfEmpresa(t *testing.T) {
 		store.AssertNumberOfCalls(t, "ObtenerIngresosDeEmpresa", 1)
 	})
 }
+
+func TestIncomeService_UpdateIncome(t *testing.T) {
+	t.Run("manda al store solo los campos del payload", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		monto := int64(2500)
+		descripcion := "Venta de la tarde"
+		fecha := "2026-09-15"
+
+		store.On("ActualizarIngreso", mock.Anything,
+			mock.MatchedBy(func(c CambiosIngreso) bool {
+				return c.Monto != nil && *c.Monto == monto &&
+					c.PaymentMethod == nil &&
+					c.Descripcion != nil && *c.Descripcion == descripcion &&
+					c.CategoryID == nil &&
+					c.Fecha != nil && c.Fecha.Format("2006-01-02") == fecha
+			}),
+			testIncomeID, testEmpresaID,
+		).Return(newTestIncome(), nil).Once()
+
+		income, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
+			Monto:       &monto,
+			Descripcion: &descripcion,
+			Fecha:       &fecha,
+		}, testIncomeID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testIncomeID, income.ID)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("rechaza una fecha con formato invalido", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		fecha := "15-09-2026"
+
+		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
+			Fecha: &fecha,
+		}, testIncomeID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorFechaInvalida)
+		store.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("rechaza un payload sin campos", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{}, testIncomeID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorSinCambios)
+		store.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("valida la categoria antes de actualizar", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		categoria := uuid.New()
+
+		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID).Return(false, nil).Once()
+
+		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
+			CategoryID: &categoria,
+		}, testIncomeID, testEmpresaID)
+
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
+		store.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("traduce el ingreso inexistente a ErrorMovimientoNoEncontrado", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		monto := int64(2500)
+
+		store.On("ActualizarIngreso", mock.Anything, mock.Anything, testIncomeID, testEmpresaID).
+			Return(model.Income{}, utilidades.ErrorNoEncontrado).Once()
+
+		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
+			Monto: &monto,
+		}, testIncomeID, testEmpresaID)
+
+		require.ErrorIs(t, err, ErrorMovimientoNoEncontrado)
+	})
+
+	t.Run("propaga el error del store", func(t *testing.T) {
+		store := new(RepositorioIngresosMock)
+		service := NuevoServicioIngresos(store)
+
+		monto := int64(2500)
+
+		store.On("ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(model.Income{}, errStoreBoom).Once()
+
+		_, err := service.ActualizarIngreso(context.Background(), PayloadActualizarIngreso{
+			Monto: &monto,
+		}, testIncomeID, testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+	})
+}

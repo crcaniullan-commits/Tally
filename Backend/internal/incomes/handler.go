@@ -14,6 +14,7 @@ import (
 
 type IServiceIngresos interface {
 	AgregarIngreso(context.Context, PayloadIngreso, uuid.UUID) (model.Income, error)
+	ActualizarIngreso(context.Context, PayloadActualizarIngreso, uuid.UUID, uuid.UUID) (model.Income, error)
 	EliminarIngreso(context.Context, uuid.UUID, uuid.UUID) error
 	ObtenerIngresosDeEmpresa(context.Context, uuid.UUID, paginacion.ConsultaPaginacionIngresos) ([]model.Income, error)
 }
@@ -36,6 +37,17 @@ type PayloadIngreso struct {
 	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
 	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
 	CategoryID    *uuid.UUID          `json:"category_id" validate:"omitempty"`
+}
+
+// PayloadActualizarIngreso son los campos editables de un ingreso. Lo que no
+// viene en el payload se queda como está; "fecha" (AAAA-MM-DD) permite
+// corregir la fecha del movimiento.
+type PayloadActualizarIngreso struct {
+	Monto         *int64               `json:"monto" validate:"omitempty,gt=0"`
+	PaymentMethod *model.PaymentMethod `json:"payment_method" validate:"omitempty,oneof=debito credito transferencia efectivo"`
+	Descripcion   *string              `json:"descripcion" validate:"omitempty,max=100"`
+	CategoryID    *uuid.UUID           `json:"category_id"`
+	Fecha         *string              `json:"fecha"`
 }
 
 /*
@@ -66,6 +78,46 @@ func (h *HandlerIngresos) AgregarIngreso(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+}
+
+/*
+*	Actualiza un ingreso: monto, método de pago, descripción, categoría y fecha
+ */
+func (h *HandlerIngresos) Actualizar(w http.ResponseWriter, r *http.Request) {
+	ingresoID, err := uuid.Parse(chi.URLParam(r, "ingresoID"))
+
+	if err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	var payload PayloadActualizarIngreso
+
+	if err := utilidades.LeerJSONYValidar(w, r, &payload); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	income, err := h.service.ActualizarIngreso(r.Context(), payload, ingresoID, empresaID(r))
+
+	if err != nil {
+		switch err {
+		case ErrorMovimientoNoEncontrado:
+			h.errors.ErrorNoEncontrado(w, r, err)
+			return
+		case ErrorFechaInvalida, ErrorSinCambios, utilidades.ErrorNoEncontrado:
+			h.errors.ErrorSolicitudInvalida(w, r, err)
+			return
+		default:
+			h.errors.ErrorInterno(w, r, err)
+			return
+		}
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, income); err != nil {
+		h.errors.ErrorInterno(w, r, err)
+		return
+	}
 }
 
 /*

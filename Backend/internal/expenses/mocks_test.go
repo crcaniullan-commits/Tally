@@ -26,6 +26,14 @@ func (m *RepositorioExpensesMock) EliminarGasto(ctx context.Context, gastoID uui
 	return args.Error(0)
 }
 
+func (m *RepositorioExpensesMock) ActualizarGasto(ctx context.Context, cambios CambiosGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
+	args := m.Called(ctx, cambios, gastoID, empresaID)
+
+	expense, _ := args.Get(0).(model.Expense)
+
+	return expense, args.Error(1)
+}
+
 func (m *RepositorioExpensesMock) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
 	args := m.Called(ctx, empresaID, fq)
 
@@ -59,6 +67,14 @@ func (m *IServiceExpensesMock) AgregarGasto(ctx context.Context, payload Payload
 func (m *IServiceExpensesMock) EliminarGasto(ctx context.Context, gastoID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, gastoID, empresaID)
 	return args.Error(0)
+}
+
+func (m *IServiceExpensesMock) ActualizarGasto(ctx context.Context, payload PayloadActualizarGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
+	args := m.Called(ctx, payload, gastoID, empresaID)
+
+	expense, _ := args.Get(0).(model.Expense)
+
+	return expense, args.Error(1)
 }
 
 func (m *IServiceExpensesMock) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {

@@ -46,9 +46,22 @@ var (
 )
 
 // columnas de la query de lectura: id, email, nombre, rut, role,
-// plan_expires_at. El orden tiene que calzar con el Scan de ObtenerPorID / ObtenerPorRUT.
+// plan_expires_at. El orden tiene que calzar con el Scan de ObtenerPorRUT.
 func userColumns() []string {
 	return []string{"id", "email", "nombre", "rut", "role", "plan_expires_at"}
+}
+
+// userColumnsConPassword son las columnas de ObtenerPorID, que además trae el
+// hash de la contraseña: el middleware de autenticación usa ese usuario y
+// PATCH /usuarios reescribe la fila con el hash que viene de ahí.
+func userColumnsConPassword() []string {
+	return []string{"id", "email", "nombre", "rut", "role", "plan_expires_at", "password_hash"}
+}
+
+// userRowConPassword es userRow() con el hash al final.
+func userRowConPassword() []driver.Value {
+	row := userRow()
+	return append(row, []byte("hash-de-prueba"))
 }
 
 func userRow() []driver.Value {
@@ -68,7 +81,7 @@ func TestUserStore_GetByID(t *testing.T) {
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
@@ -82,15 +95,32 @@ func TestUserStore_GetByID(t *testing.T) {
 		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
 
+	t.Run("devuelve el hash de la contraseña para que el PATCH no lo borre", func(t *testing.T) {
+		// El middleware de autenticación arma el usuario del contexto con este
+		// método y PATCH /usuarios reescribe la fila con ese usuario: si el hash
+		// no viniera, la actualización escribiría un hash vacío en una columna
+		// NOT NULL y el endpoint devolvía 500.
+		store, mock := newMockStore(t)
+
+		mock.ExpectQuery(regexGetByID).
+			WithArgs(testUserID).
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
+
+		user, err := store.ObtenerPorID(context.Background(), testUserID)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, user.PasswordHash.GetHash())
+	})
+
 	t.Run("acepta el rut sin separadores", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[3] = "19234567K"
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
@@ -103,7 +133,7 @@ func TestUserStore_GetByID(t *testing.T) {
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
@@ -114,12 +144,12 @@ func TestUserStore_GetByID(t *testing.T) {
 	t.Run("devuelve utilidades.ErrFormatoInvalido si el rut de la base no tiene formato", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[3] = "rut-corrupto"
 
 		mock.ExpectQuery(regexGetByID).
 			WithArgs(testUserID).
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
@@ -332,22 +362,22 @@ func columnasDe(query string) []string {
 }
 
 func TestUserStore_lectura_query(t *testing.T) {
-	// ObtenerPorID y ObtenerPorRUT comparten la misma proyección, así que si cantidad u
-	// orden de columnas y del Scan difieren, el Scan se come el valor de la
-	// columna vecina: sqlmock no lo detecta (solo compara strings) y contra
-	// Postgres es "expected N destination arguments in Scan, not M" en todas las
-	// filas. Como ObtenerPorID es lo que usa el middleware de autenticación, eso
-	// tumbaba todos los endpoints bajo /v1/app.
+	// Si la cantidad o el orden de columnas de la proyección difieren del Scan,
+	// el Scan se come el valor de la columna vecina: sqlmock no lo detecta
+	// (solo compara strings) y contra Postgres es "expected N destination
+	// arguments in Scan, not M" en todas las filas. Como ObtenerPorID es lo que
+	// usa el middleware de autenticación, eso tumbaba todos los endpoints bajo
+	// /v1/app.
 	t.Run("la proyección de ObtenerPorID está en el mismo orden que el Scan", func(t *testing.T) {
 		store, mock, sql := newCapturingMockStore(t)
 
 		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(userRow()...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(userRowConPassword()...))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.NoError(t, err)
-		assert.Equal(t, userColumns(), columnasDe(*sql))
+		assert.Equal(t, userColumnsConPassword(), columnasDe(*sql))
 		require.NotNil(t, user.PlanExpiresAt)
 		assert.True(t, testPlanExpiresAt.Equal(*user.PlanExpiresAt))
 	})
@@ -374,16 +404,16 @@ func TestUserStore_lectura_query(t *testing.T) {
 		// <nil> into type *time.Time" y tumbaba el MiddlewareTokenAutenticacion.
 		store, mock, sql := newCapturingMockStore(t)
 
-		row := userRow()
+		row := userRowConPassword()
 		row[5] = nil
 
 		mock.ExpectQuery("").
-			WillReturnRows(sqlmock.NewRows(userColumns()).AddRow(row...))
+			WillReturnRows(sqlmock.NewRows(userColumnsConPassword()).AddRow(row...))
 
 		user, err := store.ObtenerPorID(context.Background(), testUserID)
 
 		require.NoError(t, err)
-		assert.Equal(t, userColumns(), columnasDe(*sql))
+		assert.Equal(t, userColumnsConPassword(), columnasDe(*sql))
 		assert.Nil(t, user.PlanExpiresAt)
 	})
 
