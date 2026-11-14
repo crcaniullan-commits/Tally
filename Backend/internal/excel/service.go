@@ -22,6 +22,9 @@ type Service struct {
 	storage FileStorage
 }
 
+// Service implementa la interfaz que consume el handler.
+var _ IServiceExcel = (*Service)(nil)
+
 func (s *Service) Save(ctx context.Context, userID, empresaID uuid.UUID,
 	nombre string, body io.ReadSeeker, size int64) (*File, error) {
 
@@ -74,7 +77,8 @@ func (s *Service) Open(ctx context.Context, empresaID, id uuid.UUID) (*File, io.
 func (s *Service) Delete(ctx context.Context, empresaID, id uuid.UUID) error {
 	key, err := s.store.Delete(ctx, empresaID, id)
 	if err != nil {
-		return nil
+		// el ErrNotFound del store sube al handler, que lo traduce a 404.
+		return err
 	}
 
 	_ = s.storage.Delete(ctx, key) //si falla queda un objeto huérfano, sin registro

@@ -21,10 +21,12 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/debtors"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/excel"
 	"github.com/crcaniullan-commits/Tally/internal/expenses"
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
 	chimit "github.com/go-chi/chi/v5/middleware"
@@ -63,10 +65,22 @@ func newEnv() (*TestEnv, func(), error) {
 		return nil, nil, err
 	}
 
-	return &TestEnv{DB: db, Router: buildRouter(db)}, cleanup, nil
+	// los archivos de excel se guardan en un directorio temporal: el suite no
+	// puede escribir en ./data/files.
+	dir, err := os.MkdirTemp("", "tally-excel-*")
+	if err != nil {
+		cleanup()
+
+		return nil, nil, fmt.Errorf("creando el directorio temporal de excel: %w", err)
+	}
+
+	return &TestEnv{DB: db, Router: buildRouter(db, storage.NewDisk(dir))}, func() {
+		cleanup()
+		_ = os.RemoveAll(dir)
+	}, nil
 }
 
-func buildRouter(db *sql.DB) http.Handler {
+func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 	logger := zap.NewNop().Sugar()
 
 	middl := intermediario.NuevoMiddlewareAutenticacion(
@@ -109,6 +123,7 @@ func buildRouter(db *sql.DB) http.Handler {
 					categories.InitModule(r, db, logger, middl)
 					goals.InitModule(r, db, logger, middl)
 					debtors.InitModule(r, db, logger, middl)
+					excel.InitModule(r, db, files, logger, middl)
 				})
 			})
 		})

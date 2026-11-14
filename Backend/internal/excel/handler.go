@@ -1,6 +1,7 @@
 package excel
 
 import (
+	"context"
 	"errors"
 	"io"
 	"mime"
@@ -16,9 +17,23 @@ import (
 
 const maxUpload = 10 << 20 // 10mb
 
+// IServiceExcel es la interfaz del service de excel. El handler depende de
+// esta interfaz (no del Service concreto) para poder testearlo aislado.
+type IServiceExcel interface {
+	Save(context.Context, uuid.UUID, uuid.UUID, string, io.ReadSeeker, int64) (*File, error)
+	List(context.Context, uuid.UUID, int, int) ([]File, error)
+	Open(context.Context, uuid.UUID, uuid.UUID) (*File, io.ReadCloser, error)
+	Delete(context.Context, uuid.UUID, uuid.UUID) error
+}
+
 type Handler struct {
-	svc    *Service
+	svc    IServiceExcel
 	errors errores.RespuestaErrores
+}
+
+// NuevoHandlerExcel arma el handler con el service y el gestor de errores.
+func NuevoHandlerExcel(s IServiceExcel, e errores.RespuestaErrores) *Handler {
+	return &Handler{svc: s, errors: e}
 }
 
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -35,8 +50,13 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	magic := make([]byte, 2)
-	if _, err := io.ReadFull(file, magic); err != nil || string(magic) != "PK" {
-		h.errors.ErrorInterno(w, r, err)
+	if _, err := io.ReadFull(file, magic); err != nil {
+		h.errors.ErrorSolicitudInvalida(w, r, errors.New("el archivo está vacío o incompleto"))
+		return
+	}
+
+	if string(magic) != "PK" {
+		h.errors.ErrorSolicitudInvalida(w, r, errors.New("el archivo debe ser un .xlsx válido"))
 		return
 	}
 
@@ -84,7 +104,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := utilidades.EscribirJSON(w, http.StatusOK, files); err != nil {
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, files); err != nil {
 		h.errors.ErrorInterno(w, r, err)
 		return
 	}

@@ -149,6 +149,19 @@ definitions:
     required:
     - nombre_empresa
     type: object
+  excel.File:
+    properties:
+      created_at:
+        type: string
+      empresa_id:
+        type: string
+      id:
+        type: string
+      nombre:
+        type: string
+      size_bytes:
+        type: integer
+    type: object
   expenses.PayloadActualizarGasto:
     properties:
       category_id:
@@ -1078,6 +1091,180 @@ paths:
       summary: Marcar deuda como pagada
       tags:
       - Deudas
+  /aplicacion/empresas/{empresaID}/excel:
+    get:
+      description: 'Devuelve los archivos .xlsx de la empresa autenticada, del más
+        nuevo al más viejo. La respuesta viene envuelta en {"datos": [...]}. Admite
+        "limit" (por defecto 20, máximo 100) y "offset".'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: cantidad de archivos a devolver
+        in: query
+        name: limit
+        type: integer
+      - description: archivos a saltar
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: archivos de la empresa
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/excel.File'
+              type: array
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar archivos
+      tags:
+      - Excel
+    post:
+      consumes:
+      - multipart/form-data
+      description: 'Sube un archivo .xlsx a la empresa autenticada. El archivo va
+        en el campo multipart "file" y no puede pesar más de 10 MB. El nombre original
+        se guarda y el binario queda en el storage de la empresa; la respuesta viene
+        envuelta en {"datos": ...} con el registro del archivo.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: archivo .xlsx
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: archivo subido
+          schema:
+            $ref: '#/definitions/excel.File'
+        "400":
+          description: falta el archivo, no es un .xlsx válido o excede el tamaño
+            máximo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Subir archivo xlsx
+      tags:
+      - Excel
+  /aplicacion/empresas/{empresaID}/excel/{id}:
+    delete:
+      description: 'Elimina un archivo .xlsx de la empresa autenticada: se borra el
+        registro y el binario asociado. Responde 204 sin cuerpo.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del archivo
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: archivo eliminado
+          schema:
+            type: string
+        "400":
+          description: id invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: archivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar archivo
+      tags:
+      - Excel
+    get:
+      description: Descarga el contenido de un archivo .xlsx de la empresa autenticada.
+        La respuesta es el binario del archivo, con el nombre original en el header
+        Content-Disposition.
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID del archivo
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: archivo
+          schema:
+            type: file
+        "400":
+          description: id invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: archivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Descargar archivo
+      tags:
+      - Excel
   /aplicacion/empresas/{empresaID}/gastos:
     get:
       description: 'Devuelve una página de los gastos de la empresa autenticada, ordenados

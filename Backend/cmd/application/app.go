@@ -18,10 +18,12 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/entorno"
 	"github.com/crcaniullan-commits/Tally/internal/errores"
+	"github.com/crcaniullan-commits/Tally/internal/excel"
 	"github.com/crcaniullan-commits/Tally/internal/expenses"
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -114,6 +116,8 @@ func (app *Application) Run() error {
 	empresaRoute, finder := empresas.InitModule(app.db, app.logger, middl)
 	emMiddl := intermediario.NuevoMiddlewareEmpresa(app.logger, finder)
 
+	fileStore := storage.NewDisk("./data/files")
+
 	r.Use(intermediario.MiddlewaresGlobales()...)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -137,6 +141,7 @@ func (app *Application) Run() error {
 					categories.InitModule(r, app.db, app.logger, middl)
 					goals.InitModule(r, app.db, app.logger, middl)
 					debtors.InitModule(r, app.db, app.logger, middl)
+					excel.InitModule(r, app.db, fileStore, app.logger, middl)
 
 				})
 			})

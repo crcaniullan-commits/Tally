@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS excel_files;

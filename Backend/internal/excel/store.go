@@ -24,7 +24,7 @@ func (s *Store) Insert(ctx context.Context, f *File) error {
 func (s *Store) List(ctx context.Context, empresaID uuid.UUID, limit, offset int) ([]File, error) {
 	rows, err := bdtx.FromContext(ctx, s.db).QueryContext(ctx,
 		`
-		SELECT id, emrpesa_id, nombre, storage_key, size_bytes, created_at
+		SELECT id, empresa_id, nombre, storage_key, size_bytes, created_at
 		FROM excel_files
 		WHERE empresa_id = $1
 		ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3
@@ -55,8 +55,8 @@ func (s *Store) Get(ctx context.Context, empresaID, id uuid.UUID) (File, error) 
 
 	err := bdtx.FromContext(ctx, s.db).QueryRowContext(ctx, `
 		SELECT id, empresa_id, nombre, storage_key, size_bytes, created_at
-		FROM exel_files
-		WHERE ID = $1 AND empresa_id = $2
+		FROM excel_files
+		WHERE id = $1 AND empresa_id = $2
 	`, id, empresaID).Scan(&f.ID, &f.EmpresaID, &f.Nombre, &f.StorageKey, &f.SizeBytes, &f.CreatedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {

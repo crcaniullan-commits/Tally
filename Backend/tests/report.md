@@ -1,6 +1,6 @@
 # Reporte de tests de integración
 
-Fecha: 2026-11-07
+Fecha: 2026-11-14
 
 Suite HTTP de integración del backend de Tally. Ejercita el router real en memoria
 contra una base PostgreSQL efímera, sin mocks de base de datos.
@@ -34,7 +34,7 @@ Requisitos:
 
 ## Resultado actual
 
-Última corrida completa: **OK**, 11 flujos y 353 subtests directos (~3 s).
+Última corrida completa: **OK**, 12 flujos y 373 subtests directos (~3 s).
 `gofmt -l tests/integration/` y `go vet ./tests/integration/...` sin hallazgos.
 
 | Flujo | Archivo | Resultado | Subtests |
@@ -49,6 +49,7 @@ Requisitos:
 | Deudores | `integration/debtors_flow_test.go` | PASS | 37 |
 | Metas | `integration/goals_flow_test.go` | PASS | 40 |
 | Usuarios | `integration/users_flow_test.go` | PASS | 28 |
+| Archivos Excel | `integration/excel_flow_test.go` | PASS | 20 |
 | Aislamiento multi-empresa | `integration/tenant_isolation_test.go` | PASS | 23 |
 
 Todos los flujos verifican al menos una ruta protegida sin token y con token
@@ -64,10 +65,11 @@ tests/
     ├── helpers_test.go           # requireProtected, dbDate
     ├── <flujo>_flow_test.go      # un archivo por flujo
     ├── password_recovery_flow_test.go
+    ├── excel_flow_test.go
     ├── tenant_isolation_test.go
     └── testutil/
         ├── env.go                # base efímera, migraciones, router real
-        ├── client.go             # Request, DecodeData, DecodeError, Require*
+        ├── client.go             # Request, RequestRaw, DecodeData, DecodeError, Require*
         ├── fixtures.go           # NewUser, CreateEmpresa, CreateCategory, ...
         └── rut.go                # generador de RUT módulo 11
 ```
@@ -102,6 +104,13 @@ tests/
   actualización solo de contraseña, actualización solo de nombre, payload vacío,
   consulta municipal por RUT, validaciones, borrado de cuenta e invalidación
   del token.
+- **Archivos Excel:** subida de un `.xlsx` (multipart, campo `file`), listado con
+  el envelope `{"datos": [...]}`, descarga con el binario y el content-type de
+  hoja de cálculo, borrado (`204`), archivo que no es un zip válido (`400`),
+  subida sin archivo (`400`), descarga y borrado de un archivo inexistente
+  (`404`), aislamiento entre empresas (listado vacío y `404` por id), municipal
+  sin acceso a la empresa (`404`), registro en la tabla `excel_files` y borrado
+  en cascada al eliminar la empresa.
 - **Aislamiento multi-empresa:** acceso a empresa ajena (`404` en middleware),
   recursos ajenos por ID desde la empresa propia (`404` en el `WHERE`), listados
   que excluyen datos ajenos, categoría ajena rechazada y rol municipal sin
@@ -125,6 +134,12 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
 | 3 | `POST /v1/autenticacion` y `POST /v1/autenticacion/municipal` con RUT mal formado | `500 {"error":"el servidor encontró un problema"}` | `400` con `el formato del RUT no es válido` | El `ParseRUT` vive en el service y el handler de auth no mapeaba `utilidades.ErrFormatoInvalido`. |
 | 4 | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío | `500 {"error":"el servidor encontró un problema"}` | `200` y el nombre queda actualizado | `MiddlewareTokenAutenticacion` usa `ObtenerPorID`, que no seleccionaba `password_hash`; el UPDATE escribía un hash vacío en una columna `NOT NULL`. Ahora `ObtenerPorID` trae el hash. |
 | 5 | `DELETE /v1/aplicacion/empresas/{empresaID}/categorias/{categoria}` con movimientos | `200` y los gastos de la categoría borrados en cascada | `409` y la categoría intacta | La categoría se borraba sin mirar si tenía ingresos o gastos asociados. |
+| 6 | `GET /v1/aplicacion/empresas/{empresaID}/excel` y `GET .../excel/{id}` | `200` | `500` (columna `emrpesa_id` y tabla `exel_files` inexistentes) | Typos en el SQL de `internal/excel/store.go`. |
+| 7 | `POST /v1/aplicacion/empresas/{empresaID}/excel` con un archivo que no es `.xlsx` | `400` | `500` (panic por `ErrorInterno` con error `nil`) | `internal/excel/handler.go` mezclaba el error de lectura con el de magic bytes y pasaba un `nil` a `ErrorInterno`. |
+| 8 | `DELETE /v1/aplicacion/empresas/{empresaID}/excel/{id}` con un id inexistente | `404` | `204` | `Service.Delete` se comía el error del store (`return nil`) y el `ErrNotFound` nunca llegaba al handler. |
+| 9 | `GET /v1/aplicacion/empresas/{empresaID}/excel` | `{"datos":[...]}` | `[...]` (array pelado) | El handler usaba `utilidades.EscribirJSON` en vez de `utilidades.RespuestaJSON`. |
+| 10 | `POST /v1/aplicacion/empresas/{empresaID}/excel` (ruta completa) | `404` (no existía) | `404` en una ruta duplicada (`/empresas/{id}/empresas/{id}/excel`) | `excel.InitModule` registraba `/empresas/{empresaID}/excel` pero se montaba dentro del grupo `/empresas/{empresaID}`. Ahora registra `/excel`. |
+| 11 | `migrations/000009_excel_files.up.sql` | creaba la tabla `excel_files` | la dropeaba (el `CREATE TABLE` estaba en el `.down.sql`) | Los dos archivos de la migración estaban invertidos: la tabla nunca existía en la base. |
 
 ## Diferencias entre swagger y código
 
@@ -145,7 +160,9 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
   código enviado (`testutil.UltimoCodigoDeRecuperacion`).
 - Vencimiento del código de recuperación (15 minutos): no se prueba esperando el
   reloj; se cubre la unidad de tiempo del código en el service.
-- `excel` e `informe`: son esqueletos sin rutas ni lógica.
+- `informe`: es un esqueleto sin rutas ni lógica.
+- Storage de archivos en S3: el suite usa `storage.NewDisk` sobre un directorio temporal; el cliente S3 no existe todavía.
+- Subida de un archivo de más de 10 MB: el tope lo aplica `http.MaxBytesReader` y no se prueba con un cuerpo de 10 MB.
 - Carrera de unicidad de categorías: deuda técnica conocida y no determinista.
 - Borrado en cascada de empresas/ingresos/gastos al borrar un usuario: solo se
   verifica que el token deja de servir (`401`).
