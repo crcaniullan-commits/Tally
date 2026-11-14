@@ -49,14 +49,14 @@ func TestExpensesFlow(t *testing.T) {
 	})
 
 	t.Run("rechaza un gasto con una categoría global de tipo ingreso", func(t *testing.T) {
-		// Las categorías globales son de tipo 'ingreso', así que no se pueden
-		// usar en un gasto.
+		// Las globales de ventas ('Ventas', 'Servicios', 'Pedidos') son de tipo
+		// 'ingreso', así que no se pueden usar en un gasto.
 		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
 		categorias := testutil.DecodeData[[]model.Categorie](t, list)
 
 		var global model.Categorie
 		for _, c := range categorias {
-			if c.EmpresaID == nil {
+			if c.EmpresaID == nil && c.Tipo == model.CategoryTypeIngreso {
 				global = c
 				break
 			}
@@ -70,6 +70,29 @@ func TestExpensesFlow(t *testing.T) {
 		})
 
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
+	})
+
+	t.Run("crea un gasto con una categoría global de tipo gasto", func(t *testing.T) {
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/categorias"), user.Token, nil)
+		categorias := testutil.DecodeData[[]model.Categorie](t, list)
+
+		var global model.Categorie
+		for _, c := range categorias {
+			if c.EmpresaID == nil && c.Tipo == model.CategoryTypeGasto {
+				global = c
+				break
+			}
+		}
+		require.NotEqual(t, uuid.Nil, global.ID)
+
+		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
+			"monto":       7000,
+			"category_id": global.ID.String(),
+		})
+
+		testutil.RequireStatus(t, res, http.StatusCreated)
+		creado := testutil.DecodeData[model.Expense](t, res)
+		require.Equal(t, global.ID, creado.CategoryID)
 	})
 
 	t.Run("lista los gastos de la empresa", func(t *testing.T) {

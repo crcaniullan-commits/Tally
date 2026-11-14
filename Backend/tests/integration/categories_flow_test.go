@@ -59,7 +59,19 @@ func TestCategoriesFlow(t *testing.T) {
 			for _, c := range categorias {
 				if c.EmpresaID == nil && c.Nombre == nombre {
 					found = true
-					require.Equal(t, model.CategoryTypeIngreso, c.Tipo, "las globales son de tipo ingreso")
+					require.Equal(t, model.CategoryTypeIngreso, c.Tipo, "las globales de ventas son de tipo ingreso")
+					break
+				}
+			}
+			require.True(t, found, "debería estar la categoría global %q", nombre)
+		}
+
+		for _, nombre := range []string{"Insumos", "Comunes", "Pagos"} {
+			found := false
+			for _, c := range categorias {
+				if c.EmpresaID == nil && c.Nombre == nombre {
+					found = true
+					require.Equal(t, model.CategoryTypeGasto, c.Tipo, "las globales de gastos son de tipo gasto")
 					break
 				}
 			}

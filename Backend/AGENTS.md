@@ -43,20 +43,20 @@ GOPROXY=off go test ./internal/categories/...   # cache de módulos ya está cal
 
 ## Migraciones
 
-`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_excel_files` es del módulo `excel`). La última migración del módulo `categories` es `000011_add_category_type`.
+`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_excel_files` es del módulo `excel`). La última migración del módulo `categories` es `000012_add_global_expense_categories` (después de `000011_add_category_type`).
 
 `.envrc` está en `.gitignore` (tiene credenciales reales). Sin él, los tests igual corren; `migration-up` necesita `DB_ADDR`.
 
 ## Esquema de la base de datos
 
-Estado tras `000011`. El número entre paréntesis es la migración que introdujo el elemento.
+Estado tras `000012`. El número entre paréntesis es la migración que introdujo el elemento.
 
 ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`). ENUM nuevo (`000011`): `category_type` (`ingreso`, `gasto`).
 
 - `users` — `email VARCHAR(255) UNIQUE NOT NULL`, `password_hash`, `nombre`, `role` (`user_role`, default `usuario`), `created_at`, `updated_at`, `rut` UNIQUE (`000002`), `plan_expires_at` nullable (`000004`).
 - `empresas` (`000007`) — `nombre_empresa VARCHAR(150) NOT NULL`, `user_id NOT NULL → users` con `ON DELETE CASCADE`. Un usuario tiene N empresas; índice `idx_empresas_user_id`.
 - `access_keys` — `code VARCHAR(50) UNIQUE NOT NULL`, `created_by → users` **nullable** con `ON DELETE SET NULL` (`000007`), `redeemed_by → users` (`SET NULL`), `redeemed_at`, `expires_at`, `revoked_at` y `revoked_by → users` (`000005`, `SET NULL`), `created_at`.
-- `categories` — `nombre VARCHAR(100) NOT NULL`; `empresa_id → empresas` **nullable** (`000007`, `ON DELETE CASCADE`), donde NULL = categoría global; índice `idx_categories_empresa_id`. `000008` siembra las globales `Ventas`, `Servicios` y `Pedidos`. `tipo category_type NOT NULL DEFAULT 'ingreso'` (`000011`): cada categoría es de ingresos o de gastos, nunca de los dos. El backfill de `000011` dejó en `'gasto'` las que ya tenían gastos asociados y en `'ingreso'` el resto (las globales quedan en `'ingreso'`).
+- `categories` — `nombre VARCHAR(100) NOT NULL`; `empresa_id → empresas` **nullable** (`000007`, `ON DELETE CASCADE`), donde NULL = categoría global; índice `idx_categories_empresa_id`. `000008` siembra las globales de ventas `Ventas`, `Servicios` y `Pedidos`; `000012` siembra las globales de gastos `Insumos`, `Comunes` y `Pagos`. `tipo category_type NOT NULL DEFAULT 'ingreso'` (`000011`): cada categoría es de ingresos o de gastos, nunca de los dos. El backfill de `000011` dejó en `'gasto'` las que ya tenían gastos asociados y en `'ingreso'` el resto (las globales de `000008` quedan en `'ingreso'`).
 - `incomes` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL` (`000003`), `payment_method`, `descripcion TEXT` nullable, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`, `category_id → categories` nullable (`000006`, `ON DELETE SET NULL`).
 - `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
 - `debtors` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `monto BIGINT NOT NULL`, `descripcion`, `pagado BOOLEAN NOT NULL DEFAULT false`, `fecha_limite DATE` nullable, `created_at`.
@@ -201,7 +201,7 @@ Respuestas siempre envueltas en `{"datos": ...}` vía `utilidades.RespuestaJSON`
 
 Paginación: `paginacion.ConsultaPaginacionIngresos` (compartida por `incomes` y `expenses`): `limite` default y máximo 30, `desplazamiento`, `desde`/`hasta` en `AAAA-MM-DD` y `categoria_id` UUID. Un parámetro inválido devuelve error → 400.
 
-Alta de categorías (`POST .../categorias`): el payload es `{"nombre": ..., "tipo": "ingreso"|"gasto"}` y el `tipo` es obligatorio (`validate:"required,oneof=ingreso gasto"`, sin espacios tras la coma). Un tipo inválido es **400**. El **PATCH no cambia el tipo**: usa un payload aparte (`PayloadCambiarNombre`, solo `nombre`) y mandar `"tipo"` ahí es un **400** por campo desconocido. El nombre es único por empresa **y tipo**. Las categorías globales (`Ventas`, `Servicios`, `Pedidos`) son de tipo `'ingreso'`: no se pueden usar en gastos.
+Alta de categorías (`POST .../categorias`): el payload es `{"nombre": ..., "tipo": "ingreso"|"gasto"}` y el `tipo` es obligatorio (`validate:"required,oneof=ingreso gasto"`, sin espacios tras la coma). Un tipo inválido es **400**. El **PATCH no cambia el tipo**: usa un payload aparte (`PayloadCambiarNombre`, solo `nombre`) y mandar `"tipo"` ahí es un **400** por campo desconocido. El nombre es único por empresa **y tipo**. Globales: de ventas (tipo `'ingreso'`) `Ventas`, `Servicios`, `Pedidos`; de gastos (tipo `'gasto'`) `Insumos`, `Comunes`, `Pagos`.
 
 Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoriaExiste` que la categoría sea global (`empresa_id IS NULL`) o de la empresa **y que sea del tipo del movimiento**: `incomes` exige `tipo = 'ingreso'` y `expenses` exige `tipo = 'gasto'`. Si no existe, es de otra empresa o es del tipo contrario, el handler responde **400** (`recurso no encontrado`). En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
 

@@ -34,7 +34,7 @@ Requisitos:
 
 ## Resultado actual
 
-Última corrida completa: **OK**, 12 flujos y 384 subtests directos (~23 s).
+Última corrida completa: **OK**, 12 flujos y 385 subtests directos (~23 s).
 `gofmt -l tests/integration/` y `go vet ./tests/integration/...` sin hallazgos.
 
 | Flujo | Archivo | Resultado | Subtests |
@@ -45,7 +45,7 @@ Requisitos:
 | Empresas | `integration/empresas_flow_test.go` | PASS | 27 |
 | Categorías | `integration/categories_flow_test.go` | PASS | 35 |
 | Ingresos | `integration/incomes_flow_test.go` | PASS | 54 |
-| Gastos | `integration/expenses_flow_test.go` | PASS | 52 |
+| Gastos | `integration/expenses_flow_test.go` | PASS | 53 |
 | Deudores | `integration/debtors_flow_test.go` | PASS | 37 |
 | Metas | `integration/goals_flow_test.go` | PASS | 40 |
 | Usuarios | `integration/users_flow_test.go` | PASS | 28 |
@@ -87,19 +87,20 @@ tests/
 - **Empresas:** creación, listado, renombrado, borrado, doble borrado, listado
   vacío, validaciones, rol municipal y aislamiento entre usuarios.
 - **Categorías:** creación con `tipo` (`ingreso`/`gasto`), listado propio + globales
-  (las globales son de tipo `ingreso`), renombrado, duplicados ignorando
-  mayúsculas/acentos, mismo nombre permitido con otro tipo, mismo nombre en otra
-  empresa, categorías globales no modificables desde la empresa, borrado, borrado
-  bloqueado (`409`) cuando la categoría tiene ingresos o gastos, PATCH con `tipo`
-  rechazado (`400` por campo desconocido) y validaciones de payload.
+  (las globales de ventas son de tipo `ingreso` y las de gastos, de tipo `gasto`),
+  renombrado, duplicados ignorando mayúsculas/acentos, mismo nombre permitido con
+  otro tipo, mismo nombre en otra empresa, categorías globales no modificables
+  desde la empresa, borrado, borrado bloqueado (`409`) cuando la categoría tiene
+  ingresos o gastos, PATCH con `tipo` rechazado (`400` por campo desconocido) y
+  validaciones de payload.
 - **Ingresos:** creación con/sin categoría, categoría global, listado, filtros
   por categoría y fechas, paginación, edición (sin tocar la fecha), borrado,
   categoría inexistente/ajena, categoría de tipo `gasto` rechazada en el alta y
   en la edición, y validaciones de payload/query.
-- **Gastos:** creación con categoría y descripción, rechazo de la categoría
-  global (de tipo `ingreso`), listado, filtros, paginación, edición (sin tocar la
-  fecha), borrado, categoría inexistente/ajena, categoría de tipo `ingreso`
-  rechazada en el alta y en la edición, y validaciones.
+- **Gastos:** creación con categoría y descripción, rechazo de las globales de tipo
+  `ingreso` y uso de las globales de tipo `gasto`, listado, filtros, paginación,
+  edición (sin tocar la fecha), borrado, categoría inexistente/ajena, categoría de
+  tipo `ingreso` rechazada en el alta y en la edición, y validaciones.
 - **Deudores:** creación, listado, actualización, marcado como pagado, campos
   desconocidos, validaciones y errores de ruta.
 - **Metas:** creación por período, listado, detalle, cálculo de estado con

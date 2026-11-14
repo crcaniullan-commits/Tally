@@ -57,12 +57,13 @@ func TestIncomesFlow(t *testing.T) {
 
 		var global model.Categorie
 		for _, c := range categorias {
-			if c.EmpresaID == nil {
+			if c.EmpresaID == nil && c.Tipo == model.CategoryTypeIngreso {
 				global = c
 				break
 			}
 		}
 		require.NotEqual(t, uuid.Nil, global.ID)
+		require.Equal(t, model.CategoryTypeIngreso, global.Tipo)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/ingresos"), user.Token, map[string]any{
 			"monto":          7000,
