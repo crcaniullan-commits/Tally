@@ -90,11 +90,11 @@ func TestCategorieService_Create(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "CAFE"}
+		payload := PayloadCategoria{Nombre: "CAFE", Tipo: model.CategoryTypeGasto}
 		empresaID := testEmpresaID
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).
-			Return([]model.Categorie{{ID: uuid.New(), Nombre: "Café", EmpresaID: &empresaID}}, nil).Once()
+			Return([]model.Categorie{{ID: uuid.New(), Nombre: "Café", EmpresaID: &empresaID, Tipo: model.CategoryTypeGasto}}, nil).Once()
 
 		result, err := service.Crear(context.Background(), payload, &empresaID)
 
@@ -138,6 +138,58 @@ func TestCategorieService_Create(t *testing.T) {
 		assert.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
 	})
+
+	t.Run("rechaza un tipo que no es ingreso ni gasto", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		payload := PayloadCategoria{Nombre: "Comida", Tipo: "otro"}
+		empresaID := testEmpresaID
+
+		result, err := service.Crear(context.Background(), payload, &empresaID)
+
+		require.ErrorIs(t, err, ErrorTipoCategoriaInvalido)
+		assert.Equal(t, uuid.Nil, result.ID)
+		store.AssertNotCalled(t, "Crear", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "ObtenerCategoriasPorEmpresa", mock.Anything, mock.Anything)
+	})
+
+	t.Run("guarda el tipo de la categoria", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		payload := PayloadCategoria{Nombre: "Ventas", Tipo: model.CategoryTypeIngreso}
+		empresaID := testEmpresaID
+
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).Return(nil, nil).Once()
+		store.On("Crear", mock.Anything, mock.MatchedBy(func(c *model.Categorie) bool {
+			return c.Tipo == model.CategoryTypeIngreso
+		})).Return(nil).Once()
+
+		result, err := service.Crear(context.Background(), payload, &empresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, model.CategoryTypeIngreso, result.Tipo)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("permite el mismo nombre si el tipo es distinto", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		payload := PayloadCategoria{Nombre: "Comida", Tipo: model.CategoryTypeIngreso}
+		empresaID := testEmpresaID
+
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, empresaID).
+			Return([]model.Categorie{newTestCategoria()}, nil).Once()
+		store.On("Crear", mock.Anything, mock.Anything).Return(nil).Once()
+
+		result, err := service.Crear(context.Background(), payload, &empresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, model.CategoryTypeIngreso, result.Tipo)
+		store.AssertExpectations(t)
+	})
 }
 
 func TestCategorieService_CambiarNombre(t *testing.T) {
@@ -145,7 +197,7 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "Bebidas"}
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{newTestCategoria()}, nil).Once()
@@ -157,15 +209,15 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("no cambia el nombre si otra categoria de la empresa ya lo usa", func(t *testing.T) {
+	t.Run("no cambia el nombre si otra categoria del mismo tipo ya lo usa", func(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "Bebidas"}
-		existente := model.Categorie{ID: uuid.New(), Nombre: "bebidas", EmpresaID: &testEmpresaID}
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
+		existente := model.Categorie{ID: uuid.New(), Nombre: "bebidas", EmpresaID: &testEmpresaID, Tipo: model.CategoryTypeGasto}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
-			Return([]model.Categorie{existente}, nil).Once()
+			Return([]model.Categorie{newTestCategoria(), existente}, nil).Once()
 
 		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
 
@@ -174,11 +226,28 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
+	t.Run("permite el nombre si la otra categoria es de otro tipo", func(t *testing.T) {
+		store := new(CategoriaStoreMock)
+		service := newService(store)
+
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
+		existente := model.Categorie{ID: uuid.New(), Nombre: "bebidas", EmpresaID: &testEmpresaID, Tipo: model.CategoryTypeIngreso}
+
+		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
+			Return([]model.Categorie{newTestCategoria(), existente}, nil).Once()
+		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(nil).Once()
+
+		err := service.CambiarNombre(context.Background(), payload, testCategoriaID, testEmpresaID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
 	t.Run("permite dejar el mismo nombre a la categoria que se renombra", func(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "COMIDA"}
+		payload := PayloadCambiarNombre{Nombre: "COMIDA"}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).
 			Return([]model.Categorie{newTestCategoria()}, nil).Once()
@@ -194,7 +263,7 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "Bebidas"}
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
 		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(utilidades.ErrorNoEncontrado).Once()
@@ -210,7 +279,7 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "Bebidas"}
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, errStoreBoom).Once()
 
@@ -225,7 +294,7 @@ func TestCategorieService_CambiarNombre(t *testing.T) {
 		store := new(CategoriaStoreMock)
 		service := newService(store)
 
-		payload := PayloadCategoria{Nombre: "Bebidas"}
+		payload := PayloadCambiarNombre{Nombre: "Bebidas"}
 
 		store.On("ObtenerCategoriasPorEmpresa", mock.Anything, testEmpresaID).Return(nil, nil).Once()
 		store.On("CambiarNombre", mock.Anything, "Bebidas", testCategoriaID, testEmpresaID).Return(errStoreBoom).Once()

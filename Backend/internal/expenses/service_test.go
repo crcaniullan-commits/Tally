@@ -27,9 +27,10 @@ func TestExpenseService_AddExpense(t *testing.T) {
 		payload := newTestPayloadExpense()
 		expense := newTestExpense()
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).Return(true, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(true, nil).Once()
 		store.On("AgregarGasto", mock.Anything, mock.MatchedBy(func(e *model.Expense) bool {
-			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID && e.Fecha.IsZero()
+			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID && e.Fecha.IsZero() &&
+				e.PaymentMethod == model.PaymentMethodDebito
 		})).Return(nil).Run(func(args mock.Arguments) {
 			e := args.Get(1).(*model.Expense)
 			e.ID = expense.ID
@@ -51,7 +52,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		payload := newTestPayloadExpense()
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).Return(false, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(false, nil).Once()
 
 		result, err := service.AgregarGasto(context.Background(), payload, testEmpresaID)
 
@@ -67,7 +68,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		payload := newTestPayloadExpense()
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).Return(false, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(false, nil).Once()
 
 		result, err := service.AgregarGasto(context.Background(), payload, testEmpresaID)
 
@@ -87,7 +88,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 		assert.Equal(t, uuid.Nil, result.ID)
-		store.AssertNotCalled(t, "CategoriaExiste", mock.Anything, mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "CategoriaExiste", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		store.AssertNotCalled(t, "AgregarGasto", mock.Anything, mock.Anything)
 	})
 
@@ -97,7 +98,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		payload := newTestPayloadExpense()
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).Return(false, errStoreBoom).Once()
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(false, errStoreBoom).Once()
 
 		result, err := service.AgregarGasto(context.Background(), payload, testEmpresaID)
 
@@ -113,7 +114,7 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		payload := PayloadGasto{Monto: 1500, CategoryID: &testCategoryID}
 
-		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID).Return(true, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(true, nil).Once()
 		store.On("AgregarGasto", mock.Anything, mock.Anything).Return(errStoreBoom).Once()
 
 		result, err := service.AgregarGasto(context.Background(), payload, testEmpresaID)
@@ -176,14 +177,12 @@ func TestExpenseService_UpdateExpense(t *testing.T) {
 
 		monto := int64(2500)
 		descripcion := "Compra de insumos"
-		fecha := "2026-09-15"
 
 		store.On("ActualizarGasto", mock.Anything,
 			mock.MatchedBy(func(c CambiosGasto) bool {
 				return c.Monto != nil && *c.Monto == monto &&
 					c.CategoryID == nil &&
-					c.Descripcion != nil && *c.Descripcion == descripcion &&
-					c.Fecha != nil && c.Fecha.Format("2006-01-02") == fecha
+					c.Descripcion != nil && *c.Descripcion == descripcion
 			}),
 			testExpenseID, testEmpresaID,
 		).Return(newTestExpense(), nil).Once()
@@ -191,7 +190,6 @@ func TestExpenseService_UpdateExpense(t *testing.T) {
 		expense, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
 			Monto:       &monto,
 			Descripcion: &descripcion,
-			Fecha:       &fecha,
 		}, testExpenseID, testEmpresaID)
 
 		require.NoError(t, err)
@@ -199,18 +197,49 @@ func TestExpenseService_UpdateExpense(t *testing.T) {
 		store.AssertExpectations(t)
 	})
 
-	t.Run("rechaza una fecha con formato invalido", func(t *testing.T) {
+	t.Run("no manda la fecha: el movimiento conserva la suya", func(t *testing.T) {
+		// La fecha no es un campo editable: el store solo recibe los campos
+		// que el service decide tocar.
 		store := new(RepositorioExpensesMock)
 		service := newService(store)
 
-		fecha := "15-09-2026"
+		monto := int64(2500)
+
+		store.On("ActualizarGasto", mock.Anything,
+			mock.MatchedBy(func(c CambiosGasto) bool {
+				return c.Monto != nil && *c.Monto == monto
+			}),
+			testExpenseID, testEmpresaID,
+		).Return(newTestExpense(), nil).Once()
 
 		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
-			Fecha: &fecha,
+			Monto: &monto,
 		}, testExpenseID, testEmpresaID)
 
-		require.ErrorIs(t, err, ErrorFechaInvalida)
-		store.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("cambia el metodo de pago", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		metodo := model.PaymentMethodTransferencia
+
+		store.On("ActualizarGasto", mock.Anything,
+			mock.MatchedBy(func(c CambiosGasto) bool {
+				return c.PaymentMethod != nil && *c.PaymentMethod == model.PaymentMethodTransferencia
+			}),
+			testExpenseID, testEmpresaID,
+		).Return(newTestExpense(), nil).Once()
+
+		expense, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			PaymentMethod: &metodo,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testExpenseID, expense.ID)
+		store.AssertExpectations(t)
 	})
 
 	t.Run("rechaza un payload sin campos", func(t *testing.T) {
@@ -229,7 +258,7 @@ func TestExpenseService_UpdateExpense(t *testing.T) {
 
 		categoria := uuid.New()
 
-		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID).Return(false, nil).Once()
+		store.On("CategoriaExiste", mock.Anything, categoria, testEmpresaID, model.CategoryTypeGasto).Return(false, nil).Once()
 
 		_, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
 			CategoryID: &categoria,

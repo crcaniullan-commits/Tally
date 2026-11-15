@@ -26,14 +26,19 @@ func NuevoServicioCategorias(store RepositorioCategorias) *ServicioCategorias {
 	return &ServicioCategorias{store: store}
 }
 
-func (s *ServicioCategorias) Crear(ctx context.Context, payload PayloadCategoria, categoriaID *uuid.UUID) (model.Categorie, error) {
+func (s *ServicioCategorias) Crear(ctx context.Context, payload PayloadCategoria, empresaID *uuid.UUID) (model.Categorie, error) {
+	if !esTipoValido(payload.Tipo) {
+		return model.Categorie{}, ErrorTipoCategoriaInvalido
+	}
+
 	categoria := &model.Categorie{
 		Nombre:    payload.Nombre,
-		EmpresaID: categoriaID,
+		Tipo:      payload.Tipo,
+		EmpresaID: empresaID,
 	}
 
 	if categoria.EmpresaID != nil {
-		if err := s.validarNombreUnico(ctx, categoria.Nombre, *categoria.EmpresaID, nil); err != nil {
+		if err := s.validarNombreUnico(ctx, categoria.Nombre, *categoria.EmpresaID, &categoria.Tipo, nil); err != nil {
 			return model.Categorie{}, err
 		}
 	}
@@ -45,8 +50,10 @@ func (s *ServicioCategorias) Crear(ctx context.Context, payload PayloadCategoria
 	return *categoria, nil
 }
 
-func (s *ServicioCategorias) CambiarNombre(ctx context.Context, payload PayloadCategoria, categoriaID uuid.UUID, empresaID uuid.UUID) error {
-	if err := s.validarNombreUnico(ctx, payload.Nombre, empresaID, &categoriaID); err != nil {
+func (s *ServicioCategorias) CambiarNombre(ctx context.Context, payload PayloadCambiarNombre, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+	// El tipo no se renombra: la unicidad del nombre se evalúa contra las
+	// categorías del mismo tipo que la que se está renombrando.
+	if err := s.validarNombreUnico(ctx, payload.Nombre, empresaID, nil, &categoriaID); err != nil {
 		return err
 	}
 
@@ -100,13 +107,32 @@ func normalizarNombre(nombre string) string {
 	return strings.ToLower(normalizado.String())
 }
 
-// validarNombreUnico devuelve ErrorCategoriaDuplicada si otra categoría de la misma
-// empresa ya usa el nombre, sin distinguir mayúsculas, acentos ni espacios.
+// validarNombreUnico devuelve ErrorCategoriaDuplicada si otra categoría de la
+// misma empresa ya usa el nombre, sin distinguir mayúsculas, acentos ni espacios.
 // excluirID permite ignorar la categoría que se está renombrando.
-func (s *ServicioCategorias) validarNombreUnico(ctx context.Context, nombre string, empresaID uuid.UUID, excluirID *uuid.UUID) error {
+//
+// El nombre solo tiene que ser único dentro del mismo tipo: "Comida" puede
+// existir como categoría de gastos y como categoría de ingresos de la misma
+// empresa. Si tipo es nil se usa el de la categoría que se está renombrando
+// (excluirID); si esa categoría no existe, no hay nada que validar.
+func (s *ServicioCategorias) validarNombreUnico(ctx context.Context, nombre string, empresaID uuid.UUID, tipo *model.CategoryType, excluirID *uuid.UUID) error {
 	categorias, err := s.store.ObtenerCategoriasPorEmpresa(ctx, empresaID)
 	if err != nil {
 		return err
+	}
+
+	if tipo == nil {
+		for _, categoria := range categorias {
+			if excluirID != nil && categoria.ID == *excluirID {
+				tipo = &categoria.Tipo
+				break
+			}
+		}
+	}
+
+	// La categoría a renombrar no existe: el store responde ErrorNoEncontrado.
+	if tipo == nil {
+		return nil
 	}
 
 	buscado := normalizarNombre(nombre)
@@ -115,10 +141,18 @@ func (s *ServicioCategorias) validarNombreUnico(ctx context.Context, nombre stri
 		if excluirID != nil && categoria.ID == *excluirID {
 			continue
 		}
+		if categoria.Tipo != *tipo {
+			continue
+		}
 		if normalizarNombre(categoria.Nombre) == buscado {
 			return ErrorCategoriaDuplicada
 		}
 	}
 
 	return nil
+}
+
+// esTipoValido indica si el tipo es uno de los dos que admite la base.
+func esTipoValido(tipo model.CategoryType) bool {
+	return tipo == model.CategoryTypeIngreso || tipo == model.CategoryTypeGasto
 }

@@ -20,7 +20,7 @@ func NuevoAlmacenCategorias(db *sql.DB) *AlmacenCategorias {
 
 func (s *AlmacenCategorias) ObtenerCategoriasPorEmpresa(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	query := `
-		SELECT id, nombre, empresa_id
+		SELECT id, nombre, empresa_id, tipo
 		FROM categories
 		WHERE empresa_id = $1
 		ORDER BY nombre;
@@ -40,7 +40,7 @@ func (s *AlmacenCategorias) ObtenerCategoriasPorEmpresa(ctx context.Context, emp
 	for rows.Next() {
 		var categoria model.Categorie
 
-		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID); err != nil {
+		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID, &categoria.Tipo); err != nil {
 			return nil, err
 		}
 
@@ -56,7 +56,7 @@ func (s *AlmacenCategorias) ObtenerCategoriasPorEmpresa(ctx context.Context, emp
 
 func (s *AlmacenCategorias) ObtenerCategoriasVisibles(ctx context.Context, empresaID uuid.UUID) ([]model.Categorie, error) {
 	query := `
-		SELECT id, nombre, empresa_id
+		SELECT id, nombre, empresa_id, tipo
 		FROM categories
 		WHERE empresa_id IS NULL OR empresa_id = $1
 		ORDER BY empresa_id NULLS LAST, nombre;
@@ -76,7 +76,7 @@ func (s *AlmacenCategorias) ObtenerCategoriasVisibles(ctx context.Context, empre
 	for rows.Next() {
 		var categoria model.Categorie
 
-		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID); err != nil {
+		if err := rows.Scan(&categoria.ID, &categoria.Nombre, &categoria.EmpresaID, &categoria.Tipo); err != nil {
 			return nil, err
 		}
 
@@ -92,13 +92,13 @@ func (s *AlmacenCategorias) ObtenerCategoriasVisibles(ctx context.Context, empre
 
 func (s *AlmacenCategorias) Crear(ctx context.Context, categoria *model.Categorie) error {
 	query := `
-		INSERT INTO categories (nombre, empresa_id)
-		VALUES ($1, $2) RETURNING id
+		INSERT INTO categories (nombre, empresa_id, tipo)
+		VALUES ($1, $2, $3) RETURNING id
 	`
 	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	err := s.db.QueryRowContext(ctx, query, categoria.Nombre, categoria.EmpresaID).Scan(
+	err := s.db.QueryRowContext(ctx, query, categoria.Nombre, categoria.EmpresaID, categoria.Tipo).Scan(
 		&categoria.ID,
 	)
 

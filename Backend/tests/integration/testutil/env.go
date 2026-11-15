@@ -289,13 +289,22 @@ func ensureSchema(db *sql.DB) error {
 }
 
 func ensureGlobalCategories(db *sql.DB) error {
+	// Se aseguran las globales que siembran las migraciones, por si la suite
+	// reutiliza una base existente (TEST_DB_ADDR) y esas filas no están.
 	_, err := db.Exec(`
-		INSERT INTO categories (nombre, empresa_id)
-		SELECT nombre, NULL
-		FROM (VALUES ('Ventas'), ('Servicios'), ('Pedidos')) AS defaults(nombre)
+		INSERT INTO categories (nombre, empresa_id, tipo)
+		SELECT defaults.nombre, NULL, defaults.tipo::category_type
+		FROM (VALUES
+			('Ventas', 'ingreso'),
+			('Servicios', 'ingreso'),
+			('Pedidos', 'ingreso'),
+			('Insumos', 'gasto'),
+			('Comunes', 'gasto'),
+			('Pagos', 'gasto')
+		) AS defaults(nombre, tipo)
 		WHERE NOT EXISTS (
 			SELECT 1 FROM categories c
-			WHERE c.empresa_id IS NULL AND c.nombre = defaults.nombre
+			WHERE c.empresa_id IS NULL AND c.nombre = defaults.nombre AND c.tipo = defaults.tipo::category_type
 		)
 	`)
 	if err != nil {

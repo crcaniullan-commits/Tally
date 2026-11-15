@@ -14,7 +14,7 @@ import (
 
 type IServiceCategorias interface {
 	Crear(context.Context, PayloadCategoria, *uuid.UUID) (model.Categorie, error)
-	CambiarNombre(context.Context, PayloadCategoria, uuid.UUID, uuid.UUID) error
+	CambiarNombre(context.Context, PayloadCambiarNombre, uuid.UUID, uuid.UUID) error
 	BorrarCategoria(context.Context, uuid.UUID, uuid.UUID) error
 	ObtenerCategorias(context.Context, uuid.UUID) ([]model.Categorie, error)
 }
@@ -28,7 +28,16 @@ func NuevoHandlerCategorias(s IServiceCategorias, e errores.RespuestaErrores) *H
 	return &HandlerCategorias{s, e}
 }
 
+// PayloadCategoria es el cuerpo del alta de una categoría. El tipo indica si la
+// categoría aplica a los ingresos o a los gastos.
 type PayloadCategoria struct {
+	Nombre string             `json:"nombre" validate:"required,max=30"`
+	Tipo   model.CategoryType `json:"tipo" validate:"required,oneof=ingreso gasto"`
+}
+
+// PayloadCambiarNombre es el cuerpo del renombrado. El tipo de la categoría no
+// se cambia por esta vía: mandarlo es un 400 por campo desconocido.
+type PayloadCambiarNombre struct {
 	Nombre string `json:"nombre" validate:"required,max=30"`
 }
 
@@ -50,7 +59,7 @@ func (h *HandlerCategorias) Crear(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		switch err {
-		case ErrorCategoriaDuplicada:
+		case ErrorCategoriaDuplicada, ErrorTipoCategoriaInvalido:
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:
@@ -93,7 +102,7 @@ func (h *HandlerCategorias) CambiarNombre(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var payload PayloadCategoria
+	var payload PayloadCambiarNombre
 	empresa := utilidades.ObtenerEmpresaDelContexto(r)
 
 	if empresa == nil {

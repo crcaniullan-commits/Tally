@@ -14,6 +14,7 @@ import (
 type RepositorioClavesAcceso interface {
 	Crear(context.Context, *model.AccessKey) error
 	ObtenerPorID(context.Context, uuid.UUID) (model.AccessKey, error)
+	ObtenerPorEmisor(context.Context, uuid.UUID, int, int) ([]model.AccessKey, error)
 	Revocar(context.Context, DatosCodigoRevocacion) error
 }
 
@@ -64,6 +65,17 @@ func (s *ServicioClavesAcceso) Reenviar(ctx context.Context, accessKeyId uuid.UU
 	s.sendEmailAsync(email, accessKey.Code, *accessKey.ExpiresAt)
 
 	return nil
+}
+
+// ListarPorEmisor devuelve las claves de acceso que emitió el municipal
+// indicado, con la paginación que le llega desde el handler.
+func (s *ServicioClavesAcceso) ListarPorEmisor(ctx context.Context, municipalID uuid.UUID, limite, desplazamiento int) ([]model.AccessKey, error) {
+	claves, err := s.store.ObtenerPorEmisor(ctx, municipalID, limite, desplazamiento)
+	if err != nil {
+		return nil, err
+	}
+
+	return claves, nil
 }
 
 func (s *ServicioClavesAcceso) Revocar(ctx context.Context, municipalID uuid.UUID, code string) error {

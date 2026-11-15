@@ -21,6 +21,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /server ./cm
 # y el servicio `app` de docker-compose depende de que esa siga siendo runtime.
 FROM golang:1.27-alpine AS test
 
+# El race detector necesita cgo, y cgo necesita un compilador C: la imagen
+# alpine no trae gcc. Sin esto, "go test -race" aborta con
+# "-race requires cgo; enable cgo by setting CGO_ENABLED=1".
+RUN apk add --no-cache gcc musl-dev
+
+ENV CGO_ENABLED=1
+
 WORKDIR /build
 
 COPY go.mod go.sum ./

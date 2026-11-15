@@ -769,14 +769,12 @@ func TestIncomesHandler_UpdateIncome(t *testing.T) {
 		handler := newTestHandler(service)
 
 		monto := int64(2500)
-		fecha := "2026-09-15"
 
 		service.On("ActualizarIngreso", mock.Anything, PayloadActualizarIngreso{
 			Monto: &monto,
-			Fecha: &fecha,
 		}, testIncomeID, testEmpresaID).Return(newTestIncome(), nil).Once()
 
-		body := `{"monto":2500,"fecha":"2026-09-15"}`
+		body := `{"monto":2500}`
 
 		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(body))
 		routeCtx := chi.NewRouteContext()
@@ -821,14 +819,13 @@ func TestIncomesHandler_UpdateIncome(t *testing.T) {
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
 	})
 
-	t.Run("responde 400 con una fecha invalida", func(t *testing.T) {
+	t.Run("responde 400 si el payload manda la fecha", func(t *testing.T) {
+		// La fecha no es un campo editable: mandarla es un campo desconocido y
+		// LeerJSON (DisallowUnknownFields) lo rechaza.
 		service := new(IServiceIncomesMock)
 		handler := newTestHandler(service)
 
-		service.On("ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(model.Income{}, ErrorFechaInvalida).Once()
-
-		body := `{"fecha":"15-09-2026"}`
+		body := `{"fecha":"2026-09-15"}`
 
 		req := httptest.NewRequest(http.MethodPatch, "/ingresos/"+testIncomeID.String(), strings.NewReader(body))
 		routeCtx := chi.NewRouteContext()
@@ -843,7 +840,8 @@ func TestIncomesHandler_UpdateIncome(t *testing.T) {
 		handler.Actualizar(w, req.WithContext(ctx))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"la fecha debe tener el formato AAAA-MM-DD"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"json: unknown field \"fecha\""}`, w.Body.String())
+		service.AssertNotCalled(t, "ActualizarIngreso", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el ingresoID no es un uuid", func(t *testing.T) {

@@ -16,7 +16,7 @@ func ObtenerCategorias() {}
 // Crear
 //
 //	@Summary		Crear categoría
-//	@Description	Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con la categoría creada.
+//	@Description	Crea una nueva categoría asociada a la empresa autenticada. El campo "tipo" indica si la categoría aplica a los ingresos ("ingreso") o a los gastos ("gasto") y no se puede cambiar después. La respuesta viene envuelta en {"datos": ...} con la categoría creada.
 //	@Tags			Categorias
 //	@Accept			json
 //	@Produce		json
@@ -32,16 +32,16 @@ func Crear() {}
 // CambiarNombre
 //
 //	@Summary		Cambiar nombre de categoría
-//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. El tipo de la categoría no se modifica: mandarlo en el payload es un 400 por campo desconocido. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
 //	@Tags			Categorias
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			categoriaID	path		string				true	"ID de la categoría"
-//	@Param			payload		body		PayloadCategoria	true	"payload"
-//	@Success		200			{object}	string				"nombre cambiado"
-//	@Failure		400			{object}	map[string]string	"categoriaID inválido o payload erróneo"
-//	@Failure		404			{object}	map[string]string	"categoría no encontrada"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string					true	"ID de la empresa"
+//	@Param			categoriaID	path		string					true	"ID de la categoría"
+//	@Param			payload		body		PayloadCambiarNombre	true	"payload"
+//	@Success		200			{object}	string					"nombre cambiado"
+//	@Failure		400			{object}	map[string]string		"categoriaID inválido o payload erróneo"
+//	@Failure		404			{object}	map[string]string		"categoría no encontrada"
+//	@Failure		500			{object}	map[string]string		"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/categorias/{categoriaID}	[patch]
 func CambiarNombre() {}

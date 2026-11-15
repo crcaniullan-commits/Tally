@@ -18,6 +18,7 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utili
 
 	r.Route("/claves", func(r chi.Router) {
 		r.Post("/", middl.VerificarRol(utilidades.RolMunicipal, hdl.EmitirParaUsuario))
+		r.Get("/", middl.VerificarRol(utilidades.RolMunicipal, hdl.Listar))
 		r.Route("/IDAcceso", func(r chi.Router) {
 			r.Post("/{claveID}", middl.VerificarRol(utilidades.RolMunicipal, hdl.Reenviar))
 		})

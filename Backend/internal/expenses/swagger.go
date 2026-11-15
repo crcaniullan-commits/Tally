@@ -3,7 +3,7 @@ package expenses
 // Create
 //
 //	@Summary		Registrar gasto
-//	@Description	Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "categoria_id" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta "fecha": la asigna la base de datos con CURRENT_DATE.
+//	@Description	Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos (CLP, sin decimales). "payment_method" es obligatorio y es uno de debito, credito, transferencia o efectivo; un valor distinto responde 400. "categoria_id" es obligatorio y debe ser el UUID de una categoría global o de la empresa de tipo "gasto"; si no existe, pertenece a otra empresa o es de tipo "ingreso" responde 400. El payload no acepta "fecha": la asigna la base de datos con CURRENT_DATE.
 //	@Tags			Gastos
 //	@Accept			json
 //	@Produce		json
@@ -19,7 +19,7 @@ func Create() {}
 // Update
 //
 //	@Summary		Editar gasto
-//	@Description	Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. "fecha" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el gasto ya actualizado.
+//	@Description	Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload (monto, payment_method, category_id, descripcion): lo que se omite se queda como estaba. "payment_method", si viene, debe ser uno de debito, credito, transferencia o efectivo. La categoría, si viene, debe ser de tipo "gasto". La fecha del movimiento NO se edita: mandarla en el payload es un 400 por campo desconocido. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el gasto ya actualizado.
 //	@Tags			Gastos
 //	@Accept			json
 //	@Produce		json
@@ -27,7 +27,7 @@ func Create() {}
 //	@Param			gastoID		path		string					true	"ID del gasto"
 //	@Param			payload		body		PayloadActualizarGasto	true	"campos a actualizar"
 //	@Success		200			{object}	model.Expense			"gasto actualizado"
-//	@Failure		400			{object}	map[string]string		"payload erróneo, fecha inválida o categoría ajena"
+//	@Failure		400			{object}	map[string]string		"payload erróneo, sin campos o categoría ajena"
 //	@Failure		404			{object}	map[string]string		"gasto no encontrado"
 //	@Failure		500			{object}	map[string]string		"error interno del servidor"
 //	@Security		ApiKeyAuth

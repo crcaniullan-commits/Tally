@@ -26,12 +26,17 @@ func (m *AlmacenDeudoresMock) Crear(ctx context.Context, debtor *model.Debtor) e
 	return args.Error(0)
 }
 
-func (m *AlmacenDeudoresMock) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, debtor model.Debtor) error {
-	args := m.Called(ctx, deudorID, empresaID, debtor)
+func (m *AlmacenDeudoresMock) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, cambios CambiosDeudor) error {
+	args := m.Called(ctx, deudorID, empresaID, cambios)
 	return args.Error(0)
 }
 
 func (m *AlmacenDeudoresMock) MarcarDeudorPagado(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, deudorID, empresaID)
+	return args.Error(0)
+}
+
+func (m *AlmacenDeudoresMock) BorrarDeudor(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, deudorID, empresaID)
 	return args.Error(0)
 }
@@ -60,6 +65,11 @@ func (m *IServiceDeudoresMock) Actualizar(ctx context.Context, deudorID uuid.UUI
 }
 
 func (m *IServiceDeudoresMock) MarcarDeudorPagado(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
+	args := m.Called(ctx, deudorID, empresaID)
+	return args.Error(0)
+}
+
+func (m *IServiceDeudoresMock) Borrar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, deudorID, empresaID)
 	return args.Error(0)
 }

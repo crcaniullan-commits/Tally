@@ -21,5 +21,6 @@ func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utili
 		r.Get("/", middl.VerificarRol(utilidades.RolUsuario, hdl.ObtenerDeudoresDeEmpresa))
 		r.Patch("/{deudorID}", middl.VerificarRol(utilidades.RolUsuario, hdl.Actualizar))
 		r.Patch("/{deudorID}/pagada", middl.VerificarRol(utilidades.RolUsuario, hdl.MarcarDeudorPagado))
+		r.Delete("/{deudorID}", middl.VerificarRol(utilidades.RolUsuario, hdl.BorrarDeudor))
 	})
 }

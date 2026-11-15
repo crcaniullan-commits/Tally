@@ -34,7 +34,7 @@ Requisitos:
 
 ## Resultado actual
 
-Última corrida completa: **OK**, 12 flujos y 373 subtests directos (~3 s).
+Última corrida completa: **OK**, 12 flujos y 393 subtests directos (~23 s).
 `gofmt -l tests/integration/` y `go vet ./tests/integration/...` sin hallazgos.
 
 | Flujo | Archivo | Resultado | Subtests |
@@ -43,10 +43,10 @@ Requisitos:
 | Recuperación de contraseña | `integration/password_recovery_flow_test.go` | PASS | 12 |
 | Claves de acceso | `integration/accesskeys_flow_test.go` | PASS | 20 |
 | Empresas | `integration/empresas_flow_test.go` | PASS | 27 |
-| Categorías | `integration/categories_flow_test.go` | PASS | 31 |
-| Ingresos | `integration/incomes_flow_test.go` | PASS | 51 |
-| Gastos | `integration/expenses_flow_test.go` | PASS | 48 |
-| Deudores | `integration/debtors_flow_test.go` | PASS | 37 |
+| Categorías | `integration/categories_flow_test.go` | PASS | 35 |
+| Ingresos | `integration/incomes_flow_test.go` | PASS | 54 |
+| Gastos | `integration/expenses_flow_test.go` | PASS | 56 |
+| Deudores | `integration/debtors_flow_test.go` | PASS | 45 |
 | Metas | `integration/goals_flow_test.go` | PASS | 40 |
 | Usuarios | `integration/users_flow_test.go` | PASS | 28 |
 | Archivos Excel | `integration/excel_flow_test.go` | PASS | 20 |
@@ -86,18 +86,27 @@ tests/
   revocada, permisos de rol y validaciones.
 - **Empresas:** creación, listado, renombrado, borrado, doble borrado, listado
   vacío, validaciones, rol municipal y aislamiento entre usuarios.
-- **Categorías:** creación, listado propio + globales, renombrado, duplicados
-  ignorando mayúsculas/acentos, mismo nombre en otra empresa, categorías
-  globales no modificables desde la empresa, borrado, borrado bloqueado (`409`)
-  cuando la categoría tiene ingresos o gastos, y validaciones.
+- **Categorías:** creación con `tipo` (`ingreso`/`gasto`), listado propio + globales
+  (las globales de ventas son de tipo `ingreso` y las de gastos, de tipo `gasto`),
+  renombrado, duplicados ignorando mayúsculas/acentos, mismo nombre permitido con
+  otro tipo, mismo nombre en otra empresa, categorías globales no modificables
+  desde la empresa, borrado, borrado bloqueado (`409`) cuando la categoría tiene
+  ingresos o gastos, PATCH con `tipo` rechazado (`400` por campo desconocido) y
+  validaciones de payload.
 - **Ingresos:** creación con/sin categoría, categoría global, listado, filtros
-  por categoría y fechas, paginación, edición (con fecha), borrado, categoría
-  inexistente/ajena y validaciones de payload/query.
-- **Gastos:** creación con categoría y descripción, categoría global, listado,
-  filtros, paginación, edición (con fecha), borrado, categoría inexistente/ajena
-  y validaciones.
-- **Deudores:** creación, listado, actualización, marcado como pagado, campos
-  desconocidos, validaciones y errores de ruta.
+  por categoría y fechas, paginación, edición (sin tocar la fecha), borrado,
+  categoría inexistente/ajena, categoría de tipo `gasto` rechazada en el alta y
+  en la edición, y validaciones de payload/query.
+- **Gastos:** creación con categoría y descripción, rechazo de las globales de tipo
+  `ingreso` y uso de las globales de tipo `gasto`, listado, filtros, paginación,
+  edición (sin tocar la fecha), borrado, categoría inexistente/ajena, categoría de
+  tipo `ingreso` rechazada en el alta y en la edición, método de pago obligatorio
+  al crear y editable en el `PATCH`, y validaciones.
+- **Deudores:** creación, listado, actualización (nombre, monto y fecha límite),
+  actualización del comentario (`descripcion`) que se queda si no se manda, marcado
+  como pagado, borrado (`200` con `Deuda eliminada`, también de una deuda ya
+  pagada), borrado de una deuda de otra empresa (`404`), campos desconocidos y
+  validaciones.
 - **Metas:** creación por período, listado, detalle, cálculo de estado con
   ingresos del día/semana/mes, pendiente no negativo, borrado y validaciones.
 - **Usuarios:** actualización de nombre+contraseña, login con nueva contraseña,

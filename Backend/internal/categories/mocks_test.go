@@ -61,7 +61,7 @@ func (m *IServiceCategoriesMock) Crear(ctx context.Context, payload PayloadCateg
 	return categoria, args.Error(1)
 }
 
-func (m *IServiceCategoriesMock) CambiarNombre(ctx context.Context, payload PayloadCategoria, categoriaID uuid.UUID, empresaID uuid.UUID) error {
+func (m *IServiceCategoriesMock) CambiarNombre(ctx context.Context, payload PayloadCambiarNombre, categoriaID uuid.UUID, empresaID uuid.UUID) error {
 	args := m.Called(ctx, payload, categoriaID, empresaID)
 	return args.Error(0)
 }
@@ -90,6 +90,7 @@ func newTestCategoria() model.Categorie {
 		ID:        testCategoriaID,
 		Nombre:    "Comida",
 		EmpresaID: &empresaID,
+		Tipo:      model.CategoryTypeGasto,
 	}
 }
 
@@ -97,5 +98,6 @@ func newTestCategoria() model.Categorie {
 func newTestPayloadCategoria() PayloadCategoria {
 	return PayloadCategoria{
 		Nombre: "Comida",
+		Tipo:   model.CategoryTypeGasto,
 	}
 }

@@ -25,6 +25,66 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/aplicacion/claves": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve las claves de acceso que emitió el municipal autenticado (created_by), de la más reciente a la más antigua. Solo se listan las claves propias del funcionario: la ruta no expone las de otros. La respuesta viene envuelta en {\"datos\": ...} con el arreglo de llaves. Se pagina con ?limite (default 30, máximo 100) y ?desplazamiento; un parámetro inválido responde 400.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ClavesAcceso"
+                ],
+                "summary": "Listar las claves de acceso emitidas",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 30,
+                        "description": "máximo de llaves a devolver",
+                        "name": "limite",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "cuántas llaves saltar",
+                        "name": "desplazamiento",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "claves emitidas por el municipal",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.AccessKey"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "paginación inválida",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -419,7 +479,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con la categoría creada.",
+                "description": "Crea una nueva categoría asociada a la empresa autenticada. El campo \"tipo\" indica si la categoría aplica a los ingresos (\"ingreso\") o a los gastos (\"gasto\") y no se puede cambiar después. La respuesta viene envuelta en {\"datos\": ...} con la categoría creada.",
                 "consumes": [
                     "application/json"
                 ],
@@ -483,7 +543,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
+                "description": "Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. El tipo de la categoría no se modifica: mandarlo en el payload es un 400 por campo desconocido. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -512,7 +572,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/categories.PayloadCategoria"
+                            "$ref": "#/definitions/categories.PayloadCambiarNombre"
                         }
                     }
                 ],
@@ -742,13 +802,79 @@ const docTemplate = `{
             }
         },
         "/aplicacion/empresas/{empresaID}/deudas/{deudorID}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina una deuda de la empresa autenticada. Se puede borrar tanto una deuda pendiente como una ya pagada. Si la deuda no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deudas"
+                ],
+                "summary": "Eliminar deuda",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID de la empresa",
+                        "name": "empresaID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ID de la deuda",
+                        "name": "deudorID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "deuda eliminada",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "deudorID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "deuda no encontrada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "patch": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Actualiza \"nombre\", \"monto\" y \"fecha_limite\" de una deuda de la empresa autenticada. La descripción no se modifica. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"datos\": ...}.",
+                "description": "Actualiza \"nombre\", \"monto\" y \"fecha_limite\" de una deuda de la empresa autenticada. \"descripcion\" es opcional: si no se manda, la descripción que ya tenía la deuda se queda; si se manda (incluso vacía), se reemplaza. \"monto\" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {\"datos\": ...}.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1237,7 +1363,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
+                "description": "Registra un nuevo gasto asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el gasto creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"payment_method\" es obligatorio y es uno de debito, credito, transferencia o efectivo; un valor distinto responde 400. \"categoria_id\" es obligatorio y debe ser el UUID de una categoría global o de la empresa de tipo \"gasto\"; si no existe, pertenece a otra empresa o es de tipo \"ingreso\" responde 400. El payload no acepta \"fecha\": la asigna la base de datos con CURRENT_DATE.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1367,7 +1493,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. \"fecha\" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el gasto ya actualizado.",
+                "description": "Edita un gasto de la empresa autenticada. Solo se modifican los campos que vienen en el payload (monto, payment_method, category_id, descripcion): lo que se omite se queda como estaba. \"payment_method\", si viene, debe ser uno de debito, credito, transferencia o efectivo. La categoría, si viene, debe ser de tipo \"gasto\". La fecha del movimiento NO se edita: mandarla en el payload es un 400 por campo desconocido. Si el gasto no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el gasto ya actualizado.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1411,7 +1537,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, fecha inválida o categoría ajena",
+                        "description": "payload erróneo, sin campos o categoría ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1533,7 +1659,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa; si no existe o pertenece a otra empresa responde 400.",
+                "description": "Registra un nuevo ingreso asociado a la empresa autenticada. La respuesta viene envuelta en {\"datos\": ...} con el ingreso creado, incluyendo el id y las fechas que asigna la base. \"monto\" es un entero en pesos chilenos (CLP, sin decimales). \"categoria_id\" es opcional (la columna es nullable) y debe ser el UUID de una categoría global o de la empresa de tipo \"ingreso\"; si no existe, pertenece a otra empresa o es de tipo \"gasto\" responde 400.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1663,7 +1789,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Edita un ingreso de la empresa autenticada. Solo se modifican los campos que vienen en el payload: lo que se omite se queda como estaba. \"fecha\" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido responde 400. Si el ingreso no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el ingreso ya actualizado.",
+                "description": "Edita un ingreso de la empresa autenticada. Solo se modifican los campos que vienen en el payload (monto, payment_method, descripcion, category_id): lo que se omite se queda como estaba. La categoría, si viene, debe ser de tipo \"ingreso\". La fecha del movimiento NO se edita: mandarla en el payload es un 400 por campo desconocido. Si el ingreso no existe o es de otra empresa responde 404. La respuesta viene envuelta en {\"datos\": ...} con el ingreso ya actualizado.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1707,7 +1833,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, fecha inválida o categoría ajena",
+                        "description": "payload erróneo, sin campos o categoría ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2734,7 +2860,7 @@ const docTemplate = `{
                 }
             }
         },
-        "categories.PayloadCategoria": {
+        "categories.PayloadCambiarNombre": {
             "type": "object",
             "required": [
                 "nombre"
@@ -2743,6 +2869,30 @@ const docTemplate = `{
                 "nombre": {
                     "type": "string",
                     "maxLength": 30
+                }
+            }
+        },
+        "categories.PayloadCategoria": {
+            "type": "object",
+            "required": [
+                "nombre",
+                "tipo"
+            ],
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "maxLength": 30
+                },
+                "tipo": {
+                    "enum": [
+                        "ingreso",
+                        "gasto"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.CategoryType"
+                        }
+                    ]
                 }
             }
         },
@@ -2765,6 +2915,10 @@ const docTemplate = `{
                 "nombre"
             ],
             "properties": {
+                "descripcion": {
+                    "type": "string",
+                    "maxLength": 100
+                },
                 "fecha_limite": {
                     "type": "string"
                 },
@@ -2844,11 +2998,21 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
-                "fecha": {
-                    "type": "string"
-                },
                 "monto": {
                     "type": "integer"
+                },
+                "payment_method": {
+                    "enum": [
+                        "debito",
+                        "credito",
+                        "transferencia",
+                        "efectivo"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.PaymentMethod"
+                        }
+                    ]
                 }
             }
         },
@@ -2856,7 +3020,8 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "category_id",
-                "monto"
+                "monto",
+                "payment_method"
             ],
             "properties": {
                 "category_id": {
@@ -2868,6 +3033,19 @@ const docTemplate = `{
                 },
                 "monto": {
                     "type": "integer"
+                },
+                "payment_method": {
+                    "enum": [
+                        "debito",
+                        "credito",
+                        "transferencia",
+                        "efectivo"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.PaymentMethod"
+                        }
+                    ]
                 }
             }
         },
@@ -2926,9 +3104,6 @@ const docTemplate = `{
                 "descripcion": {
                     "type": "string",
                     "maxLength": 100
-                },
-                "fecha": {
-                    "type": "string"
                 },
                 "monto": {
                     "type": "integer"
@@ -3023,8 +3198,22 @@ const docTemplate = `{
                 },
                 "nombre": {
                     "type": "string"
+                },
+                "tipo": {
+                    "$ref": "#/definitions/model.CategoryType"
                 }
             }
+        },
+        "model.CategoryType": {
+            "type": "string",
+            "enum": [
+                "ingreso",
+                "gasto"
+            ],
+            "x-enum-varnames": [
+                "CategoryTypeIngreso",
+                "CategoryTypeGasto"
+            ]
         },
         "model.Debtor": {
             "type": "object",
@@ -3092,6 +3281,9 @@ const docTemplate = `{
                 },
                 "monto": {
                     "type": "integer"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/model.PaymentMethod"
                 }
             }
         },
