@@ -87,20 +87,18 @@ export function eliminarMovimiento(tipo: 'ingreso' | 'egreso', id: string, empre
   return peticion(ruta, { metodo: 'DELETE', token });
 }
 
-// Editar (Historia 012): el backend aún no tiene PATCH, así que se crea el movimiento corregido
-// y después se elimina el original. Se crea primero para que nunca se pierda el dato.
-export async function reemplazarMovimiento(
+// Editar (Historia 012): PATCH al ingreso o gasto. La fecha no se cambia (decisión del equipo),
+// así el movimiento conserva su fecha original.
+export async function actualizarMovimiento(
   original: { tipo: 'ingreso' | 'egreso'; id: string },
   nuevo: { monto: number; metodo: MetodoPago | null; categoriaId: string; nota: string },
   empresaId: string,
   token: string,
 ): Promise<void> {
-  if (original.tipo === 'ingreso') {
-    await crearIngreso({ monto: nuevo.monto, metodo: nuevo.metodo ?? 'efectivo', categoriaId: nuevo.categoriaId, nota: nuevo.nota }, empresaId, token);
-  } else {
-    await crearGasto({ monto: nuevo.monto, categoriaId: nuevo.categoriaId, nota: nuevo.nota }, empresaId, token);
-  }
-  await eliminarMovimiento(original.tipo, original.id, empresaId, token);
+  const cuerpo: Record<string, unknown> = { monto: nuevo.monto, category_id: nuevo.categoriaId, descripcion: nuevo.nota.trim() };
+  if (original.tipo === 'ingreso') cuerpo.payment_method = nuevo.metodo ?? 'efectivo';
+  const ruta = original.tipo === 'ingreso' ? API.ingreso(empresaId, original.id) : API.gasto(empresaId, original.id);
+  await peticion(ruta, { metodo: 'PATCH', cuerpo, token });
 }
 
 // ¿La categoría tiene movimientos? (Historia 003: no se puede eliminar si los tiene)

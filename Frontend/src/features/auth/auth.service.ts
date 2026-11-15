@@ -2,7 +2,7 @@
 import { ApiError, peticion } from '../../shared/api/cliente';
     import { DatosRegistro } from './components/FormularioRegistro';
 
-    // POST /v1/auth → crea la cuenta y devuelve el token de sesión
+    // POST /v1/autenticacion → crea la cuenta y devuelve el token de sesión
     export function registrar(datos: DatosRegistro, clave: string): Promise<string> {
     return peticion<string>(API.registro, {
         metodo: 'POST',
@@ -17,7 +17,7 @@ import { ApiError, peticion } from '../../shared/api/cliente';
     });
     }
 
-    // POST /v1/auth/login → devuelve el token de sesión
+    // POST /v1/autenticacion/inicio-sesion → devuelve el token de sesión
     export function iniciarSesion(correo: string, contrasena: string): Promise<string> {
     return peticion<string>(API.login, {
         metodo: 'POST',
@@ -25,6 +25,24 @@ import { ApiError, peticion } from '../../shared/api/cliente';
     });
     }
 
+
+// Recuperar contraseña (Historia 011): 1) pedir código al correo, 2) verificarlo, 3) guardar la nueva contraseña
+const correoLimpio = (correo: string) => correo.trim().toLowerCase();
+
+export function solicitarRecuperacion(correo: string): Promise<unknown> {
+  return peticion(API.recuperarSolicitar, { metodo: 'POST', cuerpo: { email: correoLimpio(correo) } });
+}
+
+export function verificarCodigoRecuperacion(correo: string, codigo: string): Promise<unknown> {
+  return peticion(API.recuperarVerificar, { metodo: 'POST', cuerpo: { email: correoLimpio(correo), codigo: codigo.trim() } });
+}
+
+export function confirmarRecuperacion(correo: string, codigo: string, contrasena: string): Promise<unknown> {
+  return peticion(API.recuperarConfirmar, {
+    metodo: 'POST',
+    cuerpo: { email: correoLimpio(correo), codigo: codigo.trim(), password: contrasena },
+  });
+}
 
 export type Rol = 'usuario' | 'municipal';
 

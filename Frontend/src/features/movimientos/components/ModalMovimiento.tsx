@@ -12,7 +12,7 @@ import { useSesion } from '../../auth/SesionContext';
 import { Categoria } from '../../categorias/categorias';
 import { obtenerIdReal } from '../../categorias/categorias.service';
 import { MetodoPago, metodosPago } from '../metodosPago';
-import { eliminarMovimiento, reemplazarMovimiento } from '../movimientos.service';
+import { actualizarMovimiento, eliminarMovimiento } from '../movimientos.service';
 import { Movimiento } from './HistorialMovimientos';
 
 type Props = {
@@ -56,7 +56,7 @@ export default function ModalMovimiento({ movimiento, categorias, onCerrar, onCa
     setGuardando(true);
     try {
       const idReal = await obtenerIdReal(categoria, empresa.id, token);
-      await reemplazarMovimiento(movimiento, { monto: montoNumero, metodo, categoriaId: idReal, nota }, empresa.id, token);
+      await actualizarMovimiento(movimiento, { monto: montoNumero, metodo, categoriaId: idReal, nota }, empresa.id, token);
       avisar(esIngreso ? '¡Ingreso actualizado!' : '¡Egreso actualizado!');
       onCambio();
       onCerrar();
