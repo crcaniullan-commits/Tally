@@ -138,8 +138,9 @@ func TestTenantIsolation(t *testing.T) {
 		testutil.RequireError(t, income, http.StatusBadRequest, "recurso no encontrado")
 
 		expense := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/gastos"), intruder.Token, map[string]any{
-			"monto":       1000,
-			"category_id": ownerCatGasto.ID.String(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    ownerCatGasto.ID.String(),
 		})
 		testutil.RequireError(t, expense, http.StatusBadRequest, "recurso no encontrado")
 	})

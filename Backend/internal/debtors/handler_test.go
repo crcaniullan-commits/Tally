@@ -39,6 +39,7 @@ const (
 	}]}`
 	bodyDebtorUpdated = `{"datos":"Deuda actualizada"}`
 	bodyDebtorPaid    = `{"datos":"Deuda pagada"}`
+	bodyDebtorDeleted = `{"datos":"Deuda eliminada"}`
 	bodyNotFound      = `{"error":"no encontrado"}`
 	bodyInternalError = `{"error":"el servidor encontró un problema"}`
 )
@@ -195,6 +196,42 @@ func TestDebtorsHandler_Update(t *testing.T) {
 		service.AssertExpectations(t)
 	})
 
+	t.Run("responde 200 cuando se manda la descripcion", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		descripcion := "comentario nuevo"
+		payload := newTestUpdatePayload()
+		payload.Descripcion = &descripcion
+
+		service.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, payload).
+			Return(nil).Once()
+
+		body := `{"nombre":"Cliente","monto":15000,"fecha_limite":"2026-11-30T00:00:00Z","descripcion":"comentario nuevo"}`
+		r := requestWithDebtorID(http.MethodPatch, "/debtors/"+testDebtorID.String(), testDebtorID.String(), body)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, r)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, bodyDebtorUpdated, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si la descripcion es demasiado larga", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		body := `{"nombre":"Cliente","monto":15000,"fecha_limite":"2026-11-30T00:00:00Z","descripcion":"` + strings.Repeat("a", 101) + `"}`
+		r := requestWithDebtorID(http.MethodPatch, "/debtors/"+testDebtorID.String(), testDebtorID.String(), body)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
 	t.Run("responde 400 si el deudorID no es un UUID", func(t *testing.T) {
 		service := new(IServiceDeudoresMock)
 		handler := newTestHandler(service)
@@ -318,6 +355,70 @@ func TestDebtorsHandler_PaidDebtor(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		handler.MarcarDeudorPagado(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.JSONEq(t, bodyInternalError, w.Body.String())
+		service.AssertExpectations(t)
+	})
+}
+
+func TestDebtorsHandler_Delete(t *testing.T) {
+	t.Run("responde 200 con el mensaje de confirmacion", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		service.On("Borrar", mock.Anything, testDebtorID, testEmpresaID).Return(nil).Once()
+
+		r := requestWithDebtorID(http.MethodDelete, "/debtors/"+testDebtorID.String(), testDebtorID.String(), "")
+
+		w := httptest.NewRecorder()
+		handler.BorrarDeudor(w, r)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.JSONEq(t, bodyDebtorDeleted, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el deudorID no es un UUID", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		r := requestWithDebtorID(http.MethodDelete, "/debtors/no-es-uuid", "no-es-uuid", "")
+
+		w := httptest.NewRecorder()
+		handler.BorrarDeudor(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "Borrar", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 404 si la deuda no existe", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		service.On("Borrar", mock.Anything, testDebtorID, testEmpresaID).
+			Return(utilidades.ErrorNoEncontrado).Once()
+
+		r := requestWithDebtorID(http.MethodDelete, "/debtors/"+testDebtorID.String(), testDebtorID.String(), "")
+
+		w := httptest.NewRecorder()
+		handler.BorrarDeudor(w, r)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.JSONEq(t, bodyNotFound, w.Body.String())
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 500 si el service falla", func(t *testing.T) {
+		service := new(IServiceDeudoresMock)
+		handler := newTestHandler(service)
+
+		service.On("Borrar", mock.Anything, testDebtorID, testEmpresaID).Return(errStoreBoom).Once()
+
+		r := requestWithDebtorID(http.MethodDelete, "/debtors/"+testDebtorID.String(), testDebtorID.String(), "")
+
+		w := httptest.NewRecorder()
+		handler.BorrarDeudor(w, r)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.JSONEq(t, bodyInternalError, w.Body.String())

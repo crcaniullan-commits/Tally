@@ -624,3 +624,59 @@ func TestAccessKeyStore_Revoke_query(t *testing.T) {
 		assert.NotContains(t, *sql, "redeemed_by =")
 	})
 }
+
+func TestAccessKeyStore_ObtenerPorEmisor_query(t *testing.T) {
+	t.Run("filtra por created_by y pagina", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(accessKeyColumns()).
+				AddRow(accessKeyRow(time.Now().AddDate(1, 0, 0))...))
+
+		claves, err := store.ObtenerPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.NoError(t, err)
+		require.Len(t, claves, 1)
+		assert.Equal(t, testAccessKeyID, claves[0].ID)
+		assert.Equal(t, testAccessKeyCod, claves[0].Code)
+
+		assert.Contains(t, *sql, "WHERE created_by = $1")
+		assert.Contains(t, *sql, "LIMIT $2 OFFSET $3")
+	})
+
+	t.Run("ordena de la más reciente a la más antigua", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(accessKeyColumns()))
+
+		_, err := store.ObtenerPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.NoError(t, err)
+		assert.Contains(t, *sql, "ORDER BY created_at DESC")
+	})
+
+	t.Run("la proyección es la misma que usa ObtenerPorID", func(t *testing.T) {
+		store, mock, sql := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(accessKeyColumns()))
+
+		_, err := store.ObtenerPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.NoError(t, err)
+		assert.Equal(t, accessKeyColumns(), columnasDe(*sql))
+	})
+
+	t.Run("devuelve un arreglo vacío y no error cuando no hay claves", func(t *testing.T) {
+		store, mock, _ := newCapturingMockStore(t)
+
+		mock.ExpectQuery("").
+			WillReturnRows(sqlmock.NewRows(accessKeyColumns()))
+
+		claves, err := store.ObtenerPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.NoError(t, err)
+		assert.Empty(t, claves)
+	})
+}

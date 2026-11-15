@@ -77,9 +77,29 @@ func TestDebtorsFlow(t *testing.T) {
 				require.Equal(t, int64(60000), d.Monto)
 				require.NotNil(t, d.FechaLimite)
 				require.Equal(t, newDate.Format(time.DateOnly), d.FechaLimite.Format(time.DateOnly))
-				// El update no toca la descripción.
+				// El update no manda descripción: la que tenía se queda.
 				require.NotNil(t, d.Descripcion)
 				require.Equal(t, "deuda de prueba", *d.Descripcion)
+			}
+		}
+	})
+
+	t.Run("actualiza la descripción (comentario)", func(t *testing.T) {
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+debtor.ID.String()), user.Token, map[string]any{
+			"nombre":       debtor.Nombre,
+			"monto":        debtor.Monto,
+			"fecha_limite": debtor.FechaLimite.Format(time.RFC3339),
+			"descripcion":  "comentario del seguimiento",
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, nil)
+		debtors := testutil.DecodeData[[]model.Debtor](t, list)
+		for _, d := range debtors {
+			if d.ID == debtor.ID {
+				require.NotNil(t, d.Descripcion)
+				require.Equal(t, "comentario del seguimiento", *d.Descripcion)
 			}
 		}
 	})
@@ -206,9 +226,14 @@ func TestDebtorsFlow(t *testing.T) {
 				message: "Key: 'PayloadActualizacionDeudor.FechaLimite' Error:Field validation for 'FechaLimite' failed on the 'required' tag",
 			},
 			{
-				name:    "descripción no permitida",
-				body:    map[string]any{"nombre": "X", "monto": 1000, "fecha_limite": time.Now().UTC().Format(time.RFC3339), "descripcion": "d"},
-				message: `json: unknown field "descripcion"`,
+				name:    "descripción demasiado larga",
+				body:    map[string]any{"nombre": "X", "monto": 1000, "fecha_limite": time.Now().UTC().Format(time.RFC3339), "descripcion": string(make([]byte, 101))},
+				message: "Key: 'PayloadActualizacionDeudor.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
+			},
+			{
+				name:    "campo desconocido",
+				body:    map[string]any{"nombre": "X", "monto": 1000, "fecha_limite": time.Now().UTC().Format(time.RFC3339), "extra": 1},
+				message: `json: unknown field "extra"`,
 			},
 		}
 
@@ -265,6 +290,20 @@ func TestDebtorsFlow(t *testing.T) {
 				status:  http.StatusNotFound,
 				message: "no encontrado",
 			},
+			{
+				name:    "delete con uuid inválido",
+				method:  http.MethodDelete,
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/no-uuid"),
+				status:  http.StatusBadRequest,
+				message: "invalid UUID length: 7",
+			},
+			{
+				name:    "delete inexistente",
+				method:  http.MethodDelete,
+				path:    testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()),
+				status:  http.StatusNotFound,
+				message: "no encontrado",
+			},
 		}
 
 		for _, tc := range cases {
@@ -289,6 +328,37 @@ func TestDebtorsFlow(t *testing.T) {
 
 		paid := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+otherDebtor.ID.String()+"/pagada"), user.Token, nil)
 		testutil.RequireError(t, paid, http.StatusNotFound, "no encontrado")
+
+		del := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/deudas/"+otherDebtor.ID.String()), user.Token, nil)
+		testutil.RequireError(t, del, http.StatusNotFound, "no encontrado")
+	})
+
+	t.Run("borra el deudor", func(t *testing.T) {
+		// Se crea una deuda aparte para no tocar la del resto del flujo.
+		otro := testutil.CreateDebtor(t, user, empresa.ID, 3000)
+
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/deudas/"+otro.ID.String()), user.Token, nil)
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Deuda eliminada", testutil.DecodeData[string](t, res))
+
+		list := testutil.Request(t, http.MethodGet, testutil.EmpresaPath(empresa.ID, "/deudas"), user.Token, nil)
+		testutil.RequireStatus(t, list, http.StatusOK)
+		for _, d := range testutil.DecodeData[[]model.Debtor](t, list) {
+			require.NotEqual(t, otro.ID, d.ID, "la deuda borrada no debe seguir en el listado")
+		}
+	})
+
+	t.Run("borra una deuda ya pagada", func(t *testing.T) {
+		pagada := testutil.CreateDebtor(t, user, empresa.ID, 4000)
+
+		paid := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+pagada.ID.String()+"/pagada"), user.Token, nil)
+		testutil.RequireStatus(t, paid, http.StatusOK)
+
+		res := testutil.Request(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/deudas/"+pagada.ID.String()), user.Token, nil)
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+		require.Equal(t, "Deuda eliminada", testutil.DecodeData[string](t, res))
 	})
 
 	t.Run("no puede acceder a la empresa de otro usuario", func(t *testing.T) {
@@ -308,4 +378,5 @@ func TestDebtorsFlow(t *testing.T) {
 	requireProtected(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/deudas"))
 	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()))
 	requireProtected(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()+"/pagada"))
+	requireProtected(t, http.MethodDelete, testutil.EmpresaPath(empresa.ID, "/deudas/"+uuid.NewString()))
 }

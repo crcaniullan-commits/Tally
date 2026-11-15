@@ -100,13 +100,14 @@ var (
 func newTestExpense() model.Expense {
 	descripcion := "Compra insumos"
 	return model.Expense{
-		ID:          testExpenseID,
-		EmpresaID:   testEmpresaID,
-		Monto:       1500,
-		CategoryID:  testCategoryID,
-		Descripcion: &descripcion,
-		Fecha:       testFecha,
-		CreatedAt:   testFecha.Add(2 * time.Hour),
+		ID:            testExpenseID,
+		EmpresaID:     testEmpresaID,
+		Monto:         1500,
+		PaymentMethod: model.PaymentMethodDebito,
+		CategoryID:    testCategoryID,
+		Descripcion:   &descripcion,
+		Fecha:         testFecha,
+		CreatedAt:     testFecha.Add(2 * time.Hour),
 	}
 }
 
@@ -114,9 +115,10 @@ func newTestExpense() model.Expense {
 func newTestPayloadExpense() PayloadGasto {
 	descripcion := "Compra insumos"
 	return PayloadGasto{
-		Monto:       1500,
-		CategoryID:  &testCategoryID,
-		Descripcion: &descripcion,
+		Monto:         1500,
+		PaymentMethod: model.PaymentMethodDebito,
+		CategoryID:    &testCategoryID,
+		Descripcion:   &descripcion,
 	}
 }
 

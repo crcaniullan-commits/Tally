@@ -32,7 +32,7 @@ func ObtenerDeudoresDeEmpresa() {}
 // Update
 //
 //	@Summary		Actualizar deuda
-//	@Description	Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la empresa autenticada. La descripción no se modifica. "monto" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"datos": ...}.
+//	@Description	Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la empresa autenticada. "descripcion" es opcional: si no se manda, la descripción que ya tenía la deuda se queda; si se manda (incluso vacía), se reemplaza. "monto" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"datos": ...}.
 //	@Tags			Deudas
 //	@Accept			json
 //	@Produce		json
@@ -46,6 +46,22 @@ func ObtenerDeudoresDeEmpresa() {}
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/deudas/{deudorID}	[patch]
 func Update() {}
+
+// Delete
+//
+//	@Summary		Eliminar deuda
+//	@Description	Elimina una deuda de la empresa autenticada. Se puede borrar tanto una deuda pendiente como una ya pagada. Si la deuda no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Tags			Deudas
+//	@Produce		json
+//	@Param			empresaID	path		string				true	"ID de la empresa"
+//	@Param			deudorID	path		string				true	"ID de la deuda"
+//	@Success		200			{object}	string				"deuda eliminada"
+//	@Failure		400			{object}	map[string]string	"deudorID invalido"
+//	@Failure		404			{object}	map[string]string	"deuda no encontrada"
+//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/aplicacion/empresas/{empresaID}/deudas/{deudorID}	[delete]
+func Delete() {}
 
 // MarcarDeudorPagado
 //

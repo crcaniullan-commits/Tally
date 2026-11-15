@@ -20,14 +20,16 @@ type RepositorioGastos interface {
 // CambiosGasto son los campos a modificar de un gasto. Un puntero nil significa
 // "no tocar este campo". La fecha no entra: el movimiento conserva la suya.
 type CambiosGasto struct {
-	Monto       *int64
-	CategoryID  *uuid.UUID
-	Descripcion *string
+	Monto         *int64
+	PaymentMethod *model.PaymentMethod
+	CategoryID    *uuid.UUID
+	Descripcion   *string
 }
 
 // Vacio indica que no hay nada que actualizar.
 func (c CambiosGasto) Vacio() bool {
 	return c.Monto == nil &&
+		c.PaymentMethod == nil &&
 		c.CategoryID == nil &&
 		c.Descripcion == nil
 }
@@ -42,9 +44,10 @@ func NuevoServicioGastos(store RepositorioGastos) *ServicioGastos {
 
 func (s *ServicioGastos) AgregarGasto(ctx context.Context, payload PayloadGasto, empresaID uuid.UUID) (model.Expense, error) {
 	expense := &model.Expense{
-		EmpresaID:   empresaID,
-		Monto:       payload.Monto,
-		Descripcion: payload.Descripcion,
+		EmpresaID:     empresaID,
+		Monto:         payload.Monto,
+		PaymentMethod: payload.PaymentMethod,
+		Descripcion:   payload.Descripcion,
 	}
 
 	if payload.CategoryID == nil {
@@ -80,9 +83,10 @@ func (s *ServicioGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, e
 // vienen en el payload; la fecha del movimiento no se edita.
 func (s *ServicioGastos) ActualizarGasto(ctx context.Context, payload PayloadActualizarGasto, gastoID uuid.UUID, empresaID uuid.UUID) (model.Expense, error) {
 	cambios := CambiosGasto{
-		Monto:       payload.Monto,
-		CategoryID:  payload.CategoryID,
-		Descripcion: payload.Descripcion,
+		Monto:         payload.Monto,
+		PaymentMethod: payload.PaymentMethod,
+		CategoryID:    payload.CategoryID,
+		Descripcion:   payload.Descripcion,
 	}
 
 	if cambios.Vacio() {

@@ -303,3 +303,51 @@ func TestAccessKeyService_RevokePremature(t *testing.T) {
 		email.sinCorreos(t)
 	})
 }
+
+func TestAccessKeyService_ListarPorEmisor(t *testing.T) {
+	t.Run("devuelve las claves del municipal pedido", func(t *testing.T) {
+		store := new(RepositorioClavesAccesoMock)
+		email := newEmailQueAcepta(nil)
+		service := newTestService(store, email)
+
+		esperadas := []model.AccessKey{newTestAccessKey()}
+
+		store.On("ObtenerPorEmisor", mock.Anything, testMunicipalID, 30, 0).
+			Return(esperadas, nil).Once()
+
+		claves, err := service.ListarPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.NoError(t, err)
+		assert.Equal(t, esperadas, claves)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga la paginación al store", func(t *testing.T) {
+		store := new(RepositorioClavesAccesoMock)
+		email := newEmailQueAcepta(nil)
+		service := newTestService(store, email)
+
+		store.On("ObtenerPorEmisor", mock.Anything, testMunicipalID, 10, 20).
+			Return([]model.AccessKey{}, nil).Once()
+
+		claves, err := service.ListarPorEmisor(context.Background(), testMunicipalID, 10, 20)
+
+		require.NoError(t, err)
+		assert.Empty(t, claves)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga errores del store", func(t *testing.T) {
+		store := new(RepositorioClavesAccesoMock)
+		email := newEmailQueAcepta(nil)
+		service := newTestService(store, email)
+
+		store.On("ObtenerPorEmisor", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return([]model.AccessKey(nil), errStoreBoom).Once()
+
+		_, err := service.ListarPorEmisor(context.Background(), testMunicipalID, 30, 0)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		store.AssertExpectations(t)
+	})
+}

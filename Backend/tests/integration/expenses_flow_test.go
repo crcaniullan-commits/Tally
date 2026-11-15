@@ -21,9 +21,10 @@ func TestExpensesFlow(t *testing.T) {
 
 	t.Run("crea un gasto con categoría y descripción", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       15000,
-			"category_id": catA.ID.String(),
-			"descripcion": "compra de prueba",
+			"monto":          15000,
+			"payment_method": "debito",
+			"category_id":    catA.ID.String(),
+			"descripcion":    "compra de prueba",
 		})
 
 		testutil.RequireStatus(t, res, http.StatusCreated)
@@ -31,6 +32,7 @@ func TestExpensesFlow(t *testing.T) {
 		require.NotEqual(t, uuid.Nil, conCategoria.ID)
 		require.Equal(t, empresa.ID, conCategoria.EmpresaID)
 		require.Equal(t, int64(15000), conCategoria.Monto)
+		require.Equal(t, model.PaymentMethodDebito, conCategoria.PaymentMethod)
 		require.Equal(t, catA.ID, conCategoria.CategoryID)
 		require.NotNil(t, conCategoria.Descripcion)
 		require.Equal(t, "compra de prueba", *conCategoria.Descripcion)
@@ -39,8 +41,9 @@ func TestExpensesFlow(t *testing.T) {
 
 	t.Run("crea un gasto con otra categoría propia", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       7000,
-			"category_id": catB.ID.String(),
+			"monto":          7000,
+			"payment_method": "efectivo",
+			"category_id":    catB.ID.String(),
 		})
 
 		testutil.RequireStatus(t, res, http.StatusCreated)
@@ -65,8 +68,9 @@ func TestExpensesFlow(t *testing.T) {
 		require.Equal(t, model.CategoryTypeIngreso, global.Tipo)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       7000,
-			"category_id": global.ID.String(),
+			"monto":          7000,
+			"payment_method": "efectivo",
+			"category_id":    global.ID.String(),
 		})
 
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
@@ -86,8 +90,9 @@ func TestExpensesFlow(t *testing.T) {
 		require.NotEqual(t, uuid.Nil, global.ID)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       7000,
-			"category_id": global.ID.String(),
+			"monto":          7000,
+			"payment_method": "efectivo",
+			"category_id":    global.ID.String(),
 		})
 
 		testutil.RequireStatus(t, res, http.StatusCreated)
@@ -192,6 +197,34 @@ func TestExpensesFlow(t *testing.T) {
 
 		// Los campos que no se mandaron quedan como estaban.
 		require.Equal(t, catA.ID, actualizado.CategoryID)
+	})
+
+	t.Run("cambia el método de pago", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"payment_method": "transferencia",
+		})
+
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		actualizado := testutil.DecodeData[model.Expense](t, res)
+		require.Equal(t, editable.ID, actualizado.ID)
+		require.Equal(t, model.PaymentMethodTransferencia, actualizado.PaymentMethod)
+
+		// El resto de los campos queda como estaba.
+		require.Equal(t, int64(15000), actualizado.Monto)
+		require.Equal(t, catA.ID, actualizado.CategoryID)
+	})
+
+	t.Run("la edición rechaza un método de pago inválido", func(t *testing.T) {
+		editable := testutil.CreateExpense(t, user, empresa.ID, 15000, catA.ID)
+
+		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/gastos/"+editable.ID.String()), user.Token, map[string]any{
+			"payment_method": "bitcoin",
+		})
+
+		testutil.RequireError(t, res, http.StatusBadRequest, "Key: 'PayloadActualizarGasto.PaymentMethod' Error:Field validation for 'PaymentMethod' failed on the 'oneof' tag")
 	})
 
 	t.Run("la edición rechaza una categoría de tipo ingreso", func(t *testing.T) {
@@ -316,17 +349,17 @@ func TestExpensesFlow(t *testing.T) {
 		}{
 			{
 				name:    "monto faltante",
-				body:    map[string]any{"category_id": catA.ID.String()},
+				body:    map[string]any{"payment_method": "efectivo", "category_id": catA.ID.String()},
 				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto cero",
-				body:    map[string]any{"monto": 0, "category_id": catA.ID.String()},
+				body:    map[string]any{"monto": 0, "payment_method": "efectivo", "category_id": catA.ID.String()},
 				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'required' tag",
 			},
 			{
 				name:    "monto negativo",
-				body:    map[string]any{"monto": -5, "category_id": catA.ID.String()},
+				body:    map[string]any{"monto": -5, "payment_method": "efectivo", "category_id": catA.ID.String()},
 				message: "Key: 'PayloadGasto.Monto' Error:Field validation for 'Monto' failed on the 'gt' tag",
 			},
 			{
@@ -341,22 +374,32 @@ func TestExpensesFlow(t *testing.T) {
 			},
 			{
 				name:    "categoría faltante",
-				body:    map[string]any{"monto": 1000},
+				body:    map[string]any{"monto": 1000, "payment_method": "efectivo"},
 				message: "Key: 'PayloadGasto.CategoryID' Error:Field validation for 'CategoryID' failed on the 'required' tag",
 			},
 			{
+				name:    "método de pago faltante",
+				body:    map[string]any{"monto": 1000, "category_id": catA.ID.String()},
+				message: "Key: 'PayloadGasto.PaymentMethod' Error:Field validation for 'PaymentMethod' failed on the 'required' tag",
+			},
+			{
+				name:    "método de pago inválido",
+				body:    map[string]any{"monto": 1000, "payment_method": "bitcoin", "category_id": catA.ID.String()},
+				message: "Key: 'PayloadGasto.PaymentMethod' Error:Field validation for 'PaymentMethod' failed on the 'oneof' tag",
+			},
+			{
 				name:    "categoría inválida",
-				body:    map[string]any{"monto": 1000, "category_id": "nope"},
+				body:    map[string]any{"monto": 1000, "payment_method": "efectivo", "category_id": "nope"},
 				message: "invalid UUID length: 4",
 			},
 			{
 				name:    "descripción demasiado larga",
-				body:    map[string]any{"monto": 1000, "category_id": catA.ID.String(), "descripcion": string(make([]byte, 101))},
+				body:    map[string]any{"monto": 1000, "payment_method": "efectivo", "category_id": catA.ID.String(), "descripcion": string(make([]byte, 101))},
 				message: "Key: 'PayloadGasto.Descripcion' Error:Field validation for 'Descripcion' failed on the 'max' tag",
 			},
 			{
 				name:    "campo fecha no permitido",
-				body:    map[string]any{"monto": 1000, "category_id": catA.ID.String(), "fecha": "2026-01-01"},
+				body:    map[string]any{"monto": 1000, "payment_method": "efectivo", "category_id": catA.ID.String(), "fecha": "2026-01-01"},
 				message: `json: unknown field "fecha"`,
 			},
 		}
@@ -371,8 +414,9 @@ func TestExpensesFlow(t *testing.T) {
 
 	t.Run("rechaza una categoría inexistente", func(t *testing.T) {
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       1000,
-			"category_id": uuid.NewString(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    uuid.NewString(),
 		})
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
@@ -383,8 +427,9 @@ func TestExpensesFlow(t *testing.T) {
 		otherCategory := testutil.CreateCategory(t, otherUser, otherEmpresa.ID, model.CategoryTypeGasto)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       1000,
-			"category_id": otherCategory.ID.String(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    otherCategory.ID.String(),
 		})
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
@@ -393,8 +438,9 @@ func TestExpensesFlow(t *testing.T) {
 		ingresoCat := testutil.CreateCategory(t, user, empresa.ID, model.CategoryTypeIngreso)
 
 		res := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(empresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       1000,
-			"category_id": ingresoCat.ID.String(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    ingresoCat.ID.String(),
 		})
 		testutil.RequireError(t, res, http.StatusBadRequest, "recurso no encontrado")
 	})
@@ -495,8 +541,9 @@ func TestExpensesFlow(t *testing.T) {
 		testutil.RequireError(t, get, http.StatusNotFound, "no encontrado")
 
 		post := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(otherEmpresa.ID, "/gastos"), user.Token, map[string]any{
-			"monto":       1000,
-			"category_id": catA.ID.String(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    catA.ID.String(),
 		})
 		testutil.RequireError(t, post, http.StatusNotFound, "no encontrado")
 	})

@@ -21,8 +21,8 @@ func NuevoAlmacenGastos(db *sql.DB) *AlmacenGastos {
 
 func (s *AlmacenGastos) AgregarGasto(ctx context.Context, expense *model.Expense) error {
 	query := `
-		INSERT INTO expenses (empresa_id, monto, category_id, descripcion)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO expenses (empresa_id, monto, payment_method, category_id, descripcion)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, fecha, created_at
 	`
 
@@ -32,7 +32,7 @@ func (s *AlmacenGastos) AgregarGasto(ctx context.Context, expense *model.Expense
 	var fecha sql.NullTime
 	var createdAt sql.NullTime
 
-	err := s.db.QueryRowContext(ctx, query, expense.EmpresaID, expense.Monto, expense.CategoryID, expense.Descripcion).Scan(
+	err := s.db.QueryRowContext(ctx, query, expense.EmpresaID, expense.Monto, expense.PaymentMethod, expense.CategoryID, expense.Descripcion).Scan(
 		&expense.ID,
 		&fecha,
 		&createdAt,
@@ -62,10 +62,11 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 	query := `
 		UPDATE expenses
 		SET monto = COALESCE($1::bigint, monto),
-			category_id = COALESCE($2::uuid, category_id),
-			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END
-		WHERE id = $5 AND empresa_id = $6
-		RETURNING id, empresa_id, monto, category_id, descripcion, fecha, created_at
+			payment_method = COALESCE($2::payment_method, payment_method),
+			category_id = COALESCE($3::uuid, category_id),
+			descripcion = CASE WHEN $4::boolean THEN $5::text ELSE descripcion END
+		WHERE id = $6 AND empresa_id = $7
+		RETURNING id, empresa_id, monto, payment_method, category_id, descripcion, fecha, created_at
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
@@ -73,12 +74,18 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 
 	var (
 		monto       *int64
+		metodoPago  *string
 		categoriaID *uuid.UUID
 		descripcion *string
 	)
 
 	if cambios.Monto != nil {
 		monto = cambios.Monto
+	}
+
+	if cambios.PaymentMethod != nil {
+		metodo := string(*cambios.PaymentMethod)
+		metodoPago = &metodo
 	}
 
 	if cambios.CategoryID != nil {
@@ -91,6 +98,7 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 
 	err := s.db.QueryRowContext(ctx, query,
 		monto,
+		metodoPago,
 		categoriaID,
 		cambios.Descripcion != nil,
 		descripcion,
@@ -100,6 +108,7 @@ func (s *AlmacenGastos) ActualizarGasto(ctx context.Context, cambios CambiosGast
 		&expense.ID,
 		&expense.EmpresaID,
 		&expense.Monto,
+		&expense.PaymentMethod,
 		&expense.CategoryID,
 		&expense.Descripcion,
 		&expense.Fecha,
@@ -147,7 +156,7 @@ func (s *AlmacenGastos) EliminarGasto(ctx context.Context, gastoID uuid.UUID, em
 
 func (s *AlmacenGastos) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uuid.UUID, fq paginacion.ConsultaPaginacionIngresos) ([]model.Expense, error) {
 	query := `
-		SELECT id, empresa_id, monto, category_id, descripcion, fecha, created_at
+		SELECT id, empresa_id, monto, payment_method, category_id, descripcion, fecha, created_at
 		FROM expenses
 		WHERE empresa_id = $1
 		  AND (NULLIF($4, '')::date IS NULL OR fecha >= NULLIF($4, '')::date)
@@ -177,6 +186,7 @@ func (s *AlmacenGastos) ObtenerGastosDeEmpresa(ctx context.Context, empresaID uu
 			&expense.ID,
 			&expense.EmpresaID,
 			&expense.Monto,
+			&expense.PaymentMethod,
 			&expense.CategoryID,
 			&expense.Descripcion,
 			&expense.Fecha,

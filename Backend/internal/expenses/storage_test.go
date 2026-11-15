@@ -52,7 +52,7 @@ func newMockStore(t *testing.T) *mockStore {
 }
 
 func expenseColumns() []string {
-	return []string{"id", "empresa_id", "monto", "category_id", "descripcion", "fecha", "created_at"}
+	return []string{"id", "empresa_id", "monto", "payment_method", "category_id", "descripcion", "fecha", "created_at"}
 }
 
 func expenseRow() []driver.Value {
@@ -61,6 +61,7 @@ func expenseRow() []driver.Value {
 		testExpenseID,
 		testEmpresaID,
 		int64(1500),
+		string(model.PaymentMethodDebito),
 		testCategoryID,
 		descripcion,
 		testFecha,
@@ -114,14 +115,15 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 
 		descripcion := "Compra insumos"
 		expense := &model.Expense{
-			EmpresaID:   testEmpresaID,
-			Monto:       1500,
-			CategoryID:  testCategoryID,
-			Descripcion: &descripcion,
+			EmpresaID:     testEmpresaID,
+			Monto:         1500,
+			PaymentMethod: model.PaymentMethodDebito,
+			CategoryID:    testCategoryID,
+			Descripcion:   &descripcion,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testEmpresaID, int64(1500), testCategoryID, &descripcion).
+			WithArgs(testEmpresaID, int64(1500), model.PaymentMethodDebito, testCategoryID, &descripcion).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "fecha", "created_at"}).AddRow(testExpenseID, testFecha, testFecha.Add(2*time.Hour)))
 
 		err := ms.store.AgregarGasto(context.Background(), expense)
@@ -129,7 +131,7 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testExpenseID, expense.ID)
 		assert.Equal(t, testFecha, expense.Fecha)
-		assert.Contains(t, ms.sql, "INSERT INTO expenses (empresa_id, monto, category_id, descripcion)",
+		assert.Contains(t, ms.sql, "INSERT INTO expenses (empresa_id, monto, payment_method, category_id, descripcion)",
 			"la base asigna fecha con DEFAULT CURRENT_DATE")
 	})
 
@@ -137,13 +139,14 @@ func TestStoreExpense_AddExpense(t *testing.T) {
 		ms := newMockStore(t)
 
 		expense := &model.Expense{
-			EmpresaID:  testEmpresaID,
-			Monto:      1500,
-			CategoryID: testCategoryID,
+			EmpresaID:     testEmpresaID,
+			Monto:         1500,
+			PaymentMethod: model.PaymentMethodDebito,
+			CategoryID:    testCategoryID,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs(testEmpresaID, int64(1500), testCategoryID, (*string)(nil)).
+			WithArgs(testEmpresaID, int64(1500), model.PaymentMethodDebito, testCategoryID, (*string)(nil)).
 			WillReturnError(errDBBoom)
 
 		err := ms.store.AgregarGasto(context.Background(), expense)
@@ -243,6 +246,23 @@ func TestStoreExpense_UpdateExpense(t *testing.T) {
 		assert.Equal(t, testEmpresaID, expense.EmpresaID)
 	})
 
+	t.Run("manda el metodo de pago cuando viene en los cambios", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		metodo := model.PaymentMethodTransferencia
+
+		ms.mock.ExpectQuery("cualquier UPDATE").
+			WillReturnRows(sqlmock.NewRows(expenseColumns()).AddRow(expenseRow()...))
+
+		expense, err := ms.store.ActualizarGasto(context.Background(), CambiosGasto{
+			PaymentMethod: &metodo,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, model.PaymentMethodDebito, expense.PaymentMethod)
+		assert.Contains(t, ms.sql, "payment_method = COALESCE($2::payment_method, payment_method)")
+	})
+
 	t.Run("traduce sql.ErrNoRows a utilidades.ErrorNoEncontrado", func(t *testing.T) {
 		ms := newMockStore(t)
 
@@ -272,9 +292,10 @@ func TestStoreExpense_UpdateExpense(t *testing.T) {
 
 		require.NoError(t, err)
 
-		assert.Contains(t, ms.sql, "WHERE id = $5 AND empresa_id = $6")
+		assert.Contains(t, ms.sql, "WHERE id = $6 AND empresa_id = $7")
 		assert.Contains(t, ms.sql, "monto = COALESCE($1::bigint, monto)")
-		assert.Contains(t, ms.sql, "category_id = COALESCE($2::uuid, category_id)")
+		assert.Contains(t, ms.sql, "payment_method = COALESCE($2::payment_method, payment_method)")
+		assert.Contains(t, ms.sql, "category_id = COALESCE($3::uuid, category_id)")
 
 		// La fecha no se edita: el UPDATE no la menciona.
 		assert.NotContains(t, ms.sql, "fecha =")

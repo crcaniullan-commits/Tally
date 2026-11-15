@@ -17,6 +17,7 @@ type IServiceDeudores interface {
 	Crear(context.Context, uuid.UUID, PayloadDeudor) (model.Debtor, error)
 	Actualizar(context.Context, uuid.UUID, uuid.UUID, PayloadActualizacionDeudor) error
 	MarcarDeudorPagado(context.Context, uuid.UUID, uuid.UUID) error
+	Borrar(context.Context, uuid.UUID, uuid.UUID) error
 	ObtenerDeudores(context.Context, uuid.UUID) ([]model.Debtor, error)
 }
 
@@ -59,10 +60,14 @@ func (h *HandlerDeudores) Crear(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PayloadActualizacionDeudor son los campos editables de una deuda.
+// Descripcion es opcional: si no se manda, la descripción que ya tenía se
+// queda; si se manda (incluso vacía), se reemplaza.
 type PayloadActualizacionDeudor struct {
 	Nombre      string    `json:"nombre" validate:"required,max=30"`
 	Monto       int64     `json:"monto" validate:"required,gt=0"`
 	FechaLimite time.Time `json:"fecha_limite" validate:"required"`
+	Descripcion *string   `json:"descripcion" validate:"omitempty,max=100"`
 }
 
 func (h *HandlerDeudores) Actualizar(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +124,32 @@ func (h *HandlerDeudores) MarcarDeudorPagado(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Deuda pagada"); err != nil {
+		h.error.ErrorInterno(w, r, err)
+		return
+	}
+}
+
+func (h *HandlerDeudores) BorrarDeudor(w http.ResponseWriter, r *http.Request) {
+	deudorID, err := uuid.Parse(chi.URLParam(r, "deudorID"))
+
+	if err != nil {
+		h.error.ErrorSolicitudInvalida(w, r, err)
+		return
+	}
+
+	empresaID := utilidades.ObtenerEmpresaDelContexto(r).ID
+
+	if err := h.service.Borrar(r.Context(), deudorID, empresaID); err != nil {
+		switch {
+		case errors.Is(err, utilidades.ErrorNoEncontrado):
+			h.error.ErrorNoEncontrado(w, r, err)
+		default:
+			h.error.ErrorInterno(w, r, err)
+		}
+		return
+	}
+
+	if err := utilidades.RespuestaJSON(w, http.StatusOK, "Deuda eliminada"); err != nil {
 		h.error.ErrorInterno(w, r, err)
 		return
 	}

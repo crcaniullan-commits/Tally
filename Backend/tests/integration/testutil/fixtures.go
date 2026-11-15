@@ -228,8 +228,9 @@ func CreateExpense(t *testing.T, user *User, empresaID uuid.UUID, monto int64, c
 	t.Helper()
 
 	res := Request(t, http.MethodPost, EmpresaPath(empresaID, "/gastos"), user.Token, map[string]any{
-		"monto":       monto,
-		"category_id": categoryID.String(),
+		"monto":          monto,
+		"payment_method": "efectivo",
+		"category_id":    categoryID.String(),
 	})
 
 	RequireStatus(t, res, http.StatusCreated)

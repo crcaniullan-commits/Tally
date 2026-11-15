@@ -32,6 +32,21 @@ func EmitirParaUsuario() {}
 //	@Router			/aplicacion/claves/IDAcceso/{claveID}	[post]
 func Reenviar() {}
 
+// Listar
+//
+//	@Summary		Listar las claves de acceso emitidas
+//	@Description	Devuelve las claves de acceso que emitió el municipal autenticado (created_by), de la más reciente a la más antigua. Solo se listan las claves propias del funcionario: la ruta no expone las de otros. La respuesta viene envuelta en {"datos": ...} con el arreglo de llaves. Se pagina con ?limite (default 30, máximo 100) y ?desplazamiento; un parámetro inválido responde 400.
+//	@Tags			ClavesAcceso
+//	@Produce		json
+//	@Param			limite			query		int					false	"máximo de llaves a devolver"	default(30)
+//	@Param			desplazamiento	query		int					false	"cuántas llaves saltar"			default(0)
+//	@Success		200				{object}	[]model.AccessKey	"claves emitidas por el municipal"
+//	@Failure		400				{object}	map[string]string	"paginación inválida"
+//	@Failure		500				{object}	map[string]string	"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/aplicacion/claves	[get]
+func Listar() {}
+
 // Revocar
 //
 //	@Summary		Revocar un código de acceso

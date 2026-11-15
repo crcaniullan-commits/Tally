@@ -33,18 +33,20 @@ func empresaID(r *http.Request) uuid.UUID {
 }
 
 type PayloadGasto struct {
-	Monto       int64      `json:"monto" validate:"required,gt=0"`
-	CategoryID  *uuid.UUID `json:"category_id" validate:"required"`
-	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
+	Monto         int64               `json:"monto" validate:"required,gt=0"`
+	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
+	CategoryID    *uuid.UUID          `json:"category_id" validate:"required"`
+	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
 }
 
 // PayloadActualizarGasto son los campos editables de un gasto. Lo que no viene
 // en el payload se queda como está. La fecha NO se edita: es la del
 // movimiento original.
 type PayloadActualizarGasto struct {
-	Monto       *int64     `json:"monto" validate:"omitempty,gt=0"`
-	CategoryID  *uuid.UUID `json:"category_id"`
-	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
+	Monto         *int64               `json:"monto" validate:"omitempty,gt=0"`
+	PaymentMethod *model.PaymentMethod `json:"payment_method" validate:"omitempty,oneof=debito credito transferencia efectivo"`
+	CategoryID    *uuid.UUID           `json:"category_id"`
+	Descripcion   *string              `json:"descripcion" validate:"omitempty,max=100"`
 }
 
 // Actualizar edita un gasto: monto, categoría y descripción.

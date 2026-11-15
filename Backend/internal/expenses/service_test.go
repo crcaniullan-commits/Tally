@@ -29,7 +29,8 @@ func TestExpenseService_AddExpense(t *testing.T) {
 
 		store.On("CategoriaExiste", mock.Anything, testCategoryID, testEmpresaID, model.CategoryTypeGasto).Return(true, nil).Once()
 		store.On("AgregarGasto", mock.Anything, mock.MatchedBy(func(e *model.Expense) bool {
-			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID && e.Fecha.IsZero()
+			return e.Monto == payload.Monto && e.EmpresaID == testEmpresaID && e.CategoryID == testCategoryID && e.Fecha.IsZero() &&
+				e.PaymentMethod == model.PaymentMethodDebito
 		})).Return(nil).Run(func(args mock.Arguments) {
 			e := args.Get(1).(*model.Expense)
 			e.ID = expense.ID
@@ -216,6 +217,28 @@ func TestExpenseService_UpdateExpense(t *testing.T) {
 		}, testExpenseID, testEmpresaID)
 
 		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("cambia el metodo de pago", func(t *testing.T) {
+		store := new(RepositorioExpensesMock)
+		service := newService(store)
+
+		metodo := model.PaymentMethodTransferencia
+
+		store.On("ActualizarGasto", mock.Anything,
+			mock.MatchedBy(func(c CambiosGasto) bool {
+				return c.PaymentMethod != nil && *c.PaymentMethod == model.PaymentMethodTransferencia
+			}),
+			testExpenseID, testEmpresaID,
+		).Return(newTestExpense(), nil).Once()
+
+		expense, err := service.ActualizarGasto(context.Background(), PayloadActualizarGasto{
+			PaymentMethod: &metodo,
+		}, testExpenseID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Equal(t, testExpenseID, expense.ID)
 		store.AssertExpectations(t)
 	})
 
