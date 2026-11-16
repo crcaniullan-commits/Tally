@@ -54,7 +54,9 @@ COPY --from=builder /migrate /app/migrate
 COPY --from=builder /build/migrations /app/migrations
 COPY docker/entrypoint.sh /app/entrypoint.sh
 
-RUN chmod +x /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/data/files \
+    && chown -R app:app /app/data
 
 USER app
 
