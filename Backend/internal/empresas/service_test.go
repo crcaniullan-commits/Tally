@@ -17,7 +17,13 @@ import (
 var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 
 func newService(store RepositorioEmpresas) *ServicioEmpresas {
-	return NuevoServicioEmpresas(store)
+	return newServiceWithInvalidator(store, newInvalidadorEmpresaMock())
+}
+
+// newServiceWithInvalidator arma el service con un invalidador de cache
+// inyectado, para poder verificar que el service lo llama.
+func newServiceWithInvalidator(store RepositorioEmpresas, inv invalidadorEmpresa) *ServicioEmpresas {
+	return NuevoServicioEmpresas(store, inv)
 }
 
 func TestEmpresaService_GetEmpresas(t *testing.T) {
@@ -132,6 +138,36 @@ func TestEmpresaService_CambiarNombre(t *testing.T) {
 		assert.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
 	})
+
+	t.Run("invalida la entrada cacheada de la empresa", func(t *testing.T) {
+		// El nombre de la empresa vive en el cache: si no se invalida, el
+		// middleware seguiría sirviendo la empresa con el nombre viejo.
+		store := new(RepositorioEmpresasMock)
+		inv := new(InvalidadorEmpresaMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		store.On("CambiarNombre", mock.Anything, "Nueva Empresa", testEmpresaID, testUserID).Return(nil).Once()
+		inv.On("Invalidar", mock.Anything, testUserID, testEmpresaID).Once()
+
+		err := service.CambiarNombre(context.Background(), "Nueva Empresa", testEmpresaID, testUserID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+		inv.AssertExpectations(t)
+	})
+
+	t.Run("no invalida si el store falla", func(t *testing.T) {
+		store := new(RepositorioEmpresasMock)
+		inv := new(InvalidadorEmpresaMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		store.On("CambiarNombre", mock.Anything, "Nueva Empresa", testEmpresaID, testUserID).Return(errStoreBoom).Once()
+
+		err := service.CambiarNombre(context.Background(), "Nueva Empresa", testEmpresaID, testUserID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		inv.AssertNotCalled(t, "Invalidar", mock.Anything, mock.Anything, mock.Anything)
+	})
 }
 
 func TestEmpresaService_BorrarEmpresa(t *testing.T) {
@@ -171,5 +207,35 @@ func TestEmpresaService_BorrarEmpresa(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
+	})
+
+	t.Run("invalida la entrada cacheada de la empresa", func(t *testing.T) {
+		// Si la entrada cacheada sobrevive al borrado, el middleware seguiría
+		// dejando entrar a la empresa que ya no existe.
+		store := new(RepositorioEmpresasMock)
+		inv := new(InvalidadorEmpresaMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		store.On("BorrarEmpresa", mock.Anything, testEmpresaID, testUserID).Return(nil).Once()
+		inv.On("Invalidar", mock.Anything, testUserID, testEmpresaID).Once()
+
+		err := service.BorrarEmpresa(context.Background(), testEmpresaID, testUserID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+		inv.AssertExpectations(t)
+	})
+
+	t.Run("no invalida si el store falla", func(t *testing.T) {
+		store := new(RepositorioEmpresasMock)
+		inv := new(InvalidadorEmpresaMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		store.On("BorrarEmpresa", mock.Anything, testEmpresaID, testUserID).Return(errStoreBoom).Once()
+
+		err := service.BorrarEmpresa(context.Background(), testEmpresaID, testUserID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		inv.AssertNotCalled(t, "Invalidar", mock.Anything, mock.Anything, mock.Anything)
 	})
 }

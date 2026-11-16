@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -219,14 +220,56 @@ func TestUserStore_Update(t *testing.T) {
 	t.Run("persiste hash y nombre del usuario", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		user := newTestUser()
-		require.NoError(t, user.PasswordHash.Set("NuevaClave123"))
+		var auxiliar model.User
+		require.NoError(t, auxiliar.PasswordHash.Set("NuevaClave123"))
+
+		nombre := "Nombre Nuevo"
 
 		mock.ExpectExec(regexUpdate).
-			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
+			WithArgs(true, auxiliar.PasswordHash.GetHash(), true, nombre, testUserID).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := store.Actualizar(context.Background(), user)
+		err := store.Actualizar(context.Background(), CambiosUsuario{
+			Nombre:         &nombre,
+			PasswordHash:   auxiliar.PasswordHash.GetHash(),
+			CambiaPassword: true,
+		}, testUserID)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("no toca el password_hash si no viene en los cambios", func(t *testing.T) {
+		// Es lo que arregla el 500 con el cache: el usuario cacheado llega
+		// sin hash, así que el UPDATE no puede mandarlo.
+		store, mock := newMockStore(t)
+
+		nombre := "Solo Nombre"
+
+		mock.ExpectExec(regexUpdate).
+			WithArgs(false, []byte(nil), true, nombre, testUserID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := store.Actualizar(context.Background(), CambiosUsuario{
+			Nombre: &nombre,
+		}, testUserID)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("no toca el nombre si no viene en los cambios", func(t *testing.T) {
+		store, mock := newMockStore(t)
+
+		var auxiliar model.User
+		require.NoError(t, auxiliar.PasswordHash.Set("NuevaClave123"))
+
+		mock.ExpectExec(regexUpdate).
+			WithArgs(true, auxiliar.PasswordHash.GetHash(), false, (*string)(nil), testUserID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := store.Actualizar(context.Background(), CambiosUsuario{
+			PasswordHash:   auxiliar.PasswordHash.GetHash(),
+			CambiaPassword: true,
+		}, testUserID)
 
 		require.NoError(t, err)
 	})
@@ -234,13 +277,15 @@ func TestUserStore_Update(t *testing.T) {
 	t.Run("devuelve utilidades.ErrorNoEncontrado si no se actualizo ninguna fila", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		user := newTestUser()
+		nombre := "Nombre Nuevo"
 
 		mock.ExpectExec(regexUpdate).
-			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
+			WithArgs(false, []byte(nil), true, nombre, testUserID).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := store.Actualizar(context.Background(), user)
+		err := store.Actualizar(context.Background(), CambiosUsuario{
+			Nombre: &nombre,
+		}, testUserID)
 
 		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
@@ -248,13 +293,15 @@ func TestUserStore_Update(t *testing.T) {
 	t.Run("propaga el error de la base sin convertirlo", func(t *testing.T) {
 		store, mock := newMockStore(t)
 
-		user := newTestUser()
+		nombre := "Nombre Nuevo"
 
 		mock.ExpectExec(regexUpdate).
-			WithArgs(user.PasswordHash.GetHash(), user.Nombre, user.ID).
+			WithArgs(false, []byte(nil), true, nombre, testUserID).
 			WillReturnError(errDBBoom)
 
-		err := store.Actualizar(context.Background(), user)
+		err := store.Actualizar(context.Background(), CambiosUsuario{
+			Nombre: &nombre,
+		}, testUserID)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.NotErrorIs(t, err, utilidades.ErrorNoEncontrado, "un error de DB no es 'no encontrado'")

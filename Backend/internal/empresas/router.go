@@ -4,7 +4,6 @@ import (
 	"database/sql"
 
 	"github.com/crcaniullan-commits/Tally/internal/errores"
-	"github.com/crcaniullan-commits/Tally/internal/intermediario"
 	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -15,11 +14,11 @@ type Routes struct {
 	Item       func(r chi.Router)
 }
 
-func InitModule(db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) (Routes, intermediario.BuscadorEmpresa) {
+func InitModule(db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion, inv invalidadorEmpresa) Routes {
 	err := errores.NuevaRespuestaErrores(logger)
 
 	repo := NuevoAlmacenEmpresas(db)
-	svc := NuevoServicioEmpresas(repo)
+	svc := NuevoServicioEmpresas(repo, inv)
 	hdl := NuevoHandlerEmpresas(svc, err)
 
 	return Routes{
@@ -31,5 +30,5 @@ func InitModule(db *sql.DB, logger *zap.SugaredLogger, middl utilidades.Middlewa
 			r.Patch("/{nombre}", middl.VerificarRol(utilidades.RolUsuario, hdl.CambiarNombre))
 			r.Delete("/", middl.VerificarRol(utilidades.RolUsuario, hdl.BorrarEmpresa))
 		},
-	}, repo
+	}
 }

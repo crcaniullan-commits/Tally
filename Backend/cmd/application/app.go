@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -11,22 +10,17 @@ import (
 	"github.com/crcaniullan-commits/Tally/docs"
 	"github.com/crcaniullan-commits/Tally/internal/auth"
 	"github.com/crcaniullan-commits/Tally/internal/bdtx"
-	"github.com/crcaniullan-commits/Tally/internal/categories"
+	"github.com/crcaniullan-commits/Tally/internal/cache"
 	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
 	"github.com/crcaniullan-commits/Tally/internal/correo"
-	"github.com/crcaniullan-commits/Tally/internal/debtors"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/entorno"
 	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/excel"
-	"github.com/crcaniullan-commits/Tally/internal/expenses"
-	"github.com/crcaniullan-commits/Tally/internal/goals"
-	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
 	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
-	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 )
 
@@ -36,6 +30,7 @@ type Application struct {
 	config Config
 	db     *sql.DB
 	logger *zap.SugaredLogger
+	cache  cache.Cache
 }
 
 type Config struct {
@@ -66,11 +61,12 @@ type ConfigCorreo struct {
 	From     string
 }
 
-func NewApplication(cfg Config, db *sql.DB, logger *zap.SugaredLogger) *Application {
+func NewApplication(cfg Config, db *sql.DB, logger *zap.SugaredLogger, cache cache.Cache) *Application {
 	return &Application{
 		cfg,
 		db,
 		logger,
+		cache,
 	}
 }
 
@@ -79,6 +75,16 @@ func (app *Application) Run() error {
 	docs.SwaggerInfo.Version = version
 	docs.SwaggerInfo.Host = app.config.URLAPI
 	docs.SwaggerInfo.BasePath = "/v1"
+
+	buscadorUsuario := users.NuevoBuscadorUsuarioConCache(
+		users.NuevoAlmacenUsuarios(app.db),
+		app.cache,
+	)
+
+	buscadorEmpresa := empresas.NuevoBuscadorEmpresaConCache(
+		empresas.NuevoAlmacenEmpresas(app.db),
+		app.cache,
+	)
 
 	r := chi.NewRouter()
 
@@ -89,7 +95,7 @@ func (app *Application) Run() error {
 			app.config.ConfigJWT.Iss,
 			app.config.ConfigJWT.Iss,
 		),
-		users.NuevoAlmacenUsuarios(app.db),
+		buscadorUsuario,
 	)
 
 	var smtp remitidorCorreo
@@ -114,8 +120,8 @@ func (app *Application) Run() error {
 
 	transactor := bdtx.NewTransactor(app.db)
 
-	empresaRoute, finder := empresas.InitModule(app.db, app.logger, middl)
-	emMiddl := intermediario.NuevoMiddlewareEmpresa(app.logger, finder)
+	empresaRoute := empresas.InitModule(app.db, app.logger, middl, buscadorEmpresa)
+	emMiddl := intermediario.NuevoMiddlewareEmpresa(app.logger, buscadorEmpresa)
 
 	var fileStore excel.FileStorage
 	switch entorno.ObtenerCadena("STORAGE_DRIVER", "") {
@@ -129,32 +135,9 @@ func (app *Application) Run() error {
 
 	r.Use(intermediario.MiddlewaresGlobales()...)
 
-	r.Route("/v1", func(r chi.Router) {
-		docsURL := fmt.Sprintf("%s/swagger/doc.json", app.config.Addr)
-		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
-		auth.InitModule(r, app.db, app.logger, transactor,
-			app.config.ConfigJWT.Secret, app.config.ConfigJWT.Iss, app.config.ConfigJWT.Exp, smtp)
-		r.Route("/aplicacion", func(r chi.Router) {
-			r.Use(middl.MiddlewareTokenAutenticacion)
-			users.InitModule(r, app.db, app.logger, middl)
-			clavesacceso.InitModule(r, app.db, app.logger, middl, smtp)
-			r.Route("/empresas", func(r chi.Router) {
-				empresaRoute.Collection(r)
-
-				r.Route("/{empresaID}", func(r chi.Router) {
-					r.Use(emMiddl.EmpresaDelUsuario)
-
-					empresaRoute.Item(r)
-					incomes.InitModule(r, app.db, app.logger, middl)
-					expenses.InitModule(r, app.db, app.logger, middl)
-					categories.InitModule(r, app.db, app.logger, middl)
-					goals.InitModule(r, app.db, app.logger, middl)
-					debtors.InitModule(r, app.db, app.logger, middl)
-					excel.InitModule(r, app.db, fileStore, app.logger, middl)
-				})
-			})
-		})
-	})
+	r.Route("/v1", AsignarRutas(r, smtp, transactor, empresaRoute, *emMiddl,
+		fileStore, app.db, app.logger, app.config.Addr, app.config.ConfigJWT, middl,
+		*buscadorUsuario))
 
 	srv := &http.Server{
 		Addr:         app.config.Addr,

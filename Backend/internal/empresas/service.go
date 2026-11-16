@@ -14,12 +14,17 @@ type RepositorioEmpresas interface {
 	ObtenerEmpresas(context.Context, uuid.UUID) ([]model.Empresa, error)
 }
 
-type ServicioEmpresas struct {
-	store RepositorioEmpresas
+type invalidadorEmpresa interface {
+	Invalidar(ctx context.Context, userID, empresaID uuid.UUID)
 }
 
-func NuevoServicioEmpresas(store RepositorioEmpresas) *ServicioEmpresas {
-	return &ServicioEmpresas{store}
+type ServicioEmpresas struct {
+	store       RepositorioEmpresas
+	invalidador invalidadorEmpresa
+}
+
+func NuevoServicioEmpresas(store RepositorioEmpresas, inv invalidadorEmpresa) *ServicioEmpresas {
+	return &ServicioEmpresas{store, inv}
 }
 
 func (s *ServicioEmpresas) ObtenerEmpresas(ctx context.Context, userID uuid.UUID) ([]model.Empresa, error) {
@@ -53,6 +58,8 @@ func (s *ServicioEmpresas) CambiarNombre(ctx context.Context, nuevoNombre string
 		return err
 	}
 
+	s.invalidador.Invalidar(ctx, userID, empresaID)
+
 	return nil
 }
 
@@ -60,6 +67,8 @@ func (s *ServicioEmpresas) BorrarEmpresa(ctx context.Context, empresaID uuid.UUI
 	if err := s.store.BorrarEmpresa(ctx, empresaID, userID); err != nil {
 		return err
 	}
+
+	s.invalidador.Invalidar(ctx, userID, empresaID)
 
 	return nil
 }

@@ -50,6 +50,7 @@ Requisitos:
 | Metas | `integration/goals_flow_test.go` | PASS | 40 |
 | Usuarios | `integration/users_flow_test.go` | PASS | 28 |
 | Archivos Excel | `integration/excel_flow_test.go` | PASS | 20 |
+| Cache | `integration/cache_flow_test.go` | PASS | 5 |
 | Aislamiento multi-empresa | `integration/tenant_isolation_test.go` | PASS | 23 |
 
 Todos los flujos verifican al menos una ruta protegida sin token y con token
@@ -66,9 +67,11 @@ tests/
     ├── <flujo>_flow_test.go      # un archivo por flujo
     ├── password_recovery_flow_test.go
     ├── excel_flow_test.go
+    ├── cache_flow_test.go
     ├── tenant_isolation_test.go
     └── testutil/
         ├── env.go                # base efímera, migraciones, router real
+        ├── cache.go              # cacheMemoria: Cache en memoria para la suite
         ├── client.go             # Request, RequestRaw, DecodeData, DecodeError, Require*
         ├── fixtures.go           # NewUser, CreateEmpresa, CreateCategory, ...
         └── rut.go                # generador de RUT módulo 11
@@ -111,8 +114,8 @@ tests/
   ingresos del día/semana/mes, pendiente no negativo, borrado y validaciones.
 - **Usuarios:** actualización de nombre+contraseña, login con nueva contraseña,
   actualización solo de contraseña, actualización solo de nombre, payload vacío,
-  consulta municipal por RUT, validaciones, borrado de cuenta e invalidación
-  del token.
+  que un PATCH posterior no revierte el nombre anterior, consulta municipal por
+  RUT, validaciones, borrado de cuenta e invalidación del token.
 - **Archivos Excel:** subida de un `.xlsx` (multipart, campo `file`), listado con
   el envelope `{"datos": [...]}`, descarga con el binario y el content-type de
   hoja de cálculo, borrado (`204`), archivo que no es un zip válido (`400`),
@@ -120,6 +123,14 @@ tests/
   (`404`), aislamiento entre empresas (listado vacío y `404` por id), municipal
   sin acceso a la empresa (`404`), registro en la tabla `excel_files` y borrado
   en cascada al eliminar la empresa.
+- **Cache:** el router de la suite se arma con los mismos buscadores cacheados
+  que usa el backend real (`users.BuscadorUsuarioConCache` y
+  `empresas.BuscadorEmpresaConCache`) sobre un `cache.Cache` en memoria
+  (`testutil.cacheMemoria`), así que los flujos ejercitan el camino cacheado
+  sin depender de un Redis. Cubre: el middleware resuelve la empresa con el
+  cache, el cache no deja pasar a una empresa ajena (la clave incluye el
+  usuario), el rename y el borrado de una empresa invalidan su entrada
+  cacheada, y los gastos siguen siendo accesibles con el cache activo.
 - **Aislamiento multi-empresa:** acceso a empresa ajena (`404` en middleware),
   recursos ajenos por ID desde la empresa propia (`404` en el `WHERE`), listados
   que excluyen datos ajenos, categoría ajena rechazada y rol municipal sin
@@ -149,6 +160,9 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
 | 9 | `GET /v1/aplicacion/empresas/{empresaID}/excel` | `{"datos":[...]}` | `[...]` (array pelado) | El handler usaba `utilidades.EscribirJSON` en vez de `utilidades.RespuestaJSON`. |
 | 10 | `POST /v1/aplicacion/empresas/{empresaID}/excel` (ruta completa) | `404` (no existía) | `404` en una ruta duplicada (`/empresas/{id}/empresas/{id}/excel`) | `excel.InitModule` registraba `/empresas/{empresaID}/excel` pero se montaba dentro del grupo `/empresas/{empresaID}`. Ahora registra `/excel`. |
 | 11 | `migrations/000009_excel_files.up.sql` | creaba la tabla `excel_files` | la dropeaba (el `CREATE TABLE` estaba en el `.down.sql`) | Los dos archivos de la migración estaban invertidos: la tabla nunca existía en la base. |
+| 12 | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío, con el cache activo | `200` y el nombre queda actualizado | `500 {"error":"el servidor encontró un problema"}` | `users.BuscadorUsuarioConCache` cachea el `model.User` serializado a JSON, y `model.User.PasswordHash` tiene `json:"-"`, así que el usuario servido desde el cache llega **sin hash**. `AlmacenUsuarios.Actualizar` reescribía la fila completa con ese objeto, así que mandaba `password_hash = NULL` y Postgres lo rechazaba (`23502`). **Corregido**: el store ahora aplica solo los campos del payload (`CASE WHEN`), con el patrón de `CambiosGasto` de `expenses`, y `Actualizar` invalida la entrada cacheada. |
+| 4 (regresión) | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío | `200` | `500` con el cache activo | El bug 4 se había corregido haciendo que `ObtenerPorID` traiga el `password_hash`. Al agregar el cache, el usuario vuelve a perderlo en el round-trip por JSON (`PasswordHash` tiene `json:"-"`). Ver el bug 12. |
+| 13 | `cache.Version` / `cache.Bump` | `Bump` invalida la versión que lee `Version` | `Bump` incrementaba `var:<scope>` y `Version` leía `ver:<scope>`: son claves distintas, así que un `Bump` no cambiaba lo que devuelve `Version` | Prefijos desalineados en `internal/cache/cache.go`. **Corregido**: los dos usan ahora `claveVersion(scope)`. |
 
 ## Diferencias entre swagger y código
 

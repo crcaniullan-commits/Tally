@@ -96,7 +96,7 @@ Un tag roto no devuelve 400: **el `Validador.Struct` entra en panic** y el `Reco
 
 ## Tests
 
-Paquetes con tests: `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `paginacion`, `users` y `utilidades`. Sin tests: `bd`, `bdtx`, `informe`, `correo`, `entorno`, `errores`, `intermediario`, `model` y `storage`.
+Paquetes con tests: `cache`, `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `paginacion`, `users` y `utilidades`. Sin tests: `bd`, `bdtx`, `informe`, `correo`, `entorno`, `errores`, `intermediario`, `model` y `storage`.
 
 Convención, un archivo por capa dentro del paquete (tests en `package categories`, no `categories_test`):
 
@@ -106,6 +106,7 @@ Convención, un archivo por capa dentro del paquete (tests en `package categorie
 | `service_test.go` | lógica del service contra el store mockeado |
 | `handler_test.go` | HTTP con `httptest` + `chi.NewRouteContext()` para URL params; contexto con `utilidades.ContextoUsuario` / `utilidades.ContextoEmpresa` |
 | `storage_test.go` | `go-sqlmock` sobre el store real |
+| `cache_test.go` | el buscador con cache (`GetOrLoad`, hit/miss, invalidación) con un `cache.Cache` en memoria |
 
 `excel` suma un `router_test.go`: prueba a nivel de ruta, montando `InitModule` en un router chi.
 
@@ -129,7 +130,8 @@ bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
 
 - `TestMain` está en `tests/integration/main_test.go` y delega en `testutil.SetupSuite`.
 - `testutil/env.go` crea una base efímera `tally_it_<pid>` desde `DB_ADDR` (default `postgres://postgres:tally_database_env@localhost/tally_database_env?sslmode=disable`), aplica `migrations/*.up.sql` en orden y la dropea al terminar. `TEST_DB_ADDR` permite reutilizar una base existente sin crearla ni dropearla.
-- El router se replica en `testutil/env.go` desde `cmd/application/app.go`. **No** se modifica el archivo de producción para hacer pasar un test.
+- El router se replica en `testutil/env.go` desde `cmd/application/routes.go`. **No** se modifica el archivo de producción para hacer pasar un test.
+- El router del suite se arma con los mismos buscadores cacheados que usa el backend real (`users.NuevoBuscadorUsuarioConCache` y `empresas.NuevoBuscadorEmpresaConCache`), sobre `testutil.cacheMemoria`: un `cache.Cache` en memoria (`tests/integration/testutil/cache.go`) que guarda los bytes tal cual, como haría Redis. Así los flujos ejercitan el camino cacheado sin depender de un Redis. No tiene TTL real: los valores viven hasta que se borran.
 - El módulo `excel` va montado en el router del suite con un `storage.NewDisk` sobre un directorio temporal (el suite no puede escribir en `./data/files`).
 - Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. El remitente de correo se reemplaza por uno que **guarda los códigos enviados** (`testutil.UltimoCodigoDeRecuperacion`), para poder completar el flujo de recuperación de contraseña sin SMTP real.
 - `TestMain` registra un único usuario municipal; los tests lo obtienen con `testutil.MunicipalToken(t)` / `testutil.MunicipalRUT(t)`.
@@ -171,7 +173,9 @@ Requiere PostgreSQL. Sin `TEST_DB_ADDR`, la suite crea y dropea su propia base.
 
 ## Arquitectura
 
-`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`RepositorioIngresos`, `IServiceIngresos`, `IServiceExcel`, etc.) definidas en service/handler. El handler depende siempre de la **interfaz** del service, no del service concreto: el service real se inyecta en el `router.go` (`NuevoHandlerExcel(svc, err)`). Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*bdtx.Transactor` y la config JWT; `clavesAcceso` recibe el `SendEmail`; `excel` recibe el `FileStorage` (la implementación del binario); `empresas.InitModule` no recibe router y devuelve `Routes` + `intermediario.BuscadorEmpresa`.
+`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`RepositorioIngresos`, `IServiceIngresos`, `IServiceExcel`, etc.) definidas en service/handler. El handler depende siempre de la **interfaz** del service, no del service concreto: el service real se inyecta en el `router.go` (`NuevoHandlerExcel(svc, err)`). Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*bdtx.Transactor` y la config JWT; `clavesAcceso` recibe el `SendEmail`; `excel` recibe el `FileStorage` (la implementación del binario); `empresas.InitModule` no recibe router y devuelve `Routes`; `users.InitModule` y `empresas.InitModule` reciben además el **invalidador de cache** del módulo (`invalidarUsuario` / `invalidadorEmpresa`) para que el service pueda borrar la entrada cacheada cuando cambia o se borra el recurso.
+
+Las rutas se arman en `cmd/application/routes.go` (`AsignarRutas`), que recibe todo lo cableado; `cmd/application/app.go` arma las dependencias (buscadores con cache, middlewares, SMTP, storage) y las pasa.
 
 Los módulos `excel` e `informe` están en estados distintos. `informe` es un esqueleto: tiene `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas; obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa. `excel` está implementado y montado: sube, lista, descarga y borra archivos `.xlsx` por empresa, con el binario en el storage (`internal/storage`) y solo el registro en la tabla `excel_files`.
 
@@ -195,7 +199,18 @@ Middlewares:
 
 El usuario y la empresa del request se sacan del contexto con `utilidades.ObtenerUsuarioDelContexto(r)` y `utilidades.ObtenerEmpresaDelContexto(r)` (no hay helpers en `users`). Devuelven `nil` si el middleware no los inyectó; usarlos sin el middleware correspondiente produce panic.
 
-`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito: `PATCH /v1/aplicacion/usuarios` reescribe la fila con ese usuario, así que si el hash no viniera el UPDATE escribiría un hash vacío en una columna `NOT NULL` y el endpoint devolvía 500. `ObtenerPorRUT` no lo trae: es solo de lectura.
+`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito: `PATCH /v1/aplicacion/usuarios` reescribe la fila con ese usuario, así que si el hash no viniera el UPDATE escribiría un hash vacío en una columna `NOT NULL` y el endpoint devolvía 500. `ObtenerPorRUT` no lo trae: es solo de lectura. **Con el cache activo esto vuelve a pasar**: el usuario servido desde el cache no trae el hash (ver la sección de Cache).
+
+## Cache
+
+`internal/cache` tiene la interfaz `Cache` (`Get`/`Set`/`Delete`/`Incr`) y dos implementaciones: `RedisCache` (usada cuando hay `REDIS_URL`) y `Noop` (cuando no hay Redis: el backend funciona igual, pero sin cache). `cmd/main.go` elige una según `REDIS_URL` y la pasa a `application.NewApplication`.
+
+- `cache.GetOrLoad` es el cache-aside: busca la clave y, si no está (o falla el cache, o el valor cacheado no se puede deserializar), carga de la base y guarda el resultado. **Un error del load no se cachea**.
+- `users.BuscadorUsuarioConCache` y `empresas.BuscadorEmpresaConCache` envuelven al store y usan `GetOrLoad` con TTL de 60s. Los usa el middleware: `MiddlewareTokenAutenticacion` busca el usuario por ID y `MiddlewareEmpresa` busca la empresa por `(empresaID, userID)`.
+- La clave de empresa es `"empresa:" + userID + empresaID`: incluye el usuario, así que dos usuarios no comparten entrada.
+- Cuando un recurso cambia o se borra, el service llama al **invalidador** (interfaz `invalidarUsuario` / `invalidadorEmpresa`), que borra la entrada del cache. Sin esa invalidación, el middleware seguiría sirviendo el dato viejo.
+- **Ojo con el round-trip por JSON:** el cache serializa a JSON, así que los campos con `json:"-"` se pierden. `model.User.PasswordHash` tiene `json:"-"` (por seguridad), así que el usuario servido **desde el cache llega sin hash**. Por eso `AlmacenUsuarios.Actualizar` NO reescribe la fila completa: aplica solo los campos del payload (el patrón de `CambiosGasto` de `expenses`), con `CASE WHEN` para no pisar `password_hash` ni `nombre` cuando no vienen en el payload. Si el store reescribiera la fila entera, un PATCH que solo cambia el nombre mandaría un `password_hash` vacío a una columna `NOT NULL` (500) y un PATCH posterior revertiría el nombre con el valor viejo del cache.
+- `cache.Version` y `cache.Bump` usan la misma clave (`claveVersion(scope)`, prefijo `ver:`): `Bump` incrementa el contador y `Version` lo lee, así que un `Bump` invalida de verdad la versión. Todavía no tienen consumidor.
 
 `bdtx.Transactor` (`internal/bdtx`) envuelve `BeginTx`/`Commit`/`Rollback`. Los stores que participan de una transacción deben usar `bdtx.FromContext(ctx, s.db)` en vez de `s.db`; hoy lo hacen `auth` y `clavesAcceso`. `auth.RegistrarUsuario` crea el usuario, canjea la llave y setea `plan_expires_at` en una sola transacción.
 

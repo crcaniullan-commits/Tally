@@ -64,9 +64,10 @@ func TestUsersFlow(t *testing.T) {
 	})
 
 	t.Run("actualiza solo el nombre", func(t *testing.T) {
-		// El nombre se actualiza sin tocar la contraseña: el usuario del
-		// contexto lo carga el middleware con ObtenerPorID, que sí trae el
-		// hash, así que el UPDATE no escribe NULL en una columna NOT NULL.
+		// El nombre se actualiza sin tocar la contraseña: el store aplica solo
+		// los campos que vienen en el payload, así que el password_hash de la
+		// base no se toca (aunque el usuario del contexto venga del cache,
+		// donde el hash no está).
 		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", user.Token, map[string]string{
 			"nombre": "Solo Nombre",
 		})
@@ -99,6 +100,29 @@ func TestUsersFlow(t *testing.T) {
 		})
 
 		testutil.RequireStatus(t, login, http.StatusAccepted)
+	})
+
+	t.Run("un PATCH posterior no revierte el nombre anterior", func(t *testing.T) {
+		// El usuario del contexto puede venir del cache, con el nombre
+		// viejo. Si el store reescribiera la fila completa con ese objeto,
+		// un PATCH que solo manda password dejaría el nombre anterior.
+		otro := testutil.NewUser(t)
+
+		res := testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", otro.Token, map[string]string{
+			"nombre": "Nombre Nuevo",
+		})
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		// El segundo PATCH warms el cache del usuario y solo cambia la
+		// contraseña: el nombre no debe volver al valor viejo.
+		res = testutil.Request(t, http.MethodPatch, "/v1/aplicacion/usuarios", otro.Token, map[string]string{
+			"password": "Password123",
+		})
+		testutil.RequireStatus(t, res, http.StatusOK)
+
+		var nombre string
+		require.NoError(t, testutil.GetEnv().DB.QueryRow(`SELECT nombre FROM users WHERE id = $1`, otro.ID).Scan(&nombre))
+		require.Equal(t, "Nombre Nuevo", nombre, "el nombre no debe revertirse")
 	})
 
 	t.Run("un municipal consulta un usuario por RUT", func(t *testing.T) {

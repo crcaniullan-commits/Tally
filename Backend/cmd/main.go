@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"time"
 
 	"github.com/crcaniullan-commits/Tally/cmd/application"
 	"github.com/crcaniullan-commits/Tally/internal/bd"
+	"github.com/crcaniullan-commits/Tally/internal/cache"
 	"github.com/crcaniullan-commits/Tally/internal/entorno"
 	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"go.uber.org/zap"
@@ -86,10 +88,29 @@ func main() {
 
 	defer db.Close()
 
+	var appCache cache.Cache = cache.Noop{}
+
+	if url := entorno.ObtenerCadena("REDIS_URL", ""); url != "" {
+		rc, err := cache.NewRedis(url)
+		if err != nil {
+			logger.Fatalw("REDIS_URL inválida", "err", err)
+		}
+
+		pctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+
+		if err := rc.Ping(pctx); err != nil {
+			logger.Warnw("redis no responde; se sigue y se usará cuando vuelve", "err", err)
+		}
+
+		cancel()
+		appCache = rc
+	}
+
 	app := application.NewApplication(
 		cfg,
 		db,
 		logger,
+		appCache,
 	)
 
 	logger.Fatal(app.Run())

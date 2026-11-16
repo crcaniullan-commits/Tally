@@ -15,8 +15,8 @@ type RepositorioUsuariosMock struct {
 	mock.Mock
 }
 
-func (m *RepositorioUsuariosMock) Actualizar(ctx context.Context, user *model.User) error {
-	args := m.Called(ctx, user)
+func (m *RepositorioUsuariosMock) Actualizar(ctx context.Context, cambios CambiosUsuario, userID uuid.UUID) error {
+	args := m.Called(ctx, cambios, userID)
 	return args.Error(0)
 }
 
@@ -31,6 +31,27 @@ func (m *RepositorioUsuariosMock) ObtenerPorRUT(ctx context.Context, rut string)
 	user, _ := args.Get(0).(*model.User)
 
 	return user, args.Error(1)
+}
+
+// InvalidadorUsuarioMock es un mock del invalidador de cache
+// (invalidarUsuario) usado para verificar que el service invalida la entrada
+// cacheada del usuario cuando se borra la cuenta.
+type InvalidadorUsuarioMock struct {
+	mock.Mock
+}
+
+func (m *InvalidadorUsuarioMock) Invalidar(ctx context.Context, id uuid.UUID) {
+	m.Called(ctx, id)
+}
+
+// newInvalidadorUsuarioMock devuelve un invalidador que acepta cualquier
+// llamada: los tests que no miran el cache no tienen que configurar nada, y
+// los que sí lo verifican usan AssertCalled/AssertNotCalled.
+func newInvalidadorUsuarioMock() *InvalidadorUsuarioMock {
+	m := new(InvalidadorUsuarioMock)
+	m.On("Invalidar", mock.Anything, mock.Anything).Return().Maybe()
+
+	return m
 }
 
 // IServiceUsuariosMock es un mock de la capa de servicio (IServiceUsuarios) usado para

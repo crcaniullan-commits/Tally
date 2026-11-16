@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,13 @@ var errStoreBoom = errors.New("boom: fallo en la capa de persistencia")
 // no vive en este service (se movio al registro en auth), asi que no hay
 // transactor ni redeemer que inyectar.
 func newService(store RepositorioUsuarios) *ServicioUsuarios {
-	return NuevoServicioUsuarios(store)
+	return newServiceWithInvalidator(store, newInvalidadorUsuarioMock())
+}
+
+// newServiceWithInvalidator arma el service con un invalidador de cache
+// inyectado, para poder verificar que el service lo llama.
+func newServiceWithInvalidator(store RepositorioUsuarios, inv invalidarUsuario) *ServicioUsuarios {
+	return NuevoServicioUsuarios(store, inv)
 }
 
 func TestUserService_Update(t *testing.T) {
@@ -31,37 +38,58 @@ func TestUserService_Update(t *testing.T) {
 		user := newTestUser()
 		payload := &PayloadActualizarUsuario{Password: "NuevaClave123", Nombre: "Nombre Nuevo"}
 
-		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).Return(nil).Once()
 
 		err := service.Actualizar(context.Background(), user, payload)
 
 		require.NoError(t, err)
-
-		// La contraseña debe quedar hasheada y ser verificable.
-		assert.NotEmpty(t, user.PasswordHash.GetHash())
-		assert.NotEqual(t, []byte("NuevaClave123"), user.PasswordHash.GetHash())
-		assert.NoError(t, user.PasswordHash.Compare("NuevaClave123"))
-
 		store.AssertExpectations(t)
 		store.AssertNumberOfCalls(t, "Actualizar", 1)
+	})
+
+	t.Run("el hash que manda al store es bcrypt del password nuevo", func(t *testing.T) {
+		store := new(RepositorioUsuariosMock)
+		service := newService(store)
+
+		user := newTestUser()
+		payload := &PayloadActualizarUsuario{Password: "NuevaClave123"}
+
+		var cambios CambiosUsuario
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).
+			Run(func(args mock.Arguments) { cambios = args.Get(1).(CambiosUsuario) }).
+			Return(nil).Once()
+
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
+
+		require.True(t, cambios.CambiaPassword)
+		assert.NotEmpty(t, cambios.PasswordHash)
+		assert.NotEqual(t, []byte("NuevaClave123"), cambios.PasswordHash, "el hash no es el password en claro")
+
+		var auxiliar model.User
+		auxiliar.PasswordHash.Hash = cambios.PasswordHash
+		assert.NoError(t, auxiliar.PasswordHash.Compare("NuevaClave123"))
 	})
 
 	t.Run("actualiza nombre y contraseña a la vez cuando viene el payload completo", func(t *testing.T) {
 		// Regresión: antes service.go usaba `if password != "" { ... } else if name != ""`,
 		// y enviar ambos campos dejaba el nombre sin actualizar. Ahora son dos `if`
-		// independientes (service.go:26 y service.go:32).
+		// independientes.
 		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
 		payload := &PayloadActualizarUsuario{Password: "NuevaClave123", Nombre: "Nombre Nuevo"}
 
-		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
+		var cambios CambiosUsuario
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).
+			Run(func(args mock.Arguments) { cambios = args.Get(1).(CambiosUsuario) }).
+			Return(nil).Once()
 
 		require.NoError(t, service.Actualizar(context.Background(), user, payload))
 
-		assert.Equal(t, "Nombre Nuevo", user.Nombre, "el nombre debe actualizarse aunque venga password")
-		assert.NoError(t, user.PasswordHash.Compare("NuevaClave123"))
+		require.NotNil(t, cambios.Nombre)
+		assert.Equal(t, "Nombre Nuevo", *cambios.Nombre, "el nombre debe actualizarse aunque venga password")
+		assert.True(t, cambios.CambiaPassword)
 		store.AssertExpectations(t)
 	})
 
@@ -70,30 +98,54 @@ func TestUserService_Update(t *testing.T) {
 		service := newService(store)
 
 		user := newTestUser()
-		hashPrevio := append([]byte(nil), user.PasswordHash.GetHash()...)
 		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
 
-		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
+		var cambios CambiosUsuario
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).
+			Run(func(args mock.Arguments) { cambios = args.Get(1).(CambiosUsuario) }).
+			Return(nil).Once()
 
 		require.NoError(t, service.Actualizar(context.Background(), user, payload))
 
-		assert.Equal(t, "Nombre Nuevo", user.Nombre)
-		assert.Equal(t, hashPrevio, user.PasswordHash.GetHash(), "no debe tocar la contraseña")
+		require.NotNil(t, cambios.Nombre)
+		assert.Equal(t, "Nombre Nuevo", *cambios.Nombre)
+		assert.False(t, cambios.CambiaPassword, "no debe tocar la contraseña")
+		assert.Empty(t, cambios.PasswordHash)
 		store.AssertExpectations(t)
 	})
 
-	t.Run("persiste aunque el payload venga vacío", func(t *testing.T) {
+	t.Run("no manda el hash del usuario del contexto, solo el del payload", func(t *testing.T) {
+		// El usuario del contexto puede venir del cache, y ahí el hash llega
+		// vacío (json:"-"). Si el service lo reenviara, el UPDATE mandaría un
+		// password_hash vacío a una columna NOT NULL.
+		store := new(RepositorioUsuariosMock)
+		service := newService(store)
+
+		user := newTestUser()
+		user.PasswordHash.Hash = nil
+		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
+
+		var cambios CambiosUsuario
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).
+			Run(func(args mock.Arguments) { cambios = args.Get(1).(CambiosUsuario) }).
+			Return(nil).Once()
+
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
+
+		assert.False(t, cambios.CambiaPassword)
+		assert.Empty(t, cambios.PasswordHash, "no debe mandar un hash vacío")
+		store.AssertExpectations(t)
+	})
+
+	t.Run("no toca el store si el payload viene vacío", func(t *testing.T) {
 		store := new(RepositorioUsuariosMock)
 		service := newService(store)
 
 		user := newTestUser()
 		payload := &PayloadActualizarUsuario{}
 
-		store.On("Actualizar", mock.Anything, user).Return(nil).Once()
-
 		require.NoError(t, service.Actualizar(context.Background(), user, payload))
-		assert.Equal(t, "Nombre Original", user.Nombre)
-		store.AssertNumberOfCalls(t, "Actualizar", 1)
+		store.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("propaga el error del store sin envolverlo", func(t *testing.T) {
@@ -103,7 +155,7 @@ func TestUserService_Update(t *testing.T) {
 		user := newTestUser()
 		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
 
-		store.On("Actualizar", mock.Anything, user).Return(utilidades.ErrorNoEncontrado).Once()
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).Return(utilidades.ErrorNoEncontrado).Once()
 
 		err := service.Actualizar(context.Background(), user, payload)
 
@@ -122,8 +174,41 @@ func TestUserService_Update(t *testing.T) {
 		err := service.Actualizar(context.Background(), user, payload)
 
 		require.ErrorIs(t, err, bcrypt.ErrPasswordTooLong)
-		store.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything)
+		store.AssertNotCalled(t, "Actualizar", mock.Anything, mock.Anything, mock.Anything)
 		store.AssertExpectations(t)
+	})
+
+	t.Run("invalida la entrada cacheada del usuario", func(t *testing.T) {
+		// Sin invalidar, el middleware seguiría sirviendo el usuario viejo
+		// (por ejemplo, con el nombre anterior).
+		store := new(RepositorioUsuariosMock)
+		inv := new(InvalidadorUsuarioMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		user := newTestUser()
+		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
+
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).Return(nil).Once()
+		inv.On("Invalidar", mock.Anything, user.ID).Once()
+
+		require.NoError(t, service.Actualizar(context.Background(), user, payload))
+
+		store.AssertExpectations(t)
+		inv.AssertExpectations(t)
+	})
+
+	t.Run("no invalida si el store falla", func(t *testing.T) {
+		store := new(RepositorioUsuariosMock)
+		inv := new(InvalidadorUsuarioMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		user := newTestUser()
+		payload := &PayloadActualizarUsuario{Nombre: "Nombre Nuevo"}
+
+		store.On("Actualizar", mock.Anything, mock.Anything, user.ID).Return(errStoreBoom).Once()
+
+		require.ErrorIs(t, service.Actualizar(context.Background(), user, payload), errStoreBoom)
+		inv.AssertNotCalled(t, "Invalidar", mock.Anything, mock.Anything)
 	})
 }
 
@@ -166,6 +251,38 @@ func TestUserService_Delete(t *testing.T) {
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)
+	})
+
+	t.Run("invalida la entrada cacheada del usuario", func(t *testing.T) {
+		// Si la entrada cacheada sobrevive al borrado, el middleware de
+		// autenticación seguiría aceptando el token de una cuenta borrada.
+		store := new(RepositorioUsuariosMock)
+		inv := new(InvalidadorUsuarioMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		userID := uuid.New()
+		store.On("Eliminar", mock.Anything, userID).Return(nil).Once()
+		inv.On("Invalidar", mock.Anything, userID).Once()
+
+		err := service.Eliminar(context.Background(), userID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+		inv.AssertExpectations(t)
+	})
+
+	t.Run("no invalida si el store falla", func(t *testing.T) {
+		store := new(RepositorioUsuariosMock)
+		inv := new(InvalidadorUsuarioMock)
+		service := newServiceWithInvalidator(store, inv)
+
+		userID := uuid.New()
+		store.On("Eliminar", mock.Anything, userID).Return(errStoreBoom).Once()
+
+		err := service.Eliminar(context.Background(), userID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		inv.AssertNotCalled(t, "Invalidar", mock.Anything, mock.Anything)
 	})
 }
 

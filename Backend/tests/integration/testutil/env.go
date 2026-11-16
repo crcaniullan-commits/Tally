@@ -83,14 +83,28 @@ func newEnv() (*TestEnv, func(), error) {
 func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 	logger := zap.NewNop().Sugar()
 
+	// El backend real arma los buscadores con cache (internal/cache). La suite
+	// replica ese cableado para que los tests ejerciten el mismo camino.
+	appCache := newCacheMemoria()
+
+	buscadorUsuario := users.NuevoBuscadorUsuarioConCache(
+		users.NuevoAlmacenUsuarios(db),
+		appCache,
+	)
+
+	buscadorEmpresa := empresas.NuevoBuscadorEmpresaConCache(
+		empresas.NuevoAlmacenEmpresas(db),
+		appCache,
+	)
+
 	middl := intermediario.NuevoMiddlewareAutenticacion(
 		errores.NuevaRespuestaErrores(logger),
 		auth.NewJWTAuthenticator(jwtSecret, jwtIssuer, jwtIssuer),
-		users.NuevoAlmacenUsuarios(db),
+		buscadorUsuario,
 	)
 
-	empresaRoute, finder := empresas.InitModule(db, logger, middl)
-	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, finder)
+	empresaRoute := empresas.InitModule(db, logger, middl, buscadorEmpresa)
+	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, buscadorEmpresa)
 	transactor := bdtx.NewTransactor(db)
 
 	remitente = newRemitenteRecorder()
@@ -108,7 +122,7 @@ func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 		r.Route("/aplicacion", func(r chi.Router) {
 			r.Use(middl.MiddlewareTokenAutenticacion)
 
-			users.InitModule(r, db, logger, middl)
+			users.InitModule(r, db, logger, middl, buscadorUsuario)
 			clavesacceso.InitModule(r, db, logger, middl, remitente)
 
 			r.Route("/empresas", func(r chi.Router) {
