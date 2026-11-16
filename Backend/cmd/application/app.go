@@ -44,6 +44,7 @@ type Config struct {
 	URLAPI       string
 	ConfigJWT    ConfigJWT
 	ConfigCorreo ConfigCorreo
+	AwsConfig    storage.S3Config
 }
 
 type ConfigJWT struct {
@@ -116,7 +117,15 @@ func (app *Application) Run() error {
 	empresaRoute, finder := empresas.InitModule(app.db, app.logger, middl)
 	emMiddl := intermediario.NuevoMiddlewareEmpresa(app.logger, finder)
 
-	fileStore := storage.NewDisk("./data/files")
+	var fileStore excel.FileStorage
+	switch entorno.ObtenerCadena("STORAGE_DRIVER", "") {
+	case "s3":
+		fileStore = storage.NewS3(app.config.AwsConfig)
+		app.logger.Infow("S3 conectado correctamente con bucket", "bucket", app.config.AwsConfig.Bucket)
+	default:
+		fileStore = storage.NewDisk("./data/files")
+		app.logger.Errorf("S3 no configurado - se usará la ruta ./data/files en su lugar")
+	}
 
 	r.Use(intermediario.MiddlewaresGlobales()...)
 
@@ -142,7 +151,6 @@ func (app *Application) Run() error {
 					goals.InitModule(r, app.db, app.logger, middl)
 					debtors.InitModule(r, app.db, app.logger, middl)
 					excel.InitModule(r, app.db, fileStore, app.logger, middl)
-
 				})
 			})
 		})

@@ -7,6 +7,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/cmd/application"
 	"github.com/crcaniullan-commits/Tally/internal/bd"
 	"github.com/crcaniullan-commits/Tally/internal/entorno"
+	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -47,6 +48,13 @@ func main() {
 			Username: entorno.ObtenerCadena("GMAIL_SMTP_USERNAME", ""),
 			Password: entorno.ObtenerCadena("GMAIL_SMTP_PASSWORD", ""),
 			From:     entorno.ObtenerCadena("GMAIL_SMTP_FROM", ""),
+		},
+		AwsConfig: storage.S3Config{
+			Endpoint:  entorno.ObtenerCadena("S3_ENDPOINT", ""),
+			Region:    entorno.ObtenerCadena("S3_REGION", ""),
+			Bucket:    entorno.ObtenerCadena("S3_BUCKET", ""),
+			AccessKey: entorno.ObtenerCadena("S3_ACCESS_KEY", ""),
+			SecretKey: entorno.ObtenerCadena("S3_SECRET_KEY", ""),
 		},
 	}
 
