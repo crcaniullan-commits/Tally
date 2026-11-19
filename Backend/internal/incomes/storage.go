@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -60,16 +59,15 @@ func (s *AlmacenIngresos) AgregarIngreso(ctx context.Context, income *model.Inco
 //
 // Los COALESCE/CASE dejan intactos los campos que no vienen en el payload:
 // COALESCE para los escalares y CASE WHEN ... THEN para los que necesitan
-// distinguir "no enviado" de "NULL".
+// distinguir "no enviado" de "NULL". La fecha no se toca: es la del movimiento.
 func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios CambiosIngreso, ingresoID uuid.UUID, empresaID uuid.UUID) (model.Income, error) {
 	query := `
 		UPDATE incomes
 		SET monto = COALESCE($1::bigint, monto),
 			payment_method = COALESCE($2::payment_method, payment_method),
 			descripcion = CASE WHEN $3::boolean THEN $4::text ELSE descripcion END,
-			category_id = CASE WHEN $5::boolean THEN $6::uuid ELSE category_id END,
-			fecha = COALESCE($7::date, fecha)
-		WHERE id = $8 AND empresa_id = $9
+			category_id = CASE WHEN $5::boolean THEN $6::uuid ELSE category_id END
+		WHERE id = $7 AND empresa_id = $8
 		RETURNING id, empresa_id, monto, payment_method, descripcion, fecha, created_at, category_id
 	`
 
@@ -81,7 +79,6 @@ func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios Cambios
 		metodoPago  *string
 		descripcion *string
 		categoriaID *uuid.UUID
-		fecha       *string
 	)
 
 	if cambios.Monto != nil {
@@ -99,13 +96,6 @@ func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios Cambios
 		categoriaID = cambios.CategoryID
 	}
 
-	if cambios.Fecha != nil {
-		// La fecha viaja como texto AAAA-MM-DD para no depender de la zona
-		// horaria de la sesión al castearla a date.
-		valor := cambios.Fecha.Format(time.DateOnly)
-		fecha = &valor
-	}
-
 	income := model.Income{}
 
 	err := s.db.QueryRowContext(ctx, query,
@@ -115,7 +105,6 @@ func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios Cambios
 		descripcion,
 		cambios.CategoryID != nil,
 		categoriaID,
-		fecha,
 		ingresoID,
 		empresaID,
 	).Scan(
@@ -140,15 +129,16 @@ func (s *AlmacenIngresos) ActualizarIngreso(ctx context.Context, cambios Cambios
 	return income, nil
 }
 
-// CategoriaExiste verifica que la categoría exista y sea visible para la
-// empresa: global (empresa_id IS NULL) o propia. Una categoría de otra empresa
-// no pasa el filtro y el service la trata como inexistente.
-func (s *AlmacenIngresos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
+// CategoriaExiste verifica que la categoría exista, sea visible para la
+// empresa (global o propia) y sea del tipo indicado. Una categoría de otra
+// empresa o de otro tipo no pasa el filtro y el service la trata como
+// inexistente.
+func (s *AlmacenIngresos) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID, tipo model.CategoryType) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1
 			FROM categories
-			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2)
+			WHERE id = $1 AND (empresa_id IS NULL OR empresa_id = $2) AND tipo = $3
 		)
 	`
 
@@ -157,7 +147,7 @@ func (s *AlmacenIngresos) CategoriaExiste(ctx context.Context, categoryID uuid.U
 
 	var existe bool
 
-	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID).Scan(&existe); err != nil {
+	if err := s.db.QueryRowContext(ctx, query, categoryID, empresaID, tipo).Scan(&existe); err != nil {
 		return false, err
 	}
 

@@ -7,11 +7,14 @@ package debtors
 //	@Tags			Deudas
 //	@Accept			json
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		PayloadDeudor		true	"payload"
-//	@Success		201			{object}	model.Debtor		"deuda creada"
-//	@Failure		400			{object}	map[string]string	"payload inválido"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string					true	"ID de la empresa"
+//	@Param			payload		body		PayloadDeudor			true	"payload"
+//	@Success		201			{object}	map[string]model.Debtor	"deuda creada"
+//	@Failure		400			{object}	map[string]string		"empresaID inválido o payload inválido"
+//	@Failure		401			{object}	map[string]string		"no autorizado"
+//	@Failure		403			{object}	map[string]string		"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string		"empresa no encontrada o ajena"
+//	@Failure		500			{object}	map[string]string		"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/deudas	[post]
 func Create() {}
@@ -24,6 +27,10 @@ func Create() {}
 //	@Produce		json
 //	@Param			empresaID	path		string						true	"ID de la empresa"
 //	@Success		200			{object}	map[string][]model.Debtor	"deudas de la empresa"
+//	@Failure		400			{object}	map[string]string			"empresaID inválido"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa no encontrada o ajena"
 //	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/deudas	[get]
@@ -32,20 +39,40 @@ func ObtenerDeudoresDeEmpresa() {}
 // Update
 //
 //	@Summary		Actualizar deuda
-//	@Description	Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la empresa autenticada. La descripción no se modifica. "monto" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"datos": ...}.
+//	@Description	Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la empresa autenticada. "descripcion" es opcional: si no se manda, la descripción que ya tenía la deuda se queda; si se manda (incluso vacía), se reemplaza. "monto" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta viene envuelta en {"datos": ...}.
 //	@Tags			Deudas
 //	@Accept			json
 //	@Produce		json
 //	@Param			empresaID	path		string						true	"ID de la empresa"
 //	@Param			deudorID	path		string						true	"ID de la deuda"
 //	@Param			payload		body		PayloadActualizacionDeudor	true	"payload"
-//	@Success		200			{object}	string						"deuda actualizada"
-//	@Failure		400			{object}	map[string]string			"deudorID o payload inválido"
-//	@Failure		404			{object}	map[string]string			"deuda no encontrada"
+//	@Success		200			{object}	map[string]string			"deuda actualizada"
+//	@Failure		400			{object}	map[string]string			"empresaID o deudorID inválido, o payload inválido"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa ajena o deuda no encontrada"
 //	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/deudas/{deudorID}	[patch]
 func Update() {}
+
+// Delete
+//
+//	@Summary		Eliminar deuda
+//	@Description	Elimina una deuda de la empresa autenticada. Se puede borrar tanto una deuda pendiente como una ya pagada. Si la deuda no existe o es de otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Tags			Deudas
+//	@Produce		json
+//	@Param			empresaID	path		string				true	"ID de la empresa"
+//	@Param			deudorID	path		string				true	"ID de la deuda"
+//	@Success		200			{object}	map[string]string	"deuda eliminada"
+//	@Failure		400			{object}	map[string]string	"empresaID o deudorID invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o deuda no encontrada"
+//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Security		ApiKeyAuth
+//	@Router			/aplicacion/empresas/{empresaID}/deudas/{deudorID}	[delete]
+func Delete() {}
 
 // MarcarDeudorPagado
 //
@@ -55,9 +82,11 @@ func Update() {}
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			deudorID	path		string				true	"ID de la deuda"
-//	@Success		200			{object}	string				"deuda pagada"
-//	@Failure		400			{object}	map[string]string	"deudorID invalido"
-//	@Failure		404			{object}	map[string]string	"deuda no encontrada"
+//	@Success		200			{object}	map[string]string	"deuda pagada"
+//	@Failure		400			{object}	map[string]string	"empresaID o deudorID invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o deuda no encontrada"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/deudas/{deudorID}/pagada	[patch]

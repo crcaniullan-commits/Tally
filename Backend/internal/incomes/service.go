@@ -2,7 +2,6 @@ package incomes
 
 import (
 	"context"
-	"time"
 
 	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
@@ -15,18 +14,17 @@ type RepositorioIngresos interface {
 	ActualizarIngreso(context.Context, CambiosIngreso, uuid.UUID, uuid.UUID) (model.Income, error)
 	EliminarIngreso(context.Context, uuid.UUID, uuid.UUID) error
 	ObtenerIngresosDeEmpresa(context.Context, uuid.UUID, paginacion.ConsultaPaginacionIngresos) ([]model.Income, error)
-	CategoriaExiste(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	CategoriaExiste(context.Context, uuid.UUID, uuid.UUID, model.CategoryType) (bool, error)
 }
 
 // CambiosIngreso son los campos a modificar de un ingreso. Un puntero nil
 // significa "no tocar este campo": así el UPDATE puede dejar intacto lo que el
-// usuario no mandó.
+// usuario no mandó. La fecha no entra: el movimiento conserva la suya.
 type CambiosIngreso struct {
 	Monto         *int64
 	PaymentMethod *model.PaymentMethod
 	Descripcion   *string
 	CategoryID    *uuid.UUID
-	Fecha         *time.Time
 }
 
 // Vacio indica que no hay nada que actualizar.
@@ -34,8 +32,7 @@ func (c CambiosIngreso) Vacio() bool {
 	return c.Monto == nil &&
 		c.PaymentMethod == nil &&
 		c.Descripcion == nil &&
-		c.CategoryID == nil &&
-		c.Fecha == nil
+		c.CategoryID == nil
 }
 
 type ServicioIngresos struct {
@@ -55,10 +52,11 @@ func (s *ServicioIngresos) AgregarIngreso(ctx context.Context, payload PayloadIn
 	}
 
 	// La categoría es opcional (la columna es nullable). Si viene, tiene que
-	// existir y ser global o de la empresa; una categoría de otra empresa se
-	// rechaza igual que una inexistente.
+	// existir, ser global o de la empresa y ser de tipo 'ingreso'; una
+	// categoría de otra empresa o de otro tipo se rechaza igual que una
+	// inexistente.
 	if payload.CategoryID != nil {
-		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID)
+		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID, model.CategoryTypeIngreso)
 		if err != nil {
 			return model.Income{}, err
 		}
@@ -84,7 +82,7 @@ func (s *ServicioIngresos) EliminarIngreso(ctx context.Context, ingresoID uuid.U
 }
 
 // ActualizarIngreso modifica un ingreso de la empresa. Solo se tocan los campos
-// que vienen en el payload; la fecha se puede corregir (AAAA-MM-DD).
+// que vienen en el payload; la fecha del movimiento no se edita.
 func (s *ServicioIngresos) ActualizarIngreso(ctx context.Context, payload PayloadActualizarIngreso, ingresoID uuid.UUID, empresaID uuid.UUID) (model.Income, error) {
 	cambios := CambiosIngreso{
 		Monto:         payload.Monto,
@@ -93,25 +91,14 @@ func (s *ServicioIngresos) ActualizarIngreso(ctx context.Context, payload Payloa
 		CategoryID:    payload.CategoryID,
 	}
 
-	// La fecha se parsea antes de mirar si el payload traía algo: si la fecha
-	// vino pero está mal formada, el error es de fecha y no de payload vacío.
-	if payload.Fecha != nil {
-		fecha, err := time.Parse(time.DateOnly, *payload.Fecha)
-
-		if err != nil {
-			return model.Income{}, ErrorFechaInvalida
-		}
-
-		cambios.Fecha = &fecha
-	}
-
 	if cambios.Vacio() {
 		return model.Income{}, ErrorSinCambios
 	}
 
-	// La categoría, si viene, tiene que existir y ser global o de la empresa.
+	// La categoría, si viene, tiene que existir, ser global o de la empresa y
+	// ser de tipo 'ingreso'.
 	if payload.CategoryID != nil {
-		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID)
+		existe, err := s.store.CategoriaExiste(ctx, *payload.CategoryID, empresaID, model.CategoryTypeIngreso)
 
 		if err != nil {
 			return model.Income{}, err

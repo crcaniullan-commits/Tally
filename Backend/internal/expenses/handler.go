@@ -33,22 +33,23 @@ func empresaID(r *http.Request) uuid.UUID {
 }
 
 type PayloadGasto struct {
-	Monto       int64      `json:"monto" validate:"required,gt=0"`
-	CategoryID  *uuid.UUID `json:"category_id" validate:"required"`
-	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
+	Monto         int64               `json:"monto" validate:"required,gt=0"`
+	PaymentMethod model.PaymentMethod `json:"payment_method" validate:"required,oneof=debito credito transferencia efectivo"`
+	CategoryID    *uuid.UUID          `json:"category_id" validate:"required"`
+	Descripcion   *string             `json:"descripcion" validate:"omitempty,max=100"`
 }
 
 // PayloadActualizarGasto son los campos editables de un gasto. Lo que no viene
-// en el payload se queda como está; "fecha" (AAAA-MM-DD) permite corregir la
-// fecha del movimiento.
+// en el payload se queda como está. La fecha NO se edita: es la del
+// movimiento original.
 type PayloadActualizarGasto struct {
-	Monto       *int64     `json:"monto" validate:"omitempty,gt=0"`
-	CategoryID  *uuid.UUID `json:"category_id"`
-	Descripcion *string    `json:"descripcion" validate:"omitempty,max=100"`
-	Fecha       *string    `json:"fecha"`
+	Monto         *int64               `json:"monto" validate:"omitempty,gt=0"`
+	PaymentMethod *model.PaymentMethod `json:"payment_method" validate:"omitempty,oneof=debito credito transferencia efectivo"`
+	CategoryID    *uuid.UUID           `json:"category_id"`
+	Descripcion   *string              `json:"descripcion" validate:"omitempty,max=100"`
 }
 
-// Actualizar edita un gasto: monto, categoría, descripción y fecha.
+// Actualizar edita un gasto: monto, categoría y descripción.
 func (h *HandlerGastos) Actualizar(w http.ResponseWriter, r *http.Request) {
 	gastoID, err := uuid.Parse(chi.URLParam(r, "gastoID"))
 
@@ -71,7 +72,7 @@ func (h *HandlerGastos) Actualizar(w http.ResponseWriter, r *http.Request) {
 		case ErrorMovimientoNoEncontrado:
 			h.errors.ErrorNoEncontrado(w, r, err)
 			return
-		case ErrorFechaInvalida, ErrorSinCambios, utilidades.ErrorNoEncontrado:
+		case ErrorSinCambios, utilidades.ErrorNoEncontrado:
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:

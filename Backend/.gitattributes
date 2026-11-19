@@ -1,0 +1,23 @@
+# Los archivos de texto se normalizan a LF en el repo, y el checkout los deja
+# con LF aunque el core.autocrlf del Windows esté en "true".
+#
+# Sin esto, docker/entrypoint.sh se clona con CRLF y el container falla al
+# arrancar con "/bin/sh^M: not found" (o "bad interpreter"), porque la
+# shebang "#!/bin/sh\r" no matchea ningún intérprete.
+* text=auto eol=lf
+
+# Scripts de shell: la shebang tiene que terminar en LF sí o sí.
+*.sh text eol=lf
+
+# Docker: el Dockerfile y los scripts del build también se ejecutan en Linux.
+Dockerfile text eol=lf
+docker/** text eol=lf
+
+# Código Go: LF siempre, así el gofmt y los diffs son consistentes.
+*.go text eol=lf
+
+# Configuración y migraciones.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf
+*.json text eol=lf

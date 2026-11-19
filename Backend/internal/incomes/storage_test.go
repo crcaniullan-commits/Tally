@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/crcaniullan-commits/Tally/internal/model"
 	"github.com/crcaniullan-commits/Tally/internal/paginacion"
 	"github.com/crcaniullan-commits/Tally/internal/utilidades"
 	"github.com/google/uuid"
@@ -481,26 +482,28 @@ func TestStoreIncome_CategoryExists(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryID, testEmpresaID).
+			WithArgs(testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
-		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID, model.CategoryTypeIngreso)
 
 		require.NoError(t, err)
 		assert.True(t, existe)
 		assert.Contains(t, ms.sql, "FROM categories")
 		assert.Contains(t, ms.sql, "id = $1 AND (empresa_id IS NULL OR empresa_id = $2)",
 			"tiene que aceptar las globales y las propias de la empresa")
+		assert.Contains(t, ms.sql, "AND tipo = $3",
+			"tiene que filtrar por el tipo de la categoría")
 	})
 
 	t.Run("devuelve false si la categoria no existe o es de otra empresa", func(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryID, testEmpresaID).
+			WithArgs(testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
-		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID, model.CategoryTypeIngreso)
 
 		require.NoError(t, err)
 		assert.False(t, existe)
@@ -510,10 +513,10 @@ func TestStoreIncome_CategoryExists(t *testing.T) {
 		ms := newMockStore(t)
 
 		ms.mock.ExpectQuery("cualquier SELECT").
-			WithArgs(testCategoryID, testEmpresaID).
+			WithArgs(testCategoryID, testEmpresaID, model.CategoryTypeIngreso).
 			WillReturnError(errDBBoom)
 
-		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID)
+		existe, err := ms.store.CategoriaExiste(context.Background(), testCategoryID, testEmpresaID, model.CategoryTypeIngreso)
 
 		require.ErrorIs(t, err, errDBBoom)
 		assert.False(t, existe)
@@ -525,14 +528,12 @@ func TestStoreIncome_UpdateIncome(t *testing.T) {
 		ms := newMockStore(t)
 
 		monto := int64(2500)
-		fecha := time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC)
 
 		ms.mock.ExpectQuery("cualquier UPDATE").
 			WillReturnRows(sqlmock.NewRows(incomeColumns()).AddRow(incomeRow()...))
 
 		income, err := ms.store.ActualizarIngreso(context.Background(), CambiosIngreso{
 			Monto: &monto,
-			Fecha: &fecha,
 		}, testIncomeID, testEmpresaID)
 
 		require.NoError(t, err)
@@ -569,9 +570,11 @@ func TestStoreIncome_UpdateIncome(t *testing.T) {
 
 		require.NoError(t, err)
 
-		assert.Contains(t, ms.sql, "WHERE id = $8 AND empresa_id = $9")
+		assert.Contains(t, ms.sql, "WHERE id = $7 AND empresa_id = $8")
 		assert.Contains(t, ms.sql, "monto = COALESCE($1::bigint, monto)")
-		assert.Contains(t, ms.sql, "fecha = COALESCE($7::date, fecha)")
 		assert.Contains(t, ms.sql, "payment_method = COALESCE($2::payment_method, payment_method)")
+
+		// La fecha no se edita: el UPDATE no la menciona.
+		assert.NotContains(t, ms.sql, "fecha =")
 	})
 }

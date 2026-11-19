@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"os"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/crcaniullan-commits/Tally/cmd/application"
 	"github.com/crcaniullan-commits/Tally/internal/bd"
+	"github.com/crcaniullan-commits/Tally/internal/cache"
 	"github.com/crcaniullan-commits/Tally/internal/entorno"
+	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -48,6 +52,13 @@ func main() {
 			Password: entorno.ObtenerCadena("GMAIL_SMTP_PASSWORD", ""),
 			From:     entorno.ObtenerCadena("GMAIL_SMTP_FROM", ""),
 		},
+		AwsConfig: storage.S3Config{
+			Endpoint:  entorno.ObtenerCadena("S3_ENDPOINT", ""),
+			Region:    entorno.ObtenerCadena("S3_REGION", ""),
+			Bucket:    entorno.ObtenerCadena("S3_BUCKET", ""),
+			AccessKey: entorno.ObtenerCadena("S3_ACCESS_KEY", ""),
+			SecretKey: entorno.ObtenerCadena("S3_SECRET_KEY", ""),
+		},
 	}
 
 	//Logger
@@ -78,10 +89,29 @@ func main() {
 
 	defer db.Close()
 
+	var appCache cache.Cache = cache.Noop{}
+
+	if url := entorno.ObtenerCadena("REDIS_URL", ""); url != "" {
+		rc, err := cache.NewRedis(url)
+		if err != nil {
+			logger.Fatalw("REDIS_URL inválida", "err", err)
+		}
+
+		pctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+
+		if err := rc.Ping(pctx); err != nil {
+			logger.Warnw("redis no responde; se sigue y se usará cuando vuelve", "err", err)
+		}
+
+		cancel()
+		appCache = rc
+	}
+
 	app := application.NewApplication(
 		cfg,
 		db,
 		logger,
+		appCache,
 	)
 
 	logger.Fatal(app.Run())

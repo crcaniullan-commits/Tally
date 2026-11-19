@@ -40,14 +40,13 @@ type PayloadIngreso struct {
 }
 
 // PayloadActualizarIngreso son los campos editables de un ingreso. Lo que no
-// viene en el payload se queda como está; "fecha" (AAAA-MM-DD) permite
-// corregir la fecha del movimiento.
+// viene en el payload se queda como está. La fecha NO se edita: es la del
+// movimiento original.
 type PayloadActualizarIngreso struct {
 	Monto         *int64               `json:"monto" validate:"omitempty,gt=0"`
 	PaymentMethod *model.PaymentMethod `json:"payment_method" validate:"omitempty,oneof=debito credito transferencia efectivo"`
 	Descripcion   *string              `json:"descripcion" validate:"omitempty,max=100"`
 	CategoryID    *uuid.UUID           `json:"category_id"`
-	Fecha         *string              `json:"fecha"`
 }
 
 /*
@@ -81,7 +80,7 @@ func (h *HandlerIngresos) AgregarIngreso(w http.ResponseWriter, r *http.Request)
 }
 
 /*
-*	Actualiza un ingreso: monto, método de pago, descripción, categoría y fecha
+*	Actualiza un ingreso: monto, método de pago, descripción y categoría
  */
 func (h *HandlerIngresos) Actualizar(w http.ResponseWriter, r *http.Request) {
 	ingresoID, err := uuid.Parse(chi.URLParam(r, "ingresoID"))
@@ -105,7 +104,7 @@ func (h *HandlerIngresos) Actualizar(w http.ResponseWriter, r *http.Request) {
 		case ErrorMovimientoNoEncontrado:
 			h.errors.ErrorNoEncontrado(w, r, err)
 			return
-		case ErrorFechaInvalida, ErrorSinCambios, utilidades.ErrorNoEncontrado:
+		case ErrorSinCambios, utilidades.ErrorNoEncontrado:
 			h.errors.ErrorSolicitudInvalida(w, r, err)
 			return
 		default:

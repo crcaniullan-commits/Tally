@@ -23,6 +23,7 @@ const (
 		"id": "9c8b7a65-4d3c-4b2a-9f8e-7d6c5b4a3f2e",
 		"empresa_id": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
 		"monto": 1500,
+		"payment_method": "debito",
 		"category_id": "b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d",
 		"descripcion": "Compra insumos",
 		"fecha": "2026-09-30T00:00:00Z",
@@ -76,10 +77,10 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","descripcion":"Compra insumos"}`
+		body := `{"monto":1500,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","descripcion":"Compra insumos"}`
 
 		service.On("AgregarGasto", mock.Anything, mock.MatchedBy(func(p PayloadGasto) bool {
-			return p.Monto == 1500 && p.CategoryID != nil && *p.CategoryID == testCategoryID
+			return p.Monto == 1500 && p.PaymentMethod == model.PaymentMethodDebito && p.CategoryID != nil && *p.CategoryID == testCategoryID
 		}), testEmpresaID).Return(newTestExpense(), nil).Once()
 
 		r := requestWithEmpresaContext(http.MethodPost, "/expenses", body)
@@ -96,7 +97,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
+		body := `{"monto":1500,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AgregarGasto", mock.Anything, mock.Anything, testEmpresaID).Return(model.Expense{}, nil).Once()
 
@@ -113,7 +114,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":0,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":0,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -126,7 +127,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":-50,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":-50,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -139,7 +140,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		body := `{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
+		body := `{"monto":1500,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`
 
 		service.On("AgregarGasto", mock.Anything, mock.Anything, testEmpresaID).Return(model.Expense{}, utilidades.ErrorNoEncontrado).Once()
 
@@ -156,7 +157,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":1500}`)
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses", `{"monto":1500,"payment_method":"debito"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -166,12 +167,42 @@ func TestExpensesHandler_Create(t *testing.T) {
 		service.AssertNotCalled(t, "AgregarGasto", mock.Anything, mock.Anything, mock.Anything)
 	})
 
+	t.Run("responde 400 si falta payment_method", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
+			`{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
+
+		w := httptest.NewRecorder()
+		handler.Crear(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "PaymentMethod")
+		service.AssertNotCalled(t, "AgregarGasto", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 si payment_method no es un método válido", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
+			`{"monto":1500,"payment_method":"bitcoin","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d"}`)
+
+		w := httptest.NewRecorder()
+		handler.Crear(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "PaymentMethod")
+		service.AssertNotCalled(t, "AgregarGasto", mock.Anything, mock.Anything, mock.Anything)
+	})
+
 	t.Run("responde 400 si category_id no es un UUID", func(t *testing.T) {
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
 		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
-			`{"monto":1500,"category_id":"Comida"}`)
+			`{"monto":1500,"payment_method":"debito","category_id":"Comida"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -185,7 +216,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		handler := newTestHandler(service)
 
 		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
-			`{"monto":1500,"category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","fecha":"2026-09-30T00:00:00Z"}`)
+			`{"monto":1500,"payment_method":"debito","category_id":"b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5d","fecha":"2026-09-30T00:00:00Z"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -200,7 +231,7 @@ func TestExpensesHandler_Create(t *testing.T) {
 		handler := newTestHandler(service)
 
 		r := requestWithEmpresaContext(http.MethodPost, "/expenses",
-			`{"monto":1500,"categoria":"Comida"}`)
+			`{"monto":1500,"payment_method":"debito","categoria":"Comida"}`)
 
 		w := httptest.NewRecorder()
 		handler.Crear(w, r)
@@ -300,19 +331,45 @@ func TestExpensesHandler_Update(t *testing.T) {
 		handler := newTestHandler(service)
 
 		monto := int64(2500)
-		fecha := "2026-09-15"
 
 		service.On("ActualizarGasto", mock.Anything, PayloadActualizarGasto{
 			Monto: &monto,
-			Fecha: &fecha,
 		}, testExpenseID, testEmpresaID).Return(newTestExpense(), nil).Once()
 
 		w := httptest.NewRecorder()
-		handler.Actualizar(w, updateRequest(`{"monto":2500,"fecha":"2026-09-15"}`))
+		handler.Actualizar(w, updateRequest(`{"monto":2500}`))
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), `"monto":1500`)
 		service.AssertExpectations(t)
+	})
+
+	t.Run("cambia el metodo de pago", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		metodo := model.PaymentMethodTransferencia
+
+		service.On("ActualizarGasto", mock.Anything, PayloadActualizarGasto{
+			PaymentMethod: &metodo,
+		}, testExpenseID, testEmpresaID).Return(newTestExpense(), nil).Once()
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{"payment_method":"transferencia"}`))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 si el metodo de pago no es valido", func(t *testing.T) {
+		service := new(IServiceExpensesMock)
+		handler := newTestHandler(service)
+
+		w := httptest.NewRecorder()
+		handler.Actualizar(w, updateRequest(`{"payment_method":"bitcoin"}`))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 404 si el gasto no existe", func(t *testing.T) {
@@ -329,18 +386,18 @@ func TestExpensesHandler_Update(t *testing.T) {
 		assert.JSONEq(t, bodyNotFound, w.Body.String())
 	})
 
-	t.Run("responde 400 con una fecha invalida", func(t *testing.T) {
+	t.Run("responde 400 si el payload manda la fecha", func(t *testing.T) {
+		// La fecha no es un campo editable: mandarla es un campo desconocido y
+		// LeerJSON (DisallowUnknownFields) lo rechaza.
 		service := new(IServiceExpensesMock)
 		handler := newTestHandler(service)
 
-		service.On("ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(model.Expense{}, ErrorFechaInvalida).Once()
-
 		w := httptest.NewRecorder()
-		handler.Actualizar(w, updateRequest(`{"fecha":"15-09-2026"}`))
+		handler.Actualizar(w, updateRequest(`{"fecha":"2026-09-15"}`))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.JSONEq(t, `{"error":"la fecha debe tener el formato AAAA-MM-DD"}`, w.Body.String())
+		assert.JSONEq(t, `{"error":"json: unknown field \"fecha\""}`, w.Body.String())
+		service.AssertNotCalled(t, "ActualizarGasto", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("responde 400 si el gastoID no es un uuid", func(t *testing.T) {

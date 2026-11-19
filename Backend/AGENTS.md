@@ -1,8 +1,8 @@
 # Tally — AGENTS.md
 
-API financiera (ingresos, gastos, deudores, metas) para emprendedores informales. Go 1.27 + chi + Postgres 16.
+API financiera (ingresos, gastos, deudores, metas, notificaciones push y jobs) para emprendedores informales. Go 1.27 + chi + Postgres 16 + Redis opcional.
 
-Este archivo cubre **solo el backend**. El frontend es un proyecto separado en `../Frontend/` con su propio `AGENTS.md`; no mezcles las convenciones de ambos.
+Este archivo cubre **solo el backend**. El frontend es un proyecto separado en `../Frontend/` (app Expo; hoy no hay un `AGENTS.md` ahí), así que no mezcles las convenciones de ambos.
 
 ## Norma estricta: preguntar antes de tocar código
 
@@ -33,7 +33,9 @@ go tool task migration-down STEPS=1
 GOPROXY=off go test ./internal/categories/...   # cache de módulos ya está caliente
 ```
 
-`make test`, `make test-cover` y `make clean-cover` funcionan igual (el makefile corre `go vet` + `go test`). El resto de targets de `make` **no**:
+`task test` y `task test-cover` **no** llaman a `go test` directo: pasan por `scripts/run-tests.sh`, que es tolerante a la falta de cgo. `go test -race` exige `CGO_ENABLED=1` **y** un compilador C (el linker de cgo lo invoca); en Windows sin mingw/MSYS2 y en la imagen `golang:alpine` no hay cgo, y el comando muere con `-race requires cgo; enable cgo by setting CGO_ENABLED=1`. El script detecta eso, **saca `-race`** de los flags y corre los tests sin el race detector, avisando por stderr. Los tests siguen siendo válidos: lo que se pierde es la detección de carreras. Si necesitás el race detector en Windows, instalá mingw/MSYS2 y corré `go test -race ./...` a mano.
+
+`make test`, `make test-cover` y `make clean-cover` funcionan igual (el makefile corre `go vet` + `scripts/run-tests.sh`, igual que el Taskfile). El resto de targets de `make` **no**:
 
 - `make build` es un no-op silencioso: no existe el target y el catch-all `%:` del final del makefile sale con 0. No confíes en `exit 0`.
 - `go tool task build` falla: hace `go build -o bin/server main.go` pero el entrypoint está en `cmd/main.go`. Compilá con `go build -o bin/main ./cmd`. `task start` hereda el fallo porque depende de `build`.
@@ -43,30 +45,32 @@ GOPROXY=off go test ./internal/categories/...   # cache de módulos ya está cal
 
 ## Migraciones
 
-`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_excel_files` es del módulo `excel`).
+`golang-migrate`, archivos `NNN_nombre.{up,down}.sql` en `migrations/`. Editar una migración ya aplicada no la reaplica: creá una nueva. Última migración del módulo `auth`: `000010_add_password_reset_codes` (`000009_excel_files` es del módulo `excel`). La última migración del módulo `categories` es `000012_add_global_expense_categories` (después de `000011_add_category_type`). La última en general es `000014_device_tokens`, que crea `device_tokens` y `notification_log` para el módulo de notificaciones (`000013_add_payment_method_to_expenses` sigue siendo la de gastos).
 
 `.envrc` está en `.gitignore` (tiene credenciales reales). Sin él, los tests igual corren; `migration-up` necesita `DB_ADDR`.
 
 ## Esquema de la base de datos
 
-Estado tras `000010`. El número entre paréntesis es la migración que introdujo el elemento.
+Estado tras `000014`. El número entre paréntesis es la migración que introdujo el elemento.
 
-ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`).
+ENUMs (`000001`): `user_role` (`usuario`, `municipal`), `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`), `goal_period` (`dia`, `semana`, `mes`). ENUM nuevo (`000011`): `category_type` (`ingreso`, `gasto`).
 
 - `users` — `email VARCHAR(255) UNIQUE NOT NULL`, `password_hash`, `nombre`, `role` (`user_role`, default `usuario`), `created_at`, `updated_at`, `rut` UNIQUE (`000002`), `plan_expires_at` nullable (`000004`).
 - `empresas` (`000007`) — `nombre_empresa VARCHAR(150) NOT NULL`, `user_id NOT NULL → users` con `ON DELETE CASCADE`. Un usuario tiene N empresas; índice `idx_empresas_user_id`.
 - `access_keys` — `code VARCHAR(50) UNIQUE NOT NULL`, `created_by → users` **nullable** con `ON DELETE SET NULL` (`000007`), `redeemed_by → users` (`SET NULL`), `redeemed_at`, `expires_at`, `revoked_at` y `revoked_by → users` (`000005`, `SET NULL`), `created_at`.
-- `categories` — `nombre VARCHAR(100) NOT NULL`; `empresa_id → empresas` **nullable** (`000007`, `ON DELETE CASCADE`), donde NULL = categoría global; índice `idx_categories_empresa_id`. `000008` siembra las globales `Ventas`, `Servicios` y `Pedidos`.
+- `categories` — `nombre VARCHAR(100) NOT NULL`; `empresa_id → empresas` **nullable** (`000007`, `ON DELETE CASCADE`), donde NULL = categoría global; índice `idx_categories_empresa_id`. `000008` siembra las globales de ventas `Ventas`, `Servicios` y `Pedidos`; `000012` siembra las globales de gastos `Insumos`, `Comunes` y `Pagos`. `tipo category_type NOT NULL DEFAULT 'ingreso'` (`000011`): cada categoría es de ingresos o de gastos, nunca de los dos. El backfill de `000011` dejó en `'gasto'` las que ya tenían gastos asociados y en `'ingreso'` el resto (las globales de `000008` quedan en `'ingreso'`).
 - `incomes` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL` (`000003`), `payment_method`, `descripcion TEXT` nullable, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`, `category_id → categories` nullable (`000006`, `ON DELETE SET NULL`).
-- `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
+- `expenses` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `monto BIGINT NOT NULL`, `payment_method NOT NULL` (`000013`, con backfill `'efectivo'`), `category_id NOT NULL → categories` (`ON DELETE CASCADE`), `descripcion`, `fecha DATE NOT NULL DEFAULT CURRENT_DATE`, `created_at`.
 - `debtors` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `monto BIGINT NOT NULL`, `descripcion`, `pagado BOOLEAN NOT NULL DEFAULT false`, `fecha_limite DATE` nullable, `created_at`.
 - `goals` — `empresa_id NOT NULL → empresas` (`000007`, `CASCADE`), `nombre`, `periodo` (`goal_period`), `monto_meta BIGINT NOT NULL`, `created_at`.
 - `password_reset_codes` (`000010`) — `user_id NOT NULL → users` (`CASCADE`), `codigo VARCHAR(64) NOT NULL` (hash SHA-256 del código de 6 dígitos, nunca el código en claro), `expira_en TIMESTAMPTZ NOT NULL`, `verificado_en` y `usado_en` TIMESTAMPTZ nullable; índice `idx_password_reset_codes_user_id`. Es la tabla del flujo de recuperación de contraseña: el código pasa por *emitido → verificado → usado*.
 - `excel_files` (`000009`) — `id UUID PRIMARY KEY` (lo genera Go), `empresa_id NOT NULL → empresas` (`CASCADE`), `nombre TEXT NOT NULL` (nombre original del archivo), `storage_key TEXT NOT NULL UNIQUE` (clave del objeto en el storage), `size_bytes BIGINT NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`; índice `idx_excel_files_empresa (empresa_id, created_at DESC)`. La tabla guarda **solo el registro**: el binario vive en el storage (`internal/storage`).
+- `device_tokens` (`000014`) — `id UUID PRIMARY KEY` (lo genera Go), `user_id NOT NULL → users` (`CASCADE`), `token TEXT UNIQUE NOT NULL`, `platform TEXT NOT NULL` (el service acepta `android`, `ios` o `web`; la columna es texto libre), `last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()`; índice `idx_device_tokens_user`. El `UNIQUE (token)` es global: registrar el mismo token con otro usuario lo **reasigna** (upsert), porque el token identifica al dispositivo, no al usuario.
+- `notification_log` (`000014`) — `user_id NOT NULL → users` (`CASCADE`), `kind TEXT NOT NULL` (`daily` u `overdue`), `ref_date DATE NOT NULL`, `sent_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `PRIMARY KEY (user_id, kind, ref_date)`. Es el candado de idempotencia de los jobs: el `INSERT ... ON CONFLICT DO NOTHING` decide si la notificación del día ya se mandó, y también alimenta `GET /notificaciones/historial`.
 
 `000007` sacó `user_id` de `incomes`, `expenses`, `debtors`, `goals` y `categories`: la tenencia pasa a ser `empresa_id → empresas → users`. Crea los índices `idx_incomes_empresa_id`, `idx_expenses_empresa_id`, `idx_debtors_empresa_id`, `idx_goals_empresa_id` y `idx_categories_empresa_id`.
 
-**Unicidad de categorías (solo aplicación):** una empresa no puede repetir nombre de categoría, pero el mismo nombre sí puede existir en otra empresa. La regla vive en `ServicioCategorias` (`normalizarNombre` + `validarNombreUnico`) y **no tiene índice ni constraint en la base**. La comparación ignora mayúsculas, acentos y espacios (`"Comida" == "comida" == "COMIDA"`, `"Áqui" == "aqui"`). Al ser un chequeo previo al `INSERT`, dos creates concurrentes de la misma empresa pueden colarse; cerrarlo requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
+**Unicidad de categorías (solo aplicación):** una empresa no puede repetir nombre de categoría **dentro del mismo tipo**, pero el mismo nombre sí puede existir en otra empresa y sí puede existir en la misma empresa con otro tipo (`"Comida"` de gastos y `"Comida"` de ingresos). La regla vive en `ServicioCategorias` (`normalizarNombre` + `validarNombreUnico`) y **no tiene índice ni constraint en la base**. La comparación ignora mayúsculas, acentos y espacios (`"Comida" == "comida" == "COMIDA"`, `"Áqui" == "aqui"`). Al ser un chequeo previo al `INSERT`, dos creates concurrentes de la misma empresa y tipo pueden colarse; cerrarlo requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, tipo, nombre)`.
 
 ## Montos de dinero: `int64`, nunca `float64`
 
@@ -94,7 +98,7 @@ Un tag roto no devuelve 400: **el `Validador.Struct` entra en panic** y el `Reco
 
 ## Tests
 
-Paquetes con tests: `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `paginacion`, `users` y `utilidades`. Sin tests: `bd`, `bdtx`, `informe`, `correo`, `entorno`, `errores`, `intermediario`, `model` y `storage`.
+Paquetes con tests: `cache`, `clavesAcceso`, `auth`, `categories`, `debtors`, `dispositivos`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `jobs`, `notificaciones`, `paginacion`, `users` y `utilidades`. Sin tests: `bd`, `bdtx`, `informe`, `correo`, `entorno`, `errores`, `intermediario`, `model` y `storage`.
 
 Convención, un archivo por capa dentro del paquete (tests en `package categories`, no `categories_test`):
 
@@ -104,18 +108,21 @@ Convención, un archivo por capa dentro del paquete (tests en `package categorie
 | `service_test.go` | lógica del service contra el store mockeado |
 | `handler_test.go` | HTTP con `httptest` + `chi.NewRouteContext()` para URL params; contexto con `utilidades.ContextoUsuario` / `utilidades.ContextoEmpresa` |
 | `storage_test.go` | `go-sqlmock` sobre el store real |
+| `cache_test.go` | el buscador con cache (`GetOrLoad`, hit/miss, invalidación) con un `cache.Cache` en memoria |
 
 `excel` suma un `router_test.go`: prueba a nivel de ruta, montando `InitModule` en un router chi.
 
 `testify` (`assert` / `require` / `mock`) y `go-sqlmock` son dependencias directas.
 
-**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `expenses`, `goals`, `incomes`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. Los tests de integración contra Postgres real viven en `tests/integration/` (ver sección siguiente).
+**sqlmock no parsea SQL**: solo compara strings y devuelve las filas que le digas. No detecta un `Scan` desalineado ni una columna inexistente. Por eso la mayoría de los `storage_test.go` (`clavesAcceso`, `auth`, `categories`, `debtors`, `dispositivos`, `empresas`, `expenses`, `goals`, `incomes`, `jobs`, `notificaciones`, y un caso de `users`) usan un `QueryMatcherFunc` permisivo que captura el SQL realmente ejecutado y lo audita a mano. Los tests de integración contra Postgres real viven en `tests/integration/` (ver sección siguiente).
 
-`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Crear` y en `CambiarNombre`, y `ObtenerCategoriasPorEmpresa` / `ObtenerCategoriasVisibles` en el store.
+`categories` tiene tests específicos de la regla de negocio: `TestNormalizarNombre`, duplicados por mayúsculas/acentos en `Crear` y en `CambiarNombre`, unicidad **por empresa y tipo** (el mismo nombre con otro tipo se permite) y `ObtenerCategoriasPorEmpresa` / `ObtenerCategoriasVisibles` en el store.
 
 `debtors` y `goals` tienen tests de service, handler y storage. `debtors` cubre CRUD, listado, `pagado` y mapeo de `ErrorNoEncontrado`; `goals` cubre el cálculo de estado y las rutas de detalle/estado.
 
 `excel` sigue la convención: `mocks_test.go` (mocks de `fileStore`, `FileStorage` e `IServiceExcel` + fixtures), `service_test.go` (el service contra el store mockeado), `handler_test.go` (HTTP con `httptest` y `chi.NewRouteContext()` para el `{id}`, con el **service mockeado** vía `IServiceExcel`) y `storage_test.go` (`go-sqlmock` sobre el store real). Además tiene `router_test.go`, que prueba a nivel de **ruta** (monta `InitModule` en un router chi) con un `FileStorage` en memoria. El mock de sqlmock devuelve las filas que se le piden y no valida el SQL, así que `TestExcelStore_UsaLaEmpresaEnElWhere` audita a mano el SQL que se ejecuta.
+
+`dispositivos` cubre el upsert, la validación de plataforma y token, el listado y el borrado (handler, service y storage). `notificaciones` cubre el service (tokens vacíos, tokens inválidos, `Claim`/`Unclaim`), el handler del historial y del push de prueba, el cliente Expo contra un `httptest.Server` (`transporte_test.go`) y el almacén con sqlmock. `jobs` cubre el cálculo de `RecordatorioDiario` y `CobrosVencidos`, la idempotencia por `Claim`, el formateo CLP y el scheduler (`scheduler_test.go`); sus stores se prueban con sqlmock.
 
 ### Tests de integración (`tests/integration/`)
 
@@ -127,14 +134,16 @@ bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
 
 - `TestMain` está en `tests/integration/main_test.go` y delega en `testutil.SetupSuite`.
 - `testutil/env.go` crea una base efímera `tally_it_<pid>` desde `DB_ADDR` (default `postgres://postgres:tally_database_env@localhost/tally_database_env?sslmode=disable`), aplica `migrations/*.up.sql` en orden y la dropea al terminar. `TEST_DB_ADDR` permite reutilizar una base existente sin crearla ni dropearla.
-- El router se replica en `testutil/env.go` desde `cmd/application/app.go`. **No** se modifica el archivo de producción para hacer pasar un test.
+- El router se replica en `testutil/env.go` desde `cmd/application/routes.go`. **No** se modifica el archivo de producción para hacer pasar un test.
+- El router del suite se arma con los mismos buscadores cacheados que usa el backend real (`users.NuevoBuscadorUsuarioConCache` y `empresas.NuevoBuscadorEmpresaConCache`), sobre `testutil.cacheMemoria`: un `cache.Cache` en memoria (`tests/integration/testutil/cache.go`) que guarda los bytes tal cual, como haría Redis. Así los flujos ejercitan el camino cacheado sin depender de un Redis. No tiene TTL real: los valores viven hasta que se borran.
 - El módulo `excel` va montado en el router del suite con un `storage.NewDisk` sobre un directorio temporal (el suite no puede escribir en `./data/files`).
+- `dispositivos`, `notificaciones` y `jobs` también van montados. `notificaciones` se cablea con `notificaciones.NuevoLogNotifier` (no manda push real: loguea y devuelve `nil`) y `jobs.InitModule` recibe los crons `0 20 * * *` y `0 9 * * *`, pero el suite **no** llama a `Planificador.Start()`: el cron real solo arranca desde `routes.go`, y la integración ejerce los endpoints manuales (`POST /jobs/...`, `POST /notificaciones/probar`).
 - Se omite el middleware `Logger` para no ensuciar `go test -v`; se mantienen `RequestID`, `ClientIPFromHeader("X-Real-IP")` y `Recoverer`. El remitente de correo se reemplaza por uno que **guarda los códigos enviados** (`testutil.UltimoCodigoDeRecuperacion`), para poder completar el flujo de recuperación de contraseña sin SMTP real.
 - `TestMain` registra un único usuario municipal; los tests lo obtienen con `testutil.MunicipalToken(t)` / `testutil.MunicipalRUT(t)`.
 
 **Archivos y nombres**
 
-- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `password_recovery_flow_test.go`, `incomes_flow_test.go`, `excel_flow_test.go`, etc.).
+- Un archivo por flujo: `tests/integration/<flujo>_flow_test.go` (`auth_flow_test.go`, `password_recovery_flow_test.go`, `incomes_flow_test.go`, `excel_flow_test.go`, `notificaciones_jobs_flow_test.go`, etc.).
 - El aislamiento multi-empresa vive en `tenant_isolation_test.go`.
 - Helpers compartidos en `helpers_test.go` (`requireProtected`, `dbDate`); entorno, cliente HTTP y fixtures en `testutil/`.
 - Los tests van en `package integration` (no `integration_test`).
@@ -146,7 +155,7 @@ bugs y discrepancias vive en `tests/report.md` y se actualiza con cada flujo.
 - Flujo feliz secuencial reutilizando IDs generados; negativos en tablas con `t.Run`.
 - Validar **status exacto** y **mensaje exacto** (`testutil.RequireStatus` / `testutil.RequireError`). No inventar rutas, campos ni mensajes: el código es la fuente de verdad; swagger solo orienta.
 - Cada test debe ser independiente: crear sus propios usuarios/empresas con los fixtures (`NewUser`, `CreateEmpresa`, `CreateCategory`, `CreateIncome`, `CreateExpense`, `CreateDebtor`, `CreateGoal`) y limpiar con `t.Cleanup`. No depender del orden entre tests.
-- Todo flujo debe verificar al menos una ruta protegida sin token y con token inválido usando `requireProtected` (`401 unauthorized`).
+- Todo flujo debe verificar al menos una ruta protegida sin token y con token inválido usando `requireProtected` (`401` con `{"error":"no autorizado"}`). `password_recovery_flow_test.go` es público por diseño; `cache_flow_test.go` y `tenant_isolation_test.go` usan tokens válidos y no repiten el chequeo.
 - Fechas: usar `dbDate(t, offset)` para alinear con `CURRENT_DATE` de Postgres y no con el reloj del host.
 - Cubrir explícitamente el aislamiento por empresa: acceso a la empresa ajena y a recursos ajenos por ID, además de listados que excluyan datos de otra empresa.
 
@@ -169,21 +178,28 @@ Requiere PostgreSQL. Sin `TEST_DB_ADDR`, la suite crea y dropea su propia base.
 
 ## Arquitectura
 
-`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`RepositorioIngresos`, `IServiceIngresos`, `IServiceExcel`, etc.) definidas en service/handler. El handler depende siempre de la **interfaz** del service, no del service concreto: el service real se inyecta en el `router.go` (`NuevoHandlerExcel(svc, err)`). Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*bdtx.Transactor` y la config JWT; `clavesAcceso` recibe el `SendEmail`; `excel` recibe el `FileStorage` (la implementación del binario); `empresas.InitModule` no recibe router y devuelve `Routes` + `intermediario.BuscadorEmpresa`.
+`handler.go` → `service.go` → `storage.go` por módulo, con interfaces inversas (`RepositorioIngresos`, `IServiceIngresos`, `IServiceExcel`, etc.) definidas en service/handler. El handler depende siempre de la **interfaz** del service, no del service concreto: el service real se inyecta en el `router.go` (`NuevoHandlerExcel(svc, err)`). Cada módulo implementado expone un `router.go` con `InitModule`, pero la firma varía: la mayoría `(r, db, logger, middl)`; `auth` recibe además `*bdtx.Transactor` y la config JWT; `clavesAcceso` recibe el `SendEmail`; `excel` recibe el `FileStorage` (la implementación del binario); `empresas.InitModule` no recibe router y devuelve `Routes`; `users.InitModule` y `empresas.InitModule` reciben además el **invalidador de cache** del módulo (`invalidarUsuario` / `invalidadorEmpresa`) para que el service pueda borrar la entrada cacheada cuando cambia o se borra el recurso. Los módulos nuevos encadenan dependencias: `dispositivos.InitModule` devuelve el `*ServicioDispositivos` para que `notificaciones.InitModule` lo reciba como `BuscadorDispositivos` junto con el `EnviadorPush` y devuelva el `*ServicioNotificaciones`; `jobs.InitModule` recibe ese servicio como `Notificador`, la `*time.Location` y los dos crons, y devuelve `(*ModuloJobs, error)` (con el `Planificador` adentro).
 
-Los módulos `excel` e `informe` están en estados distintos. `informe` es un esqueleto: tiene `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas; obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa. `excel` está implementado y montado: sube, lista, descarga y borra archivos `.xlsx` por empresa, con el binario en el storage (`internal/storage`) y solo el registro en la tabla `excel_files`.
+Las rutas se arman en `cmd/application/routes.go` (`AsignarRutas`), que recibe todo lo cableado; `cmd/application/app.go` arma las dependencias (buscadores con cache, middlewares, SMTP, storage) y las pasa.
 
-Cableado actual en `cmd/application/app.go`:
+`informe` es el único módulo que sigue siendo un esqueleto: tiene `handler.go`, `service.go`, `storage.go` y `router.go` con TODOs, sin lógica ni rutas; obtendrá una sola vez toda la información de un usuario con todas sus empresas o de una sola empresa. El resto está implementado y montado: `excel` sube, lista, descarga y borra archivos `.xlsx` por empresa (binario en `internal/storage`, registro en `excel_files`); `dispositivos` registra y desvincula tokens push; `notificaciones` envía push por Expo y lista el historial; `jobs` corre el recordatorio diario y el aviso de cobros vencidos, a mano o por cron.
+
+Cableado actual en `cmd/application/routes.go` (`AsignarRutas`), con las dependencias armadas en `cmd/application/app.go`:
 
 - `/v1/swagger/*` — UI de Swagger.
 - `/v1/autenticacion` — `POST /` (registro con código de acceso), `POST /inicio-sesion`, `POST /municipal`, más el flujo de recuperación de contraseña (`POST /recuperar-password` emite el código de 6 dígitos y lo manda por correo, `POST /recuperar-password/verificar` lo valida, `POST /recuperar-password/confirmar` cambia la contraseña). Sin JWT.
 - `/v1/aplicacion` — todo lo demás, detrás de `MiddlewareTokenAutenticacion`:
   - `/usuarios` — `PATCH /`, `DELETE /`, `GET /municipal/{rut}` (este último rol municipal).
-  - `/claves` — `POST /` (emitir), `POST /IDAcceso/{claveID}` (reenviar), `POST /revocar/{codigo}` (revocar). Solo rol municipal.
+  - `/claves` — `POST /` (emitir), `GET /` (listar las claves emitidas por el municipal autenticado), `POST /IDAcceso/{claveID}` (reenviar), `POST /revocar/{codigo}` (revocar). Solo rol municipal.
   - `/empresas` — `POST /` y `GET /`.
-  - `/empresas/{empresaID}` — detrás de `MiddlewareEmpresa.EmpresaDelUsuario`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `ingresos` (`POST /`, `GET /`, `PATCH /{ingresoID}`, `DELETE /{ingresoID}`), `gastos` (`POST /`, `GET /`, `PATCH /{gastoID}`, `DELETE /{gastoID}`), `categorias` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `metas` (prefijo `/metas`: `POST /`, `GET /`, `GET /{metaID}`, `DELETE /{metaID}`, `GET /{metaID}/estado`), `deudas` (prefijo `/deudas`: `POST /`, `GET /`, `PATCH /{deudorID}`, `PATCH /{deudorID}/pagada`) y `excel` (prefijo `/excel`: `POST /` sube un `.xlsx` en multipart, `GET /` lista, `GET /{id}` descarga, `DELETE /{id}` borra).
+  - `/dispositivos` — `PUT /` y `POST /` (registrar o refrescar el token), `GET /` (listar) y `DELETE /` (token en el body) o `DELETE /{token}`. Solo rol usuario.
+  - `/notificaciones` — `GET /historial` y `POST /probar` (push de prueba al usuario autenticado). Solo rol usuario.
+  - `/jobs` — `POST /recordatorio-diario`, `POST /cobros-vencidos` y `POST /ejecutar-todos` (disparo manual; el cron corre aparte). Solo rol usuario.
+  - `/empresas/{empresaID}` — detrás de `MiddlewareEmpresa.EmpresaDelUsuario`: `PATCH /{nombre}` y `DELETE /` de la empresa, más `ingresos` (`POST /`, `GET /`, `PATCH /{ingresoID}`, `DELETE /{ingresoID}`), `gastos` (`POST /`, `GET /`, `PATCH /{gastoID}`, `DELETE /{gastoID}`), `categorias` (`GET /` lista las propias y las globales, `POST /`, `PATCH /{categoriaID}`, `DELETE /{categoria}`), `metas` (prefijo `/metas`: `POST /`, `GET /`, `GET /{metaID}`, `DELETE /{metaID}`, `GET /{metaID}/estado`), `deudas` (prefijo `/deudas`: `POST /`, `GET /`, `PATCH /{deudorID}`, `PATCH /{deudorID}/pagada`, `DELETE /{deudorID}`) y `excel` (prefijo `/excel`: `POST /` sube un `.xlsx` en multipart, `GET /` lista, `GET /{id}` descarga, `DELETE /{id}` borra).
 
-**No montados:** `informe` (esqueleto sin lógica ni rutas). El resto de los módulos con lógica (`clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `users`) está montado.
+**No montados:** `informe` (esqueleto sin lógica ni rutas). El resto de los módulos con lógica (`clavesAcceso`, `auth`, `categories`, `debtors`, `dispositivos`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `jobs`, `notificaciones`, `users`) está montado.
+
+Variables de entorno que lee el cableado: `ADDR`, `DB_ADDR`, `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_MAX_IDLE_TIME`, `EXTERNAL_URL` (base de la URL de swagger), `JWT_SECRET` (el `iss` y la expiración de 72 h están fijos en `cmd/main.go`), `GMAIL_SMTP_*`, `STORAGE_DRIVER` (`s3` o vacío para disco local), `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY`, `REDIS_URL` (vacío = `cache.Noop`), `EXPO_PUSH_MOCK` (default `false`), `CRON_RECORDATORIO_DIARIO` / `CRON_COBROS_VENCIDOS` (vacío = defaults del scheduler) y `CRON_RUNNER_ENABLED` (default `true`: arranca el cron).
 
 Middlewares:
 - `intermediario.MiddlewaresGlobales()`: `RequestID`, `ClientIPFromHeader("X-Real-IP")`, `Logger`, `Recoverer`.
@@ -193,27 +209,63 @@ Middlewares:
 
 El usuario y la empresa del request se sacan del contexto con `utilidades.ObtenerUsuarioDelContexto(r)` y `utilidades.ObtenerEmpresaDelContexto(r)` (no hay helpers en `users`). Devuelven `nil` si el middleware no los inyectó; usarlos sin el middleware correspondiente produce panic.
 
-`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito: `PATCH /v1/aplicacion/usuarios` reescribe la fila con ese usuario, así que si el hash no viniera el UPDATE escribiría un hash vacío en una columna `NOT NULL` y el endpoint devolvía 500. `ObtenerPorRUT` no lo trae: es solo de lectura.
+`users.AlmacenUsuarios.ObtenerPorID` (el que usa `MiddlewareTokenAutenticacion`) trae `password_hash` a propósito, aunque el UPDATE ya **no** reescribe la fila entera: `AlmacenUsuarios.Actualizar` aplica solo los campos del payload con `CASE WHEN`, así que un usuario sin hash (por ejemplo, servido desde el cache) no pisa la columna. `ObtenerPorRUT` no trae el hash ni `created_at`/`updated_at`: es solo de lectura y esas fechas salen en cero (bug conocido).
+
+## Cache
+
+`internal/cache` tiene la interfaz `Cache` (`Get`/`Set`/`Delete`/`Incr`) y dos implementaciones: `RedisCache` (usada cuando hay `REDIS_URL`) y `Noop` (cuando no hay Redis: el backend funciona igual, pero sin cache). `cmd/main.go` elige una según `REDIS_URL` y la pasa a `application.NewApplication`. El `docker/docker-compose.yml` levanta un servicio `redis` (`redis:7-alpine`, sin persistencia, `maxmemory 128mb` con `allkeys-lru`) y la app lo usa con `REDIS_URL=redis://redis:6379/0`.
+
+- `cache.GetOrLoad` es el cache-aside: busca la clave y, si no está (o falla el cache, o el valor cacheado no se puede deserializar), carga de la base y guarda el resultado. **Un error del load no se cachea**.
+- `users.BuscadorUsuarioConCache` y `empresas.BuscadorEmpresaConCache` envuelven al store y usan `GetOrLoad` con TTL de 60s. Los usa el middleware: `MiddlewareTokenAutenticacion` busca el usuario por ID y `MiddlewareEmpresa` busca la empresa por `(empresaID, userID)`.
+- La clave de empresa es `"empresa:" + userID + empresaID`: incluye el usuario, así que dos usuarios no comparten entrada.
+- Cuando un recurso cambia o se borra, el service llama al **invalidador** (interfaz `invalidarUsuario` / `invalidadorEmpresa`), que borra la entrada del cache. Sin esa invalidación, el middleware seguiría sirviendo el dato viejo.
+- **Ojo con el round-trip por JSON:** el cache serializa a JSON, así que los campos con `json:"-"` se pierden. `model.User.PasswordHash` tiene `json:"-"` (por seguridad), así que el usuario servido **desde el cache llega sin hash**. Por eso `AlmacenUsuarios.Actualizar` NO reescribe la fila completa: aplica solo los campos del payload (el patrón de `CambiosGasto` de `expenses`), con `CASE WHEN` para no pisar `password_hash` ni `nombre` cuando no vienen en el payload. Si el store reescribiera la fila entera, un PATCH que solo cambia el nombre mandaría un `password_hash` vacío a una columna `NOT NULL` (500) y un PATCH posterior revertiría el nombre con el valor viejo del cache.
+- `cache.Version` y `cache.Bump` usan la misma clave (`claveVersion(scope)`, prefijo `ver:`): `Bump` incrementa el contador y `Version` lo lee, así que un `Bump` invalida de verdad la versión. Todavía no tienen consumidor.
 
 `bdtx.Transactor` (`internal/bdtx`) envuelve `BeginTx`/`Commit`/`Rollback`. Los stores que participan de una transacción deben usar `bdtx.FromContext(ctx, s.db)` en vez de `s.db`; hoy lo hacen `auth` y `clavesAcceso`. `auth.RegistrarUsuario` crea el usuario, canjea la llave y setea `plan_expires_at` en una sola transacción.
 
 Respuestas siempre envueltas en `{"datos": ...}` vía `utilidades.RespuestaJSON`; errores como `{"error": "..."}` vía `utilidades.EscribirErrorJSON`. `utilidades.LeerJSON` usa `DisallowUnknownFields` y el handler traduce el fallo a **400**. `utilidades.ErrorNoEncontrado` / `utilidades.ErrorConflicto` son los errores de dominio compartidos; `internal/errores` mapea a 400/401/403/404/409/500.
 
-Paginación: `paginacion.ConsultaPaginacionIngresos` (compartida por `incomes` y `expenses`): `limite` default y máximo 30, `desplazamiento`, `desde`/`hasta` en `AAAA-MM-DD` y `categoria_id` UUID. Un parámetro inválido devuelve error → 400.
+Paginación: `paginacion.ConsultaPaginacionIngresos` (compartida por `incomes` y `expenses`): `limite` default y máximo 30, `desplazamiento`, `desde`/`hasta` en `AAAA-MM-DD` y `categoria_id` UUID. Un parámetro inválido devuelve error → 400. El listado de claves usa su propia `ConsultaPaginacionClaves` (dentro de `internal/clavesAcceso`): `limite` default 30 y máximo 100, `desplazamiento`; un parámetro inválido o fuera de rango → **400**.
 
-Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoriaExiste` que la categoría sea global (`empresa_id IS NULL`) o de la empresa; si no existe o es de otra empresa, el handler responde **400**. En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
+Alta de categorías (`POST .../categorias`): el payload es `{"nombre": ..., "tipo": "ingreso"|"gasto"}` y el `tipo` es obligatorio (`validate:"required,oneof=ingreso gasto"`, sin espacios tras la coma). Un tipo inválido es **400**. El **PATCH no cambia el tipo**: usa un payload aparte (`PayloadCambiarNombre`, solo `nombre`) y mandar `"tipo"` ahí es un **400** por campo desconocido. El nombre es único por empresa **y tipo**. Globales: de ventas (tipo `'ingreso'`) `Ventas`, `Servicios`, `Pedidos`; de gastos (tipo `'gasto'`) `Insumos`, `Comunes`, `Pagos`.
 
-Edición de movimientos (`PATCH .../ingresos/{ingresoID}` y `PATCH .../gastos/{gastoID}`): el payload trae **punteros** y lo que no se manda se queda como está. `fecha` es opcional y va en `AAAA-MM-DD` (formato inválido → **400** `la fecha debe tener el formato AAAA-MM-DD`). Un payload sin ningún campo → **400** `no se enviaron campos para actualizar`. Un movimiento que no existe o es de otra empresa → **404**. La fecha viaja a la base como texto (`$n::date`) para no depender de la zona horaria de la sesión.
+Categorías al crear ingresos/gastos: llegan por **`category_id`** (UUID). El service valida con el store `CategoriaExiste` que la categoría sea global (`empresa_id IS NULL`) o de la empresa **y que sea del tipo del movimiento**: `incomes` exige `tipo = 'ingreso'` y `expenses` exige `tipo = 'gasto'`. Si no existe, es de otra empresa o es del tipo contrario, el handler responde **400** (`recurso no encontrado`). En incomes es opcional porque `incomes.category_id` es nullable; en expenses es obligatoria porque la columna es `NOT NULL`. El payload de expenses no acepta `fecha`: la asigna la base con `DEFAULT CURRENT_DATE`.
+
+Método de pago: **ingresos y gastos** lo tienen, con el mismo ENUM `payment_method` (`debito`, `credito`, `transferencia`, `efectivo`). Al crear, el campo es **obligatorio** en los dos (`validate:"required,oneof=debito credito transferencia efectivo"`): si falta o es inválido, **400**. En el `PATCH` llega como puntero y es opcional: si no se manda, no se toca. En gastos la columna llegó con la migración `000013` (las filas existentes quedaron en `'efectivo'`).
+
+Edición de movimientos (`PATCH .../ingresos/{ingresoID}` y `PATCH .../gastos/{gastoID}`): el payload trae **punteros** y lo que no se manda se queda como está. Campos editables: `monto`, `payment_method`, `descripcion` y `category_id`. **La fecha no se edita**: el movimiento conserva la suya y mandar `"fecha"` en el payload es un **400** por campo desconocido (`DisallowUnknownFields`). Un payload sin ningún campo → **400** `no se enviaron campos para actualizar`. Un movimiento que no existe o es de otra empresa → **404**.
 
 Recuperación de contraseña (`internal/auth`): el código de 6 dígitos se genera con `crypto/rand` y **se guarda hasheado (SHA-256)**, nunca en claro. El estado vive en `password_reset_codes`: *emitido → verificado → usado*. Pedir un código nuevo invalida el anterior. Los errores del dominio (`ErrorCodigoRecuperacionInvalido`, `...Vencido`, `...Usado`, `...NoVerificado`) y el email no registrado (`utilidades.ErrorNoEncontrado`) responden **400**. El remitente es la interfaz `auth.Remitente` (`SendPasswordResetCode`), que implementan `correo.Client`, `correo.ClienteGmail` y el mock de `cmd/application/app.go`.
 
+Deudas (`internal/debtors`): el `PATCH /deudas/{deudorID}` edita `nombre`, `monto` y `fecha_limite` (obligatorios) y también `descripcion`: es **opcional** y llega como puntero, así que si no se manda la descripción que ya tenía se queda (el store lo resuelve con `descripcion = COALESCE($4, descripcion)`) y si se manda se reemplaza. El `DELETE /deudas/{deudorID}` borra la deuda de la empresa —también una ya pagada— y responde **200** con `{"datos":"Deuda eliminada"}`; si no existe o es de otra empresa, **404**.
+
+Claves de acceso (`internal/clavesAcceso`): el `GET /v1/aplicacion/claves` lista **solo** las claves emitidas por el municipal autenticado (`created_by` = usuario del contexto), de la más reciente a la más antigua (`ORDER BY created_at DESC`): no hay forma de pedir las de otro funcionario, así que la ruta no expone las de otros. Responde **200** con `{"datos":[...]}`.
+
 Borrado de categorías: una categoría con ingresos o gastos asociados **no se puede borrar** (`409` `la categoría tiene movimientos asociados y no se puede eliminar`), porque `expenses.category_id` es `NOT NULL` con `ON DELETE CASCADE` y `incomes.category_id` tiene `ON DELETE SET NULL`. El chequeo (`TieneMovimientos`) filtra por la empresa de la categoría: una categoría ajena sigue respondiendo **404**, no 409.
 
-Archivos `.xlsx` (`internal/excel`): el binario vive en el storage (`internal/storage`, hoy disco en `./data/files`, después S3) y en la base solo queda el registro de `excel_files`. La subida es `multipart/form-data` con el campo `file`, tope de **10 MB** (`http.MaxBytesReader`) y validación de los magic bytes (`PK`): un archivo que no sea un zip válido es **400**, no 500. La clave del objeto es `usuarioID/empresaID/uuid.xlsx`. El service guarda **primero el objeto y después el registro**: si el `INSERT` falla, borra el objeto para no dejar basura (si el borrado del objeto falla al eliminar, queda un huérfano sin registro). El listado usa `limit` (default 20, máximo 100) y `offset`, y devuelve `{"datos": [...]}`. El borrado responde **204** y el `ErrNotFound` (archivo inexistente o de otra empresa) se traduce a **404**.
+Archivos `.xlsx` (`internal/excel`): el binario vive en el storage (`internal/storage`, disco en `./data/files` o S3/R2 según `STORAGE_DRIVER`) y en la base solo queda el registro de `excel_files`. La subida es `multipart/form-data` con el campo `file`, tope de **10 MB** (`http.MaxBytesReader`) y validación de los magic bytes (`PK`): un archivo que no sea un zip válido es **400**, no 500. La clave del objeto es `usuarioID/empresaID/uuid.xlsx`. El service guarda **primero el objeto y después el registro**: si el `INSERT` falla, borra el objeto para no dejar basura (si el borrado del objeto falla al eliminar, queda un huérfano sin registro). El listado usa `limit` (default 20, máximo 100) y `offset`, y devuelve `{"datos": [...]}`. El borrado responde **204** y el `ErrNotFound` (archivo inexistente o de otra empresa) se traduce a **404**.
+
+## Notificaciones y jobs
+
+Tres módulos encadenados: `dispositivos` (tokens push del usuario) → `notificaciones` (envío e historial) → `jobs` (quién y cuándo se notifica).
+
+**Dispositivos (`internal/dispositivos`).** El payload es `{"token": ..., "platform": "android"|"ios"|"web"}`; el token es obligatorio y la plataforma se normaliza a minúsculas (**400** si no es una de las tres). El registro es un **upsert** sobre `device_tokens`: refresca `last_seen_at`. Como `token` es `UNIQUE` global, registrar el mismo token con otro usuario lo reasigna (el token identifica al dispositivo). `PUT /` y `POST /` hacen lo mismo; `DELETE /` acepta el token en el body y `DELETE /{token}` en el path; ambos responden **204**, un token vacío es **400** y uno que no existe, **404**.
+
+**Notificaciones (`internal/notificaciones`).** La interfaz `EnviadorPush` tiene una sola operación: `EnviarPush(ctx, tokens, model.Notification) ([]string, error)`, que devuelve los tokens que Expo rechazó como inválidos (`DeviceNotRegistered`). El service los borra de `device_tokens`, así que un token muerto no se vuelve a intentar. Hay dos implementaciones: `ClienteExpoPush` (POST real a `https://exp.host/--/api/v2/push/send`, con timeout de 10 s) y `LogNotifier` (mock que solo loguea; se activa con `EXPO_PUSH_MOCK=true`). `Send` no hace nada si el usuario no tiene tokens. `GET /notificaciones/historial` lista `notification_log` del usuario; `POST /notificaciones/probar` manda una push de prueba (payload opcional con `title`/`body`) a todos sus dispositivos.
+
+**Idempotencia (`notification_log`).** La PK `(user_id, kind, ref_date)` es el candado: `Claim` hace `INSERT ... ON CONFLICT DO NOTHING` y devuelve si insertó. `kind` es `daily` (recordatorio de inactividad) u `overdue` (cobros vencidos) y `ref_date` es el día en `America/Santiago`. Si el envío falla, `jobs` llama a `Unclaim` para borrar la fila y permitir el reintento; si el envío sale bien, la fila queda y una segunda corrida del mismo día no vuelve a notificar.
+
+**Jobs (`internal/jobs`).**
+- `RecordatorioDiario`: busca usuarios con `device_tokens` que **hoy** (en hora de Chile) no cargaron ni ingresos ni gastos, y les manda la push "¿Cómo va tu día?" / "Aún no registras movimientos hoy. Anótalos para no olvidarlos." La comparación es por rango `[hoy 00:00, mañana 00:00)` sobre `fecha`, no por `created_at`.
+- `CobrosVencidos`: agrupa por usuario los deudores con `fecha_limite < hoy` y `pagado = false`, y manda **una** notificación consolidada por usuario con la cantidad y el total (`"Tienes 3 cobros vencidos por $45.000."`; singular si es uno). `FormatearCLP` usa separador de miles con punto y nunca flotantes.
+- `EjecutarTodos` corre los dos en orden (primero el diario).
+
+Los tres endpoints `POST /jobs/...` son disparo **manual** y responden **200** con `{"datos":"..."}`; el cron no pasa por HTTP. `NuevoPlanificadorJobs` usa `robfig/cron` con los defaults `0 20 * * *` (diario, 20:00) y `0 9 * * *` (cobros, 09:00), en la zona `America/Santiago` (si `time.LoadLocation` falla, cae a UTC; `cmd/main.go` importa `time/tzdata` para que la zona exista en la imagen). `CRON_RECORDATORIO_DIARIO` y `CRON_COBROS_VENCIDOS` los sobreescriben. Un cron inválido hace que `jobs.InitModule` devuelva error: como `routes.go` solo arranca el planificador si `err == nil`, el módulo queda **sin montar** (las rutas `/jobs` no existen) y el arranque continúa; el error no se loguea. El `Planificador.Start()` se llama solo si `CRON_RUNNER_ENABLED` es `true` (default).
 
 ## Swagger
 
-Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `clavesAcceso`, `auth`, `categories`, `debtors`, `empresas`, `excel`, `expenses`, `goals`, `incomes` y `users`. `informe` no tiene endpoints todavía.
+Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se llaman): `clavesAcceso`, `auth`, `categories`, `debtors`, `dispositivos`, `empresas`, `excel`, `expenses`, `goals`, `incomes`, `jobs`, `notificaciones` y `users`. `informe` no tiene endpoints todavía.
 
 `docs/docs.go`, `docs/swagger.json` y `docs/swagger.yaml` son **generados**: después de tocar anotaciones o tipos, `go tool task gen-docs` y commiteá el resultado. La UI queda en `/v1/swagger/`. El root de swagger se anota en `cmd/main.go` (`@BasePath /v1`, `@securityDefinitions.apiKey`).
 
@@ -221,21 +273,26 @@ Las anotaciones viven en un `swagger.go` por módulo (funciones vacías, no se l
 
 `../.github/workflows/test.yml` corre solo el job `backend`: `go mod download`, `go vet ./...`, `go test -race -covermode=atomic -coverprofile=coverage.out ./...`, resumen con `go tool cover` y upload a Codecov (`fail_ci_if_error: false`). Usa `go-version-file: Backend/go.mod` y `working-directory: Backend`. El workflow vive en la raíz del repo porque GitHub Actions solo lee `.github/` del root. Triggers: push a `main`, PRs a `main` y manual.
 
+El job exporta `CGO_ENABLED: 1` explícito: el runner de ubuntu lo tiene activo por default, pero dejarlo escrito evita que un cambio del runner lo desactive y rompa el job con `-race requires cgo`. El CI **sí** corre con race detector (no usa `scripts/run-tests.sh`): si el job falla, el problema es del código, no del entorno.
+
+El `Dockerfile` de `docker/` tiene tres stages: `builder` (compila `/server` y `/migrate` con `CGO_ENABLED=0`), `test` (corre los tests) y `runtime` (la imagen final). El stage `test` instala `gcc musl-dev` y fija `CGO_ENABLED=1`, porque `golang:alpine` no trae compilador C y sin eso `-race` no puede correr dentro del container. El stage `test` tiene que quedar **antes** del `runtime`: `docker build` sin `--target` usa la última etapa.
+
 El job levanta un service container `postgres:16` (usuario `postgres`, contraseña `tally_database_env`, base `tally_database_env`) con health check `pg_isready`, y exporta `DB_ADDR` apuntando a `localhost:5432`. Ese Postgres es efímero y vive solo durante el job. No hay step de migraciones: `testutil` crea `tally_it_<pid>` dentro de esa instancia y aplica `migrations/*.up.sql` ahí mismo.
 
 ## Deuda técnica conocida (verificada, sin arreglar)
 
-- La unicidad de categorías es solo a nivel aplicación: hay ventana de carrera entre el chequeo y el `INSERT` (ver esquema). Cerrarla requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, nombre)`.
+- La unicidad de categorías es solo a nivel aplicación: hay ventana de carrera entre el chequeo y el `INSERT` (ver esquema). Cerrarla requiere transacción + `pg_advisory_xact_lock` o un `UNIQUE (empresa_id, tipo, nombre)`.
 - `informe` es solo un esqueleto: no tiene handlers, services, stores, rutas ni tests implementados.
-- El storage de archivos es disco (`internal/storage.DiskStorage`): el cliente S3 queda pendiente. Además, el borrado de un archivo borra el registro y el objeto, pero si el borrado del objeto falla queda un huérfano en el storage (sin registro, invisible para la API).
+- El storage de archivos tiene dos implementaciones: `DiskStorage` (default, `./data/files`) y `S3Storage` (`internal/storage/s3.go`, cliente S3-compatible con endpoint, region, bucket y credenciales, path-style para R2/S3). Se elige con `STORAGE_DRIVER=s3`; sin eso se usa disco. Además, el borrado de un archivo borra el registro y el objeto, pero si el borrado del objeto falla queda un huérfano en el storage (sin registro, invisible para la API).
 - En la edición de movimientos no se puede **borrar** un campo: mandar `"descripcion": null` o `"category_id": null` equivale a "no tocarlo". Para quitar la categoría de un ingreso hay que hacerlo por otra vía.
 - `GET /v1/aplicacion/usuarios/municipal/{rut}` sigue devolviendo `created_at` y `updated_at` en cero: `ObtenerPorRUT` no selecciona esas columnas (bug conocido, documentado en `tests/report.md`).
 
 ## Otros
 
-- `../Frontend/` está vacío salvo `.gitkeep`: no hay consumidor del contrato JSON todavía, así que cambiar un tag no rompe nada visible.
+- `../Frontend/` tiene la app Expo local en marcha, pero en git solo está versionado `.gitkeep`: el resto (`.env.local`, `.expo/`, `node_modules/`, `pnpm-lock.yaml`) no está en el repo, así que no hay consumidor versionado del contrato JSON todavía.
 - `../Fase 1/` y `../Fase 2/` son carpetas de evidencias del curso, sin código.
-- `docker/` tiene `Dockerfile`, `docker-compose.yml` y `entrypoint.sh` para desplegar la API; el `docker-compose.yml` de la raíz solo levanta Postgres.
+- `docker/` tiene `Dockerfile`, `docker-compose.yml` y `entrypoint.sh` para desplegar la API. El compose de `docker/` levanta `postgres` + `redis` + `tests` (stage `test` del Dockerfile) + `app`; el `docker-compose.yml` de la raíz solo levanta Postgres.
+- `Backend/.gitattributes` normaliza los archivos de texto a LF (`* text=auto eol=lf`, más reglas para `*.sh`, `docker/**`, `*.go`, `*.yml`, `*.sql`, `*.json`). Es una regla **del backend**, no del repo: el `.gitattributes` de la raíz solo tiene la línea de LFS del mp4. Sin esto, en un clone de Windows con `core.autocrlf=true`, `docker/entrypoint.sh` queda con CRLF y el container falla al arrancar con `bad interpreter` (la shebang `#!/bin/sh\r` no matchea). Si tocás un archivo de texto nuevo, no hace falta hacer nada: la regla lo cubre.
 - `.air.toml` configura live reload con `go build -o ./bin/main ./cmd` (la ruta correcta del entrypoint).
 - `gofmt` no está enganchado a ningún hook: corré `gofmt -w` sobre lo que toques.
 - Todos los archivos, incluido `internal/auth/swagger.go`, están formateados con `gofmt`.

@@ -94,13 +94,28 @@ definitions:
     - codigo
     - email
     type: object
-  categories.PayloadCategoria:
+  categories.PayloadCambiarNombre:
     properties:
       nombre:
         maxLength: 30
         type: string
     required:
     - nombre
+    type: object
+  categories.PayloadCategoria:
+    properties:
+      nombre:
+        maxLength: 30
+        type: string
+      tipo:
+        allOf:
+        - $ref: '#/definitions/model.CategoryType'
+        enum:
+        - ingreso
+        - gasto
+    required:
+    - nombre
+    - tipo
     type: object
   clavesacceso.PayloadCorreo:
     properties:
@@ -111,6 +126,9 @@ definitions:
     type: object
   debtors.PayloadActualizacionDeudor:
     properties:
+      descripcion:
+        maxLength: 100
+        type: string
       fecha_limite:
         type: string
       monto:
@@ -141,6 +159,27 @@ definitions:
     - monto
     - nombre
     type: object
+  dispositivos.PayloadDispositivo:
+    properties:
+      platform:
+        enum:
+        - android
+        - ios
+        - web
+        type: string
+      token:
+        type: string
+    required:
+    - platform
+    - token
+    type: object
+  dispositivos.PayloadEliminarDispositivo:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   empresas.PayloadEmpresa:
     properties:
       nombre_empresa:
@@ -169,10 +208,16 @@ definitions:
       descripcion:
         maxLength: 100
         type: string
-      fecha:
-        type: string
       monto:
         type: integer
+      payment_method:
+        allOf:
+        - $ref: '#/definitions/model.PaymentMethod'
+        enum:
+        - debito
+        - credito
+        - transferencia
+        - efectivo
     type: object
   expenses.PayloadGasto:
     properties:
@@ -183,9 +228,18 @@ definitions:
         type: string
       monto:
         type: integer
+      payment_method:
+        allOf:
+        - $ref: '#/definitions/model.PaymentMethod'
+        enum:
+        - debito
+        - credito
+        - transferencia
+        - efectivo
     required:
     - category_id
     - monto
+    - payment_method
     type: object
   goals.EstadoMeta:
     properties:
@@ -223,8 +277,6 @@ definitions:
         type: string
       descripcion:
         maxLength: 100
-        type: string
-      fecha:
         type: string
       monto:
         type: integer
@@ -287,7 +339,17 @@ definitions:
         type: string
       nombre:
         type: string
+      tipo:
+        $ref: '#/definitions/model.CategoryType'
     type: object
+  model.CategoryType:
+    enum:
+    - ingreso
+    - gasto
+    type: string
+    x-enum-varnames:
+    - CategoryTypeIngreso
+    - CategoryTypeGasto
   model.Debtor:
     properties:
       created_at:
@@ -306,6 +368,19 @@ definitions:
         type: string
       pagado:
         type: boolean
+    type: object
+  model.DeviceToken:
+    properties:
+      id:
+        type: string
+      last_seen_at:
+        type: string
+      platform:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: string
     type: object
   model.Empresa:
     properties:
@@ -332,6 +407,8 @@ definitions:
         type: string
       monto:
         type: integer
+      payment_method:
+        $ref: '#/definitions/model.PaymentMethod'
     type: object
   model.Goal:
     properties:
@@ -376,6 +453,17 @@ definitions:
         type: integer
       payment_method:
         $ref: '#/definitions/model.PaymentMethod'
+    type: object
+  model.NotificationLog:
+    properties:
+      kind:
+        type: string
+      ref_date:
+        type: string
+      sent_at:
+        type: string
+      user_id:
+        type: string
     type: object
   model.PaymentMethod:
     enum:
@@ -425,6 +513,15 @@ definitions:
     x-enum-varnames:
     - UserRoleUsuario
     - UserRoleMunicipal
+  notificaciones.PayloadPruebaNotificacion:
+    properties:
+      cuerpo:
+        maxLength: 250
+        type: string
+      titulo:
+        maxLength: 100
+        type: string
+    type: object
   users.PayloadActualizarUsuario:
     properties:
       nombre:
@@ -458,6 +555,64 @@ info:
   title: Tally
 paths:
   /aplicacion/claves:
+    get:
+      description: 'Devuelve las claves de acceso que emitió el municipal autenticado
+        (created_by), de la más reciente a la más antigua. Solo se listan las claves
+        propias del funcionario: la ruta no expone las de otros. La respuesta viene
+        envuelta en {"datos": ...} con el arreglo de llaves. Se pagina con ?limite
+        (default 30, máximo 100) y ?desplazamiento; un parámetro inválido responde
+        400.'
+      parameters:
+      - default: 30
+        description: máximo de llaves a devolver
+        in: query
+        name: limite
+        type: integer
+      - default: 0
+        description: cuántas llaves saltar
+        in: query
+        name: desplazamiento
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: claves emitidas por el municipal
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.AccessKey'
+              type: array
+            type: object
+        "400":
+          description: paginación inválida
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol municipal)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar las claves de acceso emitidas
+      tags:
+      - ClavesAcceso
     post:
       consumes:
       - application/json
@@ -465,7 +620,7 @@ paths:
         (created_by) con un año de vencimiento y lo envía por correo al destinatario
         del payload. La respuesta viene envuelta en {"datos": ...} con la llave creada;
         el código también viaja en el correo. Emitir es independiente de canjear:
-        el emprendedor lo canjea después en POST /aplicacion/autenticacion.'
+        el emprendedor lo canjea después en POST /autenticacion.'
       parameters:
       - description: correo del destinatario
         in: body
@@ -479,9 +634,23 @@ paths:
         "201":
           description: código creado
           schema:
-            $ref: '#/definitions/model.AccessKey'
+            additionalProperties:
+              $ref: '#/definitions/model.AccessKey'
+            type: object
         "400":
           description: payload inválido o email mal formado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol municipal)
           schema:
             additionalProperties:
               type: string
@@ -524,9 +693,23 @@ paths:
         "200":
           description: correo reenviado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: claveID inválido o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol municipal)
           schema:
             additionalProperties:
               type: string
@@ -566,9 +749,23 @@ paths:
         "200":
           description: código revocado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: código vacío
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol municipal)
           schema:
             additionalProperties:
               type: string
@@ -590,21 +787,255 @@ paths:
       summary: Revocar un código de acceso
       tags:
       - ClavesAcceso
+  /aplicacion/dispositivos:
+    delete:
+      consumes:
+      - application/json
+      description: Elimina el token de dispositivo indicado en el body del usuario
+        autenticado. Responde 204 sin contenido.
+      parameters:
+      - description: token del dispositivo
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/dispositivos.PayloadEliminarDispositivo'
+      responses:
+        "204":
+          description: dispositivo desvinculado
+        "400":
+          description: token inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: dispositivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Desvincular un token de dispositivo
+      tags:
+      - Dispositivos
+    get:
+      description: 'Devuelve la lista de dispositivos y tokens activos asociados al
+        usuario autenticado. La respuesta viene envuelta en {"datos": [...]}.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lista de dispositivos
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.DeviceToken'
+              type: array
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar dispositivos registrados
+      tags:
+      - Dispositivos
+    post:
+      consumes:
+      - application/json
+      description: 'Alias de PUT /aplicacion/dispositivos: registra un token de notificación
+        push o actualiza su última conexión. Responde 204 sin contenido.'
+      parameters:
+      - description: token y plataforma del dispositivo
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/dispositivos.PayloadDispositivo'
+      responses:
+        "204":
+          description: dispositivo registrado
+        "400":
+          description: payload inválido o plataforma no soportada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar o refrescar token de dispositivo
+      tags:
+      - Dispositivos
+    put:
+      consumes:
+      - application/json
+      description: Registra un nuevo token de notificación push o actualiza la última
+        conexión (last_seen_at) de un dispositivo para el usuario autenticado. Admite
+        plataformas android, ios y web. Responde 204 sin contenido.
+      parameters:
+      - description: token y plataforma del dispositivo
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/dispositivos.PayloadDispositivo'
+      responses:
+        "204":
+          description: dispositivo registrado
+        "400":
+          description: payload inválido o plataforma no soportada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar o refrescar token de dispositivo
+      tags:
+      - Dispositivos
+  /aplicacion/dispositivos/{token}:
+    delete:
+      description: Elimina el token de dispositivo del usuario autenticado (por ejemplo,
+        al cerrar sesión en la app móvil). Responde 204 sin contenido.
+      parameters:
+      - description: token del dispositivo
+        in: path
+        name: token
+        required: true
+        type: string
+      responses:
+        "204":
+          description: dispositivo desvinculado
+        "400":
+          description: token inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: dispositivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Desvincular token de dispositivo
+      tags:
+      - Dispositivos
   /aplicacion/empresas:
     get:
       description: 'Devuelve todas las empresas asociadas al usuario autenticado.
-        La respuesta viene envuelta en {"datos": ...}.'
+        La respuesta viene envuelta en {"datos": ...}. Si el usuario no tiene empresas
+        responde 200 con {"datos": null}.'
       produces:
       - application/json
       responses:
         "200":
           description: lista de empresas
           schema:
-            items:
-              $ref: '#/definitions/model.Empresa'
-            type: array
-        "404":
-          description: empresas no encontradas
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Empresa'
+              type: array
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
@@ -638,9 +1069,23 @@ paths:
         "201":
           description: empresa creada
           schema:
-            $ref: '#/definitions/model.Empresa'
+            additionalProperties:
+              $ref: '#/definitions/model.Empresa'
+            type: object
         "400":
           description: payload de la empresa erroneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
@@ -672,7 +1117,27 @@ paths:
         "200":
           description: empresa borrada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: empresaID inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "404":
           description: empresa no encontrada
           schema:
@@ -693,8 +1158,8 @@ paths:
   /aplicacion/empresas/{empresaID}/{nombre}:
     patch:
       description: 'Cambia el nombre de una empresa, siempre que pertenezca al usuario
-        autenticado. La respuesta viene envuelta en {"datos": ...} con el mensaje
-        de confirmación.'
+        autenticado. El nombre se limita a 30 caracteres. La respuesta viene envuelta
+        en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -712,9 +1177,23 @@ paths:
         "200":
           description: nombre actualizado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: ruta debe incluir el nombre de la empresa
+          description: empresaID inválido, nombre vacío o nombre de más de 30 caracteres
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
@@ -754,9 +1233,35 @@ paths:
         "200":
           description: categorías de la empresa y globales
           schema:
-            items:
-              $ref: '#/definitions/model.Categorie'
-            type: array
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.Categorie'
+              type: array
+            type: object
+        "400":
+          description: empresaID inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
           schema:
@@ -771,8 +1276,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Crea una nueva categoría asociada a la empresa autenticada. La
-        respuesta viene envuelta en {"datos": ...} con la categoría creada.'
+      description: 'Crea una nueva categoría asociada a la empresa autenticada. El
+        campo "tipo" indica si la categoría aplica a los ingresos ("ingreso") o a
+        los gastos ("gasto") y no se puede cambiar después. La respuesta viene envuelta
+        en {"datos": ...} con la categoría creada.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -791,9 +1298,30 @@ paths:
         "201":
           description: categoría creada
           schema:
-            $ref: '#/definitions/model.Categorie'
+            additionalProperties:
+              $ref: '#/definitions/model.Categorie'
+            type: object
         "400":
-          description: payload de la categoría erróneo o la categoría ya existe
+          description: empresaID inválido, payload de la categoría erróneo o la categoría
+            ya existe
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -832,15 +1360,29 @@ paths:
         "200":
           description: categoría eliminada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: categoria invalido
+          description: empresaID o categoria invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: categoría no encontrada
+          description: empresa ajena o categoría no encontrada
           schema:
             additionalProperties:
               type: string
@@ -865,8 +1407,9 @@ paths:
   /aplicacion/empresas/{empresaID}/categorias/{categoriaID}:
     patch:
       description: 'Cambia el nombre de una categoría, siempre que pertenezca a la
-        empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el
-        mensaje de confirmación.'
+        empresa autenticada. El tipo de la categoría no se modifica: mandarlo en el
+        payload es un 400 por campo desconocido. La respuesta viene envuelta en {"datos":
+        ...} con el mensaje de confirmación.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -883,22 +1426,36 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/categories.PayloadCategoria'
+          $ref: '#/definitions/categories.PayloadCambiarNombre'
       produces:
       - application/json
       responses:
         "200":
           description: nombre cambiado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: categoriaID inválido o payload erróneo
+          description: empresaID o categoriaID inválido, o payload erróneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: categoría no encontrada
+          description: empresa ajena o categoría no encontrada
           schema:
             additionalProperties:
               type: string
@@ -936,6 +1493,30 @@ paths:
                 $ref: '#/definitions/model.Debtor'
               type: array
             type: object
+        "400":
+          description: empresaID inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
           schema:
@@ -972,9 +1553,29 @@ paths:
         "201":
           description: deuda creada
           schema:
-            $ref: '#/definitions/model.Debtor'
+            additionalProperties:
+              $ref: '#/definitions/model.Debtor'
+            type: object
         "400":
-          description: payload inválido
+          description: empresaID inválido o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -991,13 +1592,74 @@ paths:
       tags:
       - Deudas
   /aplicacion/empresas/{empresaID}/deudas/{deudorID}:
+    delete:
+      description: 'Elimina una deuda de la empresa autenticada. Se puede borrar tanto
+        una deuda pendiente como una ya pagada. Si la deuda no existe o es de otra
+        empresa responde 404. La respuesta viene envuelta en {"datos": ...} con el
+        mensaje de confirmación.'
+      parameters:
+      - description: ID de la empresa
+        in: path
+        name: empresaID
+        required: true
+        type: string
+      - description: ID de la deuda
+        in: path
+        name: deudorID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: deuda eliminada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: empresaID o deudorID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa ajena o deuda no encontrada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Eliminar deuda
+      tags:
+      - Deudas
     patch:
       consumes:
       - application/json
       description: 'Actualiza "nombre", "monto" y "fecha_limite" de una deuda de la
-        empresa autenticada. La descripción no se modifica. "monto" es un entero en
-        pesos chilenos (CLP, sin decimales) y debe ser mayor que cero. La respuesta
-        viene envuelta en {"datos": ...}.'
+        empresa autenticada. "descripcion" es opcional: si no se manda, la descripción
+        que ya tenía la deuda se queda; si se manda (incluso vacía), se reemplaza.
+        "monto" es un entero en pesos chilenos (CLP, sin decimales) y debe ser mayor
+        que cero. La respuesta viene envuelta en {"datos": ...}.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1021,15 +1683,29 @@ paths:
         "200":
           description: deuda actualizada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: deudorID o payload inválido
+          description: empresaID o deudorID inválido, o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: deuda no encontrada
+          description: empresa ajena o deuda no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1067,15 +1743,29 @@ paths:
         "200":
           description: deuda pagada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: deudorID invalido
+          description: empresaID o deudorID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: deuda no encontrada
+          description: empresa ajena o deuda no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1121,6 +1811,30 @@ paths:
                 $ref: '#/definitions/excel.File'
               type: array
             type: object
+        "400":
+          description: empresaID inválido o paginación inválida
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
           schema:
@@ -1156,10 +1870,30 @@ paths:
         "200":
           description: archivo subido
           schema:
-            $ref: '#/definitions/excel.File'
+            additionalProperties:
+              $ref: '#/definitions/excel.File'
+            type: object
         "400":
-          description: falta el archivo, no es un .xlsx válido o excede el tamaño
-            máximo
+          description: empresaID inválido, falta el archivo, no es un .xlsx válido
+            o excede el tamaño máximo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1195,16 +1929,26 @@ paths:
       responses:
         "204":
           description: archivo eliminado
-          schema:
-            type: string
         "400":
-          description: id invalido
+          description: empresaID o id invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: archivo no encontrado
+          description: empresa ajena o archivo no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1243,13 +1987,25 @@ paths:
           schema:
             type: file
         "400":
-          description: id invalido
+          description: empresaID o id invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: archivo no encontrado
+          description: empresa ajena o archivo no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1311,7 +2067,25 @@ paths:
               type: array
             type: object
         "400":
-          description: parametros de paginacion erroneos
+          description: empresaID inválido o parametros de paginacion erroneos
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1333,8 +2107,10 @@ paths:
       description: 'Registra un nuevo gasto asociado a la empresa autenticada. La
         respuesta viene envuelta en {"datos": ...} con el gasto creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
-        (CLP, sin decimales). "categoria_id" es obligatorio y debe ser el UUID de
-        una categoría global o de la empresa; si no existe o pertenece a otra empresa
+        (CLP, sin decimales). "payment_method" es obligatorio y es uno de debito,
+        credito, transferencia o efectivo; un valor distinto responde 400. "categoria_id"
+        es obligatorio y debe ser el UUID de una categoría global o de la empresa
+        de tipo "gasto"; si no existe, pertenece a otra empresa o es de tipo "ingreso"
         responde 400. El payload no acepta "fecha": la asigna la base de datos con
         CURRENT_DATE.'
       parameters:
@@ -1355,9 +2131,29 @@ paths:
         "201":
           description: gasto creado
           schema:
-            $ref: '#/definitions/model.Expense'
+            additionalProperties:
+              $ref: '#/definitions/model.Expense'
+            type: object
         "400":
-          description: payload del gasto erróneo
+          description: empresaID inválido o payload del gasto erróneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1395,15 +2191,29 @@ paths:
         "200":
           description: gasto eliminado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: gastoID invalido
+          description: empresaID o gastoID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: gasto no encontrado
+          description: empresa ajena o gasto no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1423,10 +2233,13 @@ paths:
       consumes:
       - application/json
       description: 'Edita un gasto de la empresa autenticada. Solo se modifican los
-        campos que vienen en el payload: lo que se omite se queda como estaba. "fecha"
-        (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato inválido
-        responde 400. Si el gasto no existe o es de otra empresa responde 404. La
-        respuesta viene envuelta en {"datos": ...} con el gasto ya actualizado.'
+        campos que vienen en el payload (monto, payment_method, category_id, descripcion):
+        lo que se omite se queda como estaba. "payment_method", si viene, debe ser
+        uno de debito, credito, transferencia o efectivo. La categoría, si viene,
+        debe ser de tipo "gasto". La fecha del movimiento NO se edita: mandarla en
+        el payload es un 400 por campo desconocido. Si el gasto no existe o es de
+        otra empresa responde 404. La respuesta viene envuelta en {"datos": ...} con
+        el gasto ya actualizado.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1450,15 +2263,30 @@ paths:
         "200":
           description: gasto actualizado
           schema:
-            $ref: '#/definitions/model.Expense'
+            additionalProperties:
+              $ref: '#/definitions/model.Expense'
+            type: object
         "400":
-          description: payload erróneo, fecha inválida o categoría ajena
+          description: empresaID o gastoID inválido, payload erróneo, sin campos o
+            categoría ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: gasto no encontrado
+          description: empresa ajena o gasto no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1520,7 +2348,25 @@ paths:
               type: array
             type: object
         "400":
-          description: parametros de paginacion erroneos
+          description: empresaID inválido o parametros de paginacion erroneos
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1543,8 +2389,8 @@ paths:
         respuesta viene envuelta en {"datos": ...} con el ingreso creado, incluyendo
         el id y las fechas que asigna la base. "monto" es un entero en pesos chilenos
         (CLP, sin decimales). "categoria_id" es opcional (la columna es nullable)
-        y debe ser el UUID de una categoría global o de la empresa; si no existe o
-        pertenece a otra empresa responde 400.'
+        y debe ser el UUID de una categoría global o de la empresa de tipo "ingreso";
+        si no existe, pertenece a otra empresa o es de tipo "gasto" responde 400.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1563,9 +2409,29 @@ paths:
         "201":
           description: ingreso creado
           schema:
-            $ref: '#/definitions/model.Income'
+            additionalProperties:
+              $ref: '#/definitions/model.Income'
+            type: object
         "400":
-          description: payload del ingreso erróneo
+          description: empresaID inválido o payload del ingreso erróneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1603,15 +2469,29 @@ paths:
         "200":
           description: ingreso eliminado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: ingresoID invalido
+          description: empresaID o ingresoID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: ingreso no encontrado
+          description: empresa ajena o ingreso no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1631,10 +2511,12 @@ paths:
       consumes:
       - application/json
       description: 'Edita un ingreso de la empresa autenticada. Solo se modifican
-        los campos que vienen en el payload: lo que se omite se queda como estaba.
-        "fecha" (AAAA-MM-DD) permite corregir la fecha del movimiento; un formato
-        inválido responde 400. Si el ingreso no existe o es de otra empresa responde
-        404. La respuesta viene envuelta en {"datos": ...} con el ingreso ya actualizado.'
+        los campos que vienen en el payload (monto, payment_method, descripcion, category_id):
+        lo que se omite se queda como estaba. La categoría, si viene, debe ser de
+        tipo "ingreso". La fecha del movimiento NO se edita: mandarla en el payload
+        es un 400 por campo desconocido. Si el ingreso no existe o es de otra empresa
+        responde 404. La respuesta viene envuelta en {"datos": ...} con el ingreso
+        ya actualizado.'
       parameters:
       - description: ID de la empresa
         in: path
@@ -1658,15 +2540,30 @@ paths:
         "200":
           description: ingreso actualizado
           schema:
-            $ref: '#/definitions/model.Income'
+            additionalProperties:
+              $ref: '#/definitions/model.Income'
+            type: object
         "400":
-          description: payload erróneo, fecha inválida o categoría ajena
+          description: empresaID o ingresoID inválido, payload erróneo, sin campos
+            o categoría ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: ingreso no encontrado
+          description: empresa ajena o ingreso no encontrado
           schema:
             additionalProperties:
               type: string
@@ -1705,6 +2602,30 @@ paths:
                 $ref: '#/definitions/model.Goal'
               type: array
             type: object
+        "400":
+          description: empresaID inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "500":
           description: error interno del servidor
           schema:
@@ -1741,9 +2662,29 @@ paths:
         "201":
           description: objetivo creado
           schema:
-            $ref: '#/definitions/model.Goal'
+            additionalProperties:
+              $ref: '#/definitions/model.Goal'
+            type: object
         "400":
-          description: payload inválido o falta la empresa en el contexto
+          description: empresaID inválido o payload inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: empresa no encontrada o ajena
           schema:
             additionalProperties:
               type: string
@@ -1780,15 +2721,29 @@ paths:
         "200":
           description: meta eliminada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
-          description: metaID invalido
+          description: empresaID o metaID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: meta no encontrada
+          description: empresa ajena o meta no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1824,15 +2779,29 @@ paths:
         "200":
           description: meta encontrada
           schema:
-            $ref: '#/definitions/model.Goal'
+            additionalProperties:
+              $ref: '#/definitions/model.Goal'
+            type: object
         "400":
-          description: metaID invalido
+          description: empresaID o metaID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: meta no encontrada
+          description: empresa ajena o meta no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1872,15 +2841,29 @@ paths:
         "200":
           description: estado del objetivo
           schema:
-            $ref: '#/definitions/goals.EstadoMeta'
+            additionalProperties:
+              $ref: '#/definitions/goals.EstadoMeta'
+            type: object
         "400":
-          description: metaID invalido
+          description: empresaID o metaID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
             type: object
         "404":
-          description: meta no encontrada
+          description: empresa ajena o meta no encontrada
           schema:
             additionalProperties:
               type: string
@@ -1896,16 +2879,226 @@ paths:
       summary: Estado de la meta
       tags:
       - Metas
+  /aplicacion/jobs/cobros-vencidos:
+    post:
+      description: Ejecuta bajo demanda el job que detecta deudores vencidos e impagos
+        agrupados por usuario, emitiendo una notificación consolidada en pesos chilenos.
+        Responde 200 con mensaje de confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: aviso de cobros vencidos ejecutado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar aviso de cobros vencidos
+      tags:
+      - Jobs
+  /aplicacion/jobs/ejecutar-todos:
+    post:
+      description: Ejecuta secuencialmente el recordatorio diario por inactividad
+        y el aviso de cobros vencidos. Responde 200 con mensaje de confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: todos los jobs ejecutados
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar todas las tareas programadas
+      tags:
+      - Jobs
+  /aplicacion/jobs/recordatorio-diario:
+    post:
+      description: Ejecuta bajo demanda el job que detecta usuarios con dispositivos
+        registrados que hoy no han cargado ningún ingreso ni egreso (en hora de Chile),
+        emitiendo la notificación push correspondiente. Responde 200 con mensaje de
+        confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: recordatorio diario ejecutado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar recordatorio diario de inactividad
+      tags:
+      - Jobs
+  /aplicacion/notificaciones/historial:
+    get:
+      description: 'Devuelve el registro de notificaciones y recordatorios emitidos
+        para el usuario autenticado (notification_log), ordenados del más reciente
+        al más antiguo. La respuesta viene envuelta en {"datos": [...]}.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: historial de notificaciones
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.NotificationLog'
+              type: array
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar historial de notificaciones enviadas
+      tags:
+      - Notificaciones
+  /aplicacion/notificaciones/probar:
+    post:
+      consumes:
+      - application/json
+      description: 'Despacha inmediatamente una notificación push de prueba a todos
+        los dispositivos registrados del usuario autenticado. La respuesta viene envuelta
+        en {"datos": ...}.'
+      parameters:
+      - description: título y cuerpo opcionales
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/notificaciones.PayloadPruebaNotificacion'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: notificación de prueba enviada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Enviar notificación push de prueba
+      tags:
+      - Notificaciones
   /aplicacion/usuarios:
     delete:
-      description: Elimina un usuario de la base de datos
+      description: 'Elimina un usuario de la base de datos. La respuesta viene envuelta
+        en {"datos": ...} con el mensaje de confirmación.'
       responses:
         "200":
           description: usuario eliminado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: userID invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
@@ -1930,7 +3123,8 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Actualiza un usuario en la base de datos
+      description: 'Actualiza un usuario en la base de datos. La respuesta viene envuelta
+        en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: payload
         in: body
@@ -1944,9 +3138,23 @@ paths:
         "200":
           description: usuario actualizado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload del usuario erróneo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol usuario)
           schema:
             additionalProperties:
               type: string
@@ -1970,7 +3178,8 @@ paths:
       - Usuarios
   /aplicacion/usuarios/municipal/{rut}:
     get:
-      description: Busca un usuario por su rut
+      description: 'Busca un usuario por su rut. La respuesta viene envuelta en {"datos":
+        ...} con el usuario.'
       parameters:
       - description: rut del usuario
         in: path
@@ -1983,9 +3192,23 @@ paths:
         "200":
           description: usuario
           schema:
-            $ref: '#/definitions/model.User'
+            additionalProperties:
+              $ref: '#/definitions/model.User'
+            type: object
         "400":
           description: rut invalido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: prohibido (se requiere rol municipal)
           schema:
             additionalProperties:
               type: string
@@ -2011,7 +3234,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Registra un nuevo usuario y devuelve un token de autenticación
+      description: 'Registra un nuevo usuario y devuelve un token de autenticación.
+        La respuesta viene envuelta en {"datos": ...} con el token.'
       parameters:
       - description: payload
         in: body
@@ -2025,7 +3249,9 @@ paths:
         "201":
           description: token de autenticacion
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload erróneo o datos duplicados
           schema:
@@ -2045,7 +3271,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Inicia sesión con email y contraseña y devuelve un token de autenticación
+      description: 'Inicia sesión con email y contraseña y devuelve un token de autenticación.
+        La respuesta viene envuelta en {"datos": ...} con el token.'
       parameters:
       - description: payload
         in: body
@@ -2059,7 +3286,9 @@ paths:
         "202":
           description: token de autenticacion
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: credenciales invalidas
           schema:
@@ -2079,7 +3308,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Registra un usuario con rol municipal y devuelve un token de autenticación
+      description: 'Registra un usuario con rol municipal y devuelve un token de autenticación.
+        La respuesta viene envuelta en {"datos": ...} con el token.'
       parameters:
       - description: payload
         in: body
@@ -2093,7 +3323,9 @@ paths:
         "201":
           description: token de autenticacion
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload erróneo o datos duplicados
           schema:
@@ -2113,9 +3345,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Genera un código numérico de 6 dígitos y lo manda por correo al
+      description: 'Genera un código numérico de 6 dígitos y lo manda por correo al
         email indicado. El código sirve para verificar al usuario y después cambiar
-        su contraseña. Si el email no está registrado responde 400.
+        su contraseña. Si el email no está registrado responde 400. La respuesta viene
+        envuelta en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: payload
         in: body
@@ -2129,7 +3362,9 @@ paths:
         "202":
           description: código enviado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload erróneo o email no registrado
           schema:
@@ -2149,8 +3384,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Cambia la contraseña del usuario con el código de recuperación
-        ya verificado. El código queda consumido y no se puede reusar.
+      description: 'Cambia la contraseña del usuario con el código de recuperación
+        ya verificado. El código queda consumido y no se puede reusar. La respuesta
+        viene envuelta en {"datos": ...} con el mensaje de confirmación.'
       parameters:
       - description: payload
         in: body
@@ -2164,7 +3400,9 @@ paths:
         "200":
           description: contraseña actualizada
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload erróneo o código inválido
           schema:
@@ -2184,9 +3422,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Verifica el código de 6 dígitos recibido por correo. Un código
+      description: 'Verifica el código de 6 dígitos recibido por correo. Un código
         verificado habilita el cambio de contraseña. Un código incorrecto, vencido
-        o ya usado responde 400.
+        o ya usado responde 400. La respuesta viene envuelta en {"datos": ...} con
+        el mensaje de confirmación.'
       parameters:
       - description: payload
         in: body
@@ -2200,7 +3439,9 @@ paths:
         "200":
           description: código verificado
           schema:
-            type: string
+            additionalProperties:
+              type: string
+            type: object
         "400":
           description: payload erróneo o código inválido
           schema:

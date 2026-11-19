@@ -84,6 +84,59 @@ func (s *AlmacenClavesAcceso) ObtenerPorID(ctx context.Context, accessKeyID uuid
 	return AccessKey, nil
 }
 
+// ObtenerPorEmisor devuelve las claves de acceso emitidas por el municipal
+// indicado, de la más reciente a la más antigua.
+//
+// El ORDER BY no es cosmético: sin un orden determinista el LIMIT/OFFSET
+// puede repetir o saltear filas entre páginas.
+func (s *AlmacenClavesAcceso) ObtenerPorEmisor(ctx context.Context, municipalID uuid.UUID, limite, desplazamiento int) ([]model.AccessKey, error) {
+	query := `
+		SELECT id, code, created_by, redeemed_by,
+		       redeemed_at, expires_at, revoked_at, revoked_by, created_at
+		FROM access_keys
+		WHERE created_by = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, municipalID, limite, desplazamiento)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	claves := []model.AccessKey{}
+
+	for rows.Next() {
+		accessKey := model.AccessKey{}
+
+		if err := rows.Scan(
+			&accessKey.ID,
+			&accessKey.Code,
+			&accessKey.CreatedBy,
+			&accessKey.RedeemedBy,
+			&accessKey.RedeemedAt,
+			&accessKey.ExpiresAt,
+			&accessKey.RevokedAt,
+			&accessKey.RevokedBy,
+			&accessKey.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		claves = append(claves, accessKey)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return claves, nil
+}
+
 func (s *AlmacenClavesAcceso) Canjear(ctx context.Context, code string, userID uuid.UUID) (*model.AccessKey, error) {
 	query := `
 		UPDATE access_keys

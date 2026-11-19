@@ -56,12 +56,14 @@ tasks:
     desc: "Corre vet + los tests con race detector y cobertura (ej: go tool task test TEST_FLAGS='-run TestUserService -v')"
     cmds:
       - go vet ./...
-      - go test {{.TEST_FLAGS}} ./...
+      # El script saca -race si el entorno no tiene cgo (Windows sin mingw,
+      # Alpine sin gcc): "go test -race" aborta con "-race requires cgo".
+      - sh scripts/run-tests.sh {{.TEST_FLAGS}} ./...
 
   test-cover:
     desc: Genera coverage.out y muestra el desglose de cobertura por función
     cmds:
-      - go test -race -covermode=atomic -coverprofile=coverage.out ./...
+      - sh scripts/run-tests.sh -race -covermode=atomic -coverprofile=coverage.out ./...
       - go tool cover -func=coverage.out
 
   clean-cover:

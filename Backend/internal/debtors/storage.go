@@ -61,23 +61,55 @@ func (s *AlmacenDeudores) Crear(ctx context.Context, debtor *model.Debtor) error
 	).Scan(&debtor.ID, &debtor.Pagado, &debtor.CreatedAt)
 }
 
-func (s *AlmacenDeudores) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, debtor model.Debtor) error {
+func (s *AlmacenDeudores) Actualizar(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID, cambios CambiosDeudor) error {
+	// COALESCE: si el payload no trae descripción (NULL), la que ya tenía la
+	// deuda se queda; si trae "" (o un texto), se reemplaza.
 	query := `
 		UPDATE debtors
-		SET nombre = $1, monto = $2, fecha_limite = $3
-		WHERE id = $4 and empresa_id = $5
+		SET nombre = $1, monto = $2, fecha_limite = $3,
+			descripcion = COALESCE($4, descripcion)
+		WHERE id = $5 and empresa_id = $6
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
 	result, err := s.db.ExecContext(ctx, query,
-		debtor.Nombre,
-		debtor.Monto,
-		debtor.FechaLimite,
+		cambios.Nombre,
+		cambios.Monto,
+		cambios.FechaLimite,
+		cambios.Descripcion,
 		deudorID,
 		empresaID,
 	)
+	if err != nil {
+		return err
+	}
+
+	filas, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if filas == 0 {
+		return utilidades.ErrorNoEncontrado
+	}
+
+	return nil
+}
+
+// BorrarDeudor elimina la deuda. Si no existe o no pertenece a la empresa,
+// devuelve utilidades.ErrorNoEncontrado.
+func (s *AlmacenDeudores) BorrarDeudor(ctx context.Context, deudorID uuid.UUID, empresaID uuid.UUID) error {
+	query := `
+		DELETE FROM debtors
+		WHERE id = $1 and empresa_id = $2
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
+	defer cancel()
+
+	result, err := s.db.ExecContext(ctx, query, deudorID, empresaID)
 	if err != nil {
 		return err
 	}

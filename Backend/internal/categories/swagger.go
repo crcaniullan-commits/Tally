@@ -6,9 +6,13 @@ package categories
 //	@Description	Devuelve las categorías de la empresa autenticada y las globales. Las globales se distinguen porque "empresa_id" viene null. La respuesta viene envuelta en {"datos": [...]} con las categorías propias primero, ordenadas por nombre.
 //	@Tags			Categorias
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Success		200			{array}		model.Categorie		"categorías de la empresa y globales"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string							true	"ID de la empresa"
+//	@Success		200			{object}	map[string][]model.Categorie	"categorías de la empresa y globales"
+//	@Failure		400			{object}	map[string]string				"empresaID inválido"
+//	@Failure		401			{object}	map[string]string				"no autorizado"
+//	@Failure		403			{object}	map[string]string				"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string				"empresa no encontrada o ajena"
+//	@Failure		500			{object}	map[string]string				"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/categorias	[get]
 func ObtenerCategorias() {}
@@ -16,15 +20,18 @@ func ObtenerCategorias() {}
 // Crear
 //
 //	@Summary		Crear categoría
-//	@Description	Crea una nueva categoría asociada a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con la categoría creada.
+//	@Description	Crea una nueva categoría asociada a la empresa autenticada. El campo "tipo" indica si la categoría aplica a los ingresos ("ingreso") o a los gastos ("gasto") y no se puede cambiar después. La respuesta viene envuelta en {"datos": ...} con la categoría creada.
 //	@Tags			Categorias
 //	@Accept			json
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		PayloadCategoria	true	"payload"
-//	@Success		201			{object}	model.Categorie		"categoría creada"
-//	@Failure		400			{object}	map[string]string	"payload de la categoría erróneo o la categoría ya existe"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string						true	"ID de la empresa"
+//	@Param			payload		body		PayloadCategoria			true	"payload"
+//	@Success		201			{object}	map[string]model.Categorie	"categoría creada"
+//	@Failure		400			{object}	map[string]string			"empresaID inválido, payload de la categoría erróneo o la categoría ya existe"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa no encontrada o ajena"
+//	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/categorias	[post]
 func Crear() {}
@@ -32,16 +39,18 @@ func Crear() {}
 // CambiarNombre
 //
 //	@Summary		Cambiar nombre de categoría
-//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
+//	@Description	Cambia el nombre de una categoría, siempre que pertenezca a la empresa autenticada. El tipo de la categoría no se modifica: mandarlo en el payload es un 400 por campo desconocido. La respuesta viene envuelta en {"datos": ...} con el mensaje de confirmación.
 //	@Tags			Categorias
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			categoriaID	path		string				true	"ID de la categoría"
-//	@Param			payload		body		PayloadCategoria	true	"payload"
-//	@Success		200			{object}	string				"nombre cambiado"
-//	@Failure		400			{object}	map[string]string	"categoriaID inválido o payload erróneo"
-//	@Failure		404			{object}	map[string]string	"categoría no encontrada"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string					true	"ID de la empresa"
+//	@Param			categoriaID	path		string					true	"ID de la categoría"
+//	@Param			payload		body		PayloadCambiarNombre	true	"payload"
+//	@Success		200			{object}	map[string]string		"nombre cambiado"
+//	@Failure		400			{object}	map[string]string		"empresaID o categoriaID inválido, o payload erróneo"
+//	@Failure		401			{object}	map[string]string		"no autorizado"
+//	@Failure		403			{object}	map[string]string		"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string		"empresa ajena o categoría no encontrada"
+//	@Failure		500			{object}	map[string]string		"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/categorias/{categoriaID}	[patch]
 func CambiarNombre() {}
@@ -54,9 +63,11 @@ func CambiarNombre() {}
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			categoria	path		string				true	"ID de la categoría"
-//	@Success		200			{object}	string				"categoría eliminada"
-//	@Failure		400			{object}	map[string]string	"categoria invalido"
-//	@Failure		404			{object}	map[string]string	"categoría no encontrada"
+//	@Success		200			{object}	map[string]string	"categoría eliminada"
+//	@Failure		400			{object}	map[string]string	"empresaID o categoria invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o categoría no encontrada"
 //	@Failure		409			{object}	map[string]string	"la categoría tiene movimientos asociados"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth

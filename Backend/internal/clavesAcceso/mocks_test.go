@@ -39,6 +39,14 @@ func (m *RepositorioClavesAccesoMock) Revocar(ctx context.Context, revokeData Da
 	return args.Error(0)
 }
 
+func (m *RepositorioClavesAccesoMock) ObtenerPorEmisor(ctx context.Context, municipalID uuid.UUID, limite, desplazamiento int) ([]model.AccessKey, error) {
+	args := m.Called(ctx, municipalID, limite, desplazamiento)
+
+	claves, _ := args.Get(0).([]model.AccessKey)
+
+	return claves, args.Error(1)
+}
+
 // correoEnviado es una llamada a SendActivationCode ya terminada.
 type correoEnviado struct {
 	To        string
@@ -158,6 +166,14 @@ func (m *IServiceClavesAccesoMock) Reenviar(ctx context.Context, accessKeyID uui
 func (m *IServiceClavesAccesoMock) Revocar(ctx context.Context, municipalID uuid.UUID, code string) error {
 	args := m.Called(ctx, municipalID, code)
 	return args.Error(0)
+}
+
+func (m *IServiceClavesAccesoMock) ListarPorEmisor(ctx context.Context, municipalID uuid.UUID, limite, desplazamiento int) ([]model.AccessKey, error) {
+	args := m.Called(ctx, municipalID, limite, desplazamiento)
+
+	claves, _ := args.Get(0).([]model.AccessKey)
+
+	return claves, args.Error(1)
 }
 
 var (

@@ -9,13 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
-func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion) {
+func InitModule(r chi.Router, db *sql.DB, logger *zap.SugaredLogger, middl utilidades.MiddlewareAutenticacion, inv invalidarUsuario) {
 	err := errores.NuevaRespuestaErrores(logger)
 
 	repo := NuevoAlmacenUsuarios(db)
-	svc := NuevoServicioUsuarios(repo)
+	svc := NuevoServicioUsuarios(repo, inv)
 	hdl := NuevoHandlerUsuarios(svc, err)
-
 	r.Route("/usuarios", func(r chi.Router) {
 		r.Patch("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Actualizar))
 		r.Delete("/", middl.VerificarRol(utilidades.RolUsuario, hdl.Eliminar))

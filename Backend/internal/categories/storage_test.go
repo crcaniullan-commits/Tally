@@ -53,7 +53,7 @@ func newMockStore(t *testing.T) *mockStore {
 }
 
 func categoriaColumns() []string {
-	return []string{"id", "nombre", "empresa_id"}
+	return []string{"id", "nombre", "empresa_id", "tipo"}
 }
 
 func categoriaRow() []driver.Value {
@@ -61,6 +61,7 @@ func categoriaRow() []driver.Value {
 		testCategoriaID,
 		"Comida",
 		testEmpresaID,
+		string(model.CategoryTypeGasto),
 	}
 }
 
@@ -72,6 +73,7 @@ func TestStoreCategorie_GetCategoriasPorEmpresa(t *testing.T) {
 			uuid.MustParse("b1c2d3e4-5f60-4a7b-8c9d-0e1f2a3b4c5e"),
 			"Bebidas",
 			testEmpresaID,
+			string(model.CategoryTypeIngreso),
 		}
 
 		ms.mock.ExpectQuery("cualquier SELECT").
@@ -89,7 +91,7 @@ func TestStoreCategorie_GetCategoriasPorEmpresa(t *testing.T) {
 		require.NotNil(t, categorias[0].EmpresaID)
 		assert.Equal(t, testEmpresaID, *categorias[0].EmpresaID)
 		assert.Equal(t, "Bebidas", categorias[1].Nombre)
-		assert.Contains(t, ms.sql, "SELECT id, nombre, empresa_id")
+		assert.Contains(t, ms.sql, "SELECT id, nombre, empresa_id, tipo")
 		assert.Contains(t, ms.sql, "FROM categories")
 		assert.Contains(t, ms.sql, "WHERE empresa_id = $1")
 	})
@@ -126,7 +128,7 @@ func TestStoreCategorie_GetCategoriasPorEmpresa(t *testing.T) {
 		ms.mock.ExpectQuery("cualquier SELECT").
 			WithArgs(testEmpresaID).
 			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
-				AddRow(123, "Comida", testEmpresaID))
+				AddRow(123, "Comida", testEmpresaID, string(model.CategoryTypeGasto)))
 
 		categorias, err := ms.store.ObtenerCategoriasPorEmpresa(context.Background(), testEmpresaID)
 
@@ -158,6 +160,7 @@ func TestStoreCategorie_GetCategoriasVisibles(t *testing.T) {
 			uuid.MustParse("c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
 			"Ventas",
 			nil,
+			string(model.CategoryTypeIngreso),
 		}
 
 		ms.mock.ExpectQuery("cualquier SELECT").
@@ -210,7 +213,7 @@ func TestStoreCategorie_GetCategoriasVisibles(t *testing.T) {
 		ms.mock.ExpectQuery("cualquier SELECT").
 			WithArgs(testEmpresaID).
 			WillReturnRows(sqlmock.NewRows(categoriaColumns()).
-				AddRow(123, "Comida", testEmpresaID))
+				AddRow(123, "Comida", testEmpresaID, string(model.CategoryTypeGasto)))
 
 		categorias, err := ms.store.ObtenerCategoriasVisibles(context.Background(), testEmpresaID)
 
@@ -242,10 +245,11 @@ func TestStoreCategorie_Create(t *testing.T) {
 		categoria := &model.Categorie{
 			Nombre:    "Comida",
 			EmpresaID: &empresaID,
+			Tipo:      model.CategoryTypeGasto,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs("Comida", &empresaID).
+			WithArgs("Comida", &empresaID, model.CategoryTypeGasto).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(testCategoriaID))
 
 		err := ms.store.Crear(context.Background(), categoria)
@@ -253,6 +257,7 @@ func TestStoreCategorie_Create(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, testCategoriaID, categoria.ID)
 		assert.Contains(t, ms.sql, "INSERT INTO categories")
+		assert.Contains(t, ms.sql, "(nombre, empresa_id, tipo)")
 	})
 
 	t.Run("propaga utilidades.ErrorNoEncontrado si no retorna filas", func(t *testing.T) {
@@ -262,10 +267,11 @@ func TestStoreCategorie_Create(t *testing.T) {
 		categoria := &model.Categorie{
 			Nombre:    "Comida",
 			EmpresaID: &empresaID,
+			Tipo:      model.CategoryTypeGasto,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs("Comida", &empresaID).
+			WithArgs("Comida", &empresaID, model.CategoryTypeGasto).
 			WillReturnError(sql.ErrNoRows)
 
 		err := ms.store.Crear(context.Background(), categoria)
@@ -280,10 +286,11 @@ func TestStoreCategorie_Create(t *testing.T) {
 		categoria := &model.Categorie{
 			Nombre:    "Comida",
 			EmpresaID: &empresaID,
+			Tipo:      model.CategoryTypeGasto,
 		}
 
 		ms.mock.ExpectQuery("cualquier INSERT").
-			WithArgs("Comida", &empresaID).
+			WithArgs("Comida", &empresaID, model.CategoryTypeGasto).
 			WillReturnError(errDBBoom)
 
 		err := ms.store.Crear(context.Background(), categoria)

@@ -195,17 +195,55 @@ func TestStoreDebtor_Update(t *testing.T) {
 				debtor.Nombre,
 				debtor.Monto,
 				*debtor.FechaLimite,
+				nil,
 				testDebtorID,
 				testEmpresaID,
 			).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
+		cambios := CambiosDeudor{
+			Nombre:      debtor.Nombre,
+			Monto:       debtor.Monto,
+			FechaLimite: *debtor.FechaLimite,
+		}
+
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, cambios)
 
 		require.NoError(t, err)
 		assert.Contains(t, ms.sql, "UPDATE debtors")
 		assert.Contains(t, ms.sql, "SET nombre = $1, monto = $2, fecha_limite = $3")
-		assert.Contains(t, ms.sql, "WHERE id = $4 and empresa_id = $5")
+		assert.Contains(t, ms.sql, "descripcion = COALESCE($4, descripcion)",
+			"sin descripción en el payload la que ya tenía se queda")
+		assert.Contains(t, ms.sql, "WHERE id = $5 and empresa_id = $6")
+	})
+
+	t.Run("actualiza la descripción cuando viene en el payload", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		descripcion := "comentario nuevo"
+
+		ms.mock.ExpectExec("cualquier UPDATE").
+			WithArgs(
+				debtor.Nombre,
+				debtor.Monto,
+				*debtor.FechaLimite,
+				descripcion,
+				testDebtorID,
+				testEmpresaID,
+			).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		cambios := CambiosDeudor{
+			Nombre:      debtor.Nombre,
+			Monto:       debtor.Monto,
+			FechaLimite: *debtor.FechaLimite,
+			Descripcion: &descripcion,
+		}
+
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, cambios)
+
+		require.NoError(t, err)
+		assert.Contains(t, ms.sql, "descripcion = COALESCE($4, descripcion)")
 	})
 
 	t.Run("devuelve utilidades.ErrorNoEncontrado si no actualizo ninguna fila", func(t *testing.T) {
@@ -216,12 +254,19 @@ func TestStoreDebtor_Update(t *testing.T) {
 				debtor.Nombre,
 				debtor.Monto,
 				*debtor.FechaLimite,
+				nil,
 				testDebtorID,
 				testEmpresaID,
 			).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
+		cambios := CambiosDeudor{
+			Nombre:      debtor.Nombre,
+			Monto:       debtor.Monto,
+			FechaLimite: *debtor.FechaLimite,
+		}
+
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, cambios)
 
 		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
 	})
@@ -234,12 +279,19 @@ func TestStoreDebtor_Update(t *testing.T) {
 				debtor.Nombre,
 				debtor.Monto,
 				*debtor.FechaLimite,
+				nil,
 				testDebtorID,
 				testEmpresaID,
 			).
 			WillReturnError(errDBBoom)
 
-		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
+		cambios := CambiosDeudor{
+			Nombre:      debtor.Nombre,
+			Monto:       debtor.Monto,
+			FechaLimite: *debtor.FechaLimite,
+		}
+
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, cambios)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})
@@ -252,12 +304,71 @@ func TestStoreDebtor_Update(t *testing.T) {
 				debtor.Nombre,
 				debtor.Monto,
 				*debtor.FechaLimite,
+				nil,
 				testDebtorID,
 				testEmpresaID,
 			).
 			WillReturnResult(sqlmock.NewErrorResult(errDBBoom))
 
-		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, debtor)
+		cambios := CambiosDeudor{
+			Nombre:      debtor.Nombre,
+			Monto:       debtor.Monto,
+			FechaLimite: *debtor.FechaLimite,
+		}
+
+		err := ms.store.Actualizar(context.Background(), testDebtorID, testEmpresaID, cambios)
+
+		require.ErrorIs(t, err, errDBBoom)
+	})
+}
+
+func TestStoreDebtor_Delete(t *testing.T) {
+	t.Run("elimina la deuda", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectExec("cualquier DELETE").
+			WithArgs(testDebtorID, testEmpresaID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := ms.store.BorrarDeudor(context.Background(), testDebtorID, testEmpresaID)
+
+		require.NoError(t, err)
+		assert.Contains(t, ms.sql, "DELETE FROM debtors")
+		assert.Contains(t, ms.sql, "WHERE id = $1 and empresa_id = $2")
+	})
+
+	t.Run("devuelve utilidades.ErrorNoEncontrado si no elimino ninguna fila", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectExec("cualquier DELETE").
+			WithArgs(testDebtorID, testEmpresaID).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := ms.store.BorrarDeudor(context.Background(), testDebtorID, testEmpresaID)
+
+		require.ErrorIs(t, err, utilidades.ErrorNoEncontrado)
+	})
+
+	t.Run("propaga el error de la base de datos", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectExec("cualquier DELETE").
+			WithArgs(testDebtorID, testEmpresaID).
+			WillReturnError(errDBBoom)
+
+		err := ms.store.BorrarDeudor(context.Background(), testDebtorID, testEmpresaID)
+
+		require.ErrorIs(t, err, errDBBoom)
+	})
+
+	t.Run("propaga el error al leer las filas afectadas", func(t *testing.T) {
+		ms := newMockStore(t)
+
+		ms.mock.ExpectExec("cualquier DELETE").
+			WithArgs(testDebtorID, testEmpresaID).
+			WillReturnResult(sqlmock.NewErrorResult(errDBBoom))
+
+		err := ms.store.BorrarDeudor(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errDBBoom)
 	})

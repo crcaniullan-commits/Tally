@@ -9,8 +9,11 @@ package excel
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			file		formData	file				true	"archivo .xlsx"
-//	@Success		200			{object}	File				"archivo subido"
-//	@Failure		400			{object}	map[string]string	"falta el archivo, no es un .xlsx válido o excede el tamaño máximo"
+//	@Success		200			{object}	map[string]File		"archivo subido"
+//	@Failure		400			{object}	map[string]string	"empresaID inválido, falta el archivo, no es un .xlsx válido o excede el tamaño máximo"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa no encontrada o ajena"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/excel	[post]
@@ -26,6 +29,10 @@ func Upload() {}
 //	@Param			limit		query		int					false	"cantidad de archivos a devolver"
 //	@Param			offset		query		int					false	"archivos a saltar"
 //	@Success		200			{object}	map[string][]File	"archivos de la empresa"
+//	@Failure		400			{object}	map[string]string	"empresaID inválido o paginación inválida"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa no encontrada o ajena"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/excel	[get]
@@ -40,8 +47,10 @@ func List() {}
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			id			path		string				true	"ID del archivo"
 //	@Success		200			{file}		binary				"archivo"
-//	@Failure		400			{object}	map[string]string	"id invalido"
-//	@Failure		404			{object}	map[string]string	"archivo no encontrado"
+//	@Failure		400			{object}	map[string]string	"empresaID o id invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o archivo no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/excel/{id}	[get]
@@ -53,11 +62,13 @@ func Download() {}
 //	@Description	Elimina un archivo .xlsx de la empresa autenticada: se borra el registro y el binario asociado. Responde 204 sin cuerpo.
 //	@Tags			Excel
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			id			path		string				true	"ID del archivo"
-//	@Success		204			{string}	string				"archivo eliminado"
-//	@Failure		400			{object}	map[string]string	"id invalido"
-//	@Failure		404			{object}	map[string]string	"archivo no encontrado"
+//	@Param			empresaID	path	string	true	"ID de la empresa"
+//	@Param			id			path	string	true	"ID del archivo"
+//	@Success		204			"archivo eliminado"
+//	@Failure		400			{object}	map[string]string	"empresaID o id invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o archivo no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/excel/{id}	[delete]

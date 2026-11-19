@@ -5,7 +5,8 @@ import (
 )
 
 type Categorie struct {
-	ID        uuid.UUID  `json:"id"`
-	Nombre    string     `json:"nombre"`
-	EmpresaID *uuid.UUID `json:"empresa_id"`
+	ID        uuid.UUID    `json:"id"`
+	Nombre    string       `json:"nombre"`
+	EmpresaID *uuid.UUID   `json:"empresa_id"`
+	Tipo      CategoryType `json:"tipo"`
 }

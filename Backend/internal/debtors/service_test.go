@@ -73,11 +73,29 @@ func TestDebtorService_Update(t *testing.T) {
 
 		payload := newTestUpdatePayload()
 
-		store.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, mock.MatchedBy(func(debtor model.Debtor) bool {
-			return debtor.Nombre == payload.Nombre &&
-				debtor.Monto == payload.Monto &&
-				debtor.FechaLimite != nil &&
-				debtor.FechaLimite.Equal(payload.FechaLimite)
+		store.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, mock.MatchedBy(func(cambios CambiosDeudor) bool {
+			return cambios.Nombre == payload.Nombre &&
+				cambios.Monto == payload.Monto &&
+				cambios.FechaLimite.Equal(payload.FechaLimite) &&
+				cambios.Descripcion == nil
+		})).Return(nil).Once()
+
+		err := service.Actualizar(context.Background(), testDebtorID, testEmpresaID, payload)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("manda la descripcion cuando viene en el payload", func(t *testing.T) {
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
+
+		descripcion := "comentario nuevo"
+		payload := newTestUpdatePayload()
+		payload.Descripcion = &descripcion
+
+		store.On("Actualizar", mock.Anything, testDebtorID, testEmpresaID, mock.MatchedBy(func(cambios CambiosDeudor) bool {
+			return cambios.Descripcion != nil && *cambios.Descripcion == descripcion
 		})).Return(nil).Once()
 
 		err := service.Actualizar(context.Background(), testDebtorID, testEmpresaID, payload)
@@ -121,6 +139,33 @@ func TestDebtorService_PaidDebtor(t *testing.T) {
 			Return(errStoreBoom).Once()
 
 		err := service.MarcarDeudorPagado(context.Background(), testDebtorID, testEmpresaID)
+
+		require.ErrorIs(t, err, errStoreBoom)
+		store.AssertExpectations(t)
+	})
+}
+
+func TestDebtorService_Delete(t *testing.T) {
+	t.Run("borra la deuda", func(t *testing.T) {
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
+
+		store.On("BorrarDeudor", mock.Anything, testDebtorID, testEmpresaID).Return(nil).Once()
+
+		err := service.Borrar(context.Background(), testDebtorID, testEmpresaID)
+
+		require.NoError(t, err)
+		store.AssertExpectations(t)
+	})
+
+	t.Run("propaga el error del store", func(t *testing.T) {
+		store := new(AlmacenDeudoresMock)
+		service := NuevoServicioDeudores(store)
+
+		store.On("BorrarDeudor", mock.Anything, testDebtorID, testEmpresaID).
+			Return(errStoreBoom).Once()
+
+		err := service.Borrar(context.Background(), testDebtorID, testEmpresaID)
 
 		require.ErrorIs(t, err, errStoreBoom)
 		store.AssertExpectations(t)

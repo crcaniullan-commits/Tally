@@ -3,6 +3,7 @@ package clavesacceso
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -419,5 +420,93 @@ func TestAccessKeysHandler_ServiceAndHandlerWiring(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		service.AssertCalled(t, "EmitirParaUsuario", mock.Anything, uuid.MustParse(usuario.ID.String()), testEmail)
+	})
+}
+
+func TestAccessKeysHandler_Listar(t *testing.T) {
+	t.Run("responde 200 con las claves del municipal del contexto", func(t *testing.T) {
+		service := new(IServiceClavesAccesoMock)
+		handler := newTestHandler(service)
+
+		esperada := newTestAccessKey()
+		service.On("ListarPorEmisor", mock.Anything, testMunicipalID, 30, 0).
+			Return([]model.AccessKey{esperada}, nil).Once()
+
+		r := requestWithMunicipalUser(http.MethodGet, "/claves", "")
+		w := httptest.NewRecorder()
+
+		handler.Listar(w, r)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		envelope := decodeEnvelope(t, w.Body.String())
+		datos, ok := envelope["datos"].([]any)
+		require.True(t, ok, "la respuesta debe traer un arreglo en \"datos\"")
+		require.Len(t, datos, 1)
+
+		primera, ok := datos[0].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, esperada.ID.String(), primera["id"])
+		assert.Equal(t, esperada.Code, primera["code"])
+		service.AssertExpectations(t)
+	})
+
+	t.Run("usa la paginación de la query", func(t *testing.T) {
+		service := new(IServiceClavesAccesoMock)
+		handler := newTestHandler(service)
+
+		service.On("ListarPorEmisor", mock.Anything, testMunicipalID, 10, 20).
+			Return([]model.AccessKey{}, nil).Once()
+
+		r := requestWithMunicipalUser(http.MethodGet, "/claves?limite=10&desplazamiento=20", "")
+		w := httptest.NewRecorder()
+
+		handler.Listar(w, r)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		service.AssertCalled(t, "ListarPorEmisor", mock.Anything, testMunicipalID, 10, 20)
+		service.AssertExpectations(t)
+	})
+
+	t.Run("responde 400 con un limite inválido", func(t *testing.T) {
+		service := new(IServiceClavesAccesoMock)
+		handler := newTestHandler(service)
+
+		r := requestWithMunicipalUser(http.MethodGet, "/claves?limite=abc", "")
+		w := httptest.NewRecorder()
+
+		handler.Listar(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ListarPorEmisor", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 400 con un limite fuera de rango", func(t *testing.T) {
+		service := new(IServiceClavesAccesoMock)
+		handler := newTestHandler(service)
+
+		r := requestWithMunicipalUser(http.MethodGet, "/claves?limite=500", "")
+		w := httptest.NewRecorder()
+
+		handler.Listar(w, r)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		service.AssertNotCalled(t, "ListarPorEmisor", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("responde 500 si el store falla", func(t *testing.T) {
+		service := new(IServiceClavesAccesoMock)
+		handler := newTestHandler(service)
+
+		service.On("ListarPorEmisor", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return([]model.AccessKey(nil), errors.New("boom")).Once()
+
+		r := requestWithMunicipalUser(http.MethodGet, "/claves", "")
+		w := httptest.NewRecorder()
+
+		handler.Listar(w, r)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		service.AssertExpectations(t)
 	})
 }

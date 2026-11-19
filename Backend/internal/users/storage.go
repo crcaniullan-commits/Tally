@@ -107,17 +107,38 @@ func (s *AlmacenUsuarios) ObtenerPorRUT(ctx context.Context, userRut string) (*m
 	return user, nil
 }
 
-func (s *AlmacenUsuarios) Actualizar(ctx context.Context, user *model.User) error {
+// Actualizar aplica solo los campos indicados en cambios.
+//
+// El store NO reescribe la fila completa: el CASE WHEN deja intacto el campo
+// que no viene en el payload. Importa porque el usuario del contexto puede
+// venir del cache (ver internal/cache), y en ese caso PasswordHash llega
+// vacío (el cache serializa a JSON y ese campo tiene json:"-"). Si el UPDATE
+// escribiera siempre el hash, un PATCH que solo cambia el nombre mandaría un
+// password_hash vacío a una columna NOT NULL y Postgres lo rechazaría.
+func (s *AlmacenUsuarios) Actualizar(ctx context.Context, cambios CambiosUsuario, userID uuid.UUID) error {
 	query := `
 		UPDATE users
-		SET password_hash = $1, nombre = $2, updated_at = NOW()
-		WHERE id = $3
+		SET password_hash = CASE WHEN $1::boolean THEN $2::text ELSE password_hash END,
+			nombre = CASE WHEN $3::boolean THEN $4::text ELSE nombre END,
+			updated_at = NOW()
+		WHERE id = $5
 	`
 
 	ctx, cancel := context.WithTimeout(ctx, utilidades.DuracionTimeoutConsulta)
 	defer cancel()
 
-	res, err := s.db.ExecContext(ctx, query, user.PasswordHash.Hash, user.Nombre, user.ID)
+	var nombre *string
+	if cambios.Nombre != nil {
+		nombre = cambios.Nombre
+	}
+
+	res, err := s.db.ExecContext(ctx, query,
+		cambios.CambiaPassword,
+		cambios.PasswordHash,
+		cambios.Nombre != nil,
+		nombre,
+		userID,
+	)
 
 	if err != nil {
 		return err

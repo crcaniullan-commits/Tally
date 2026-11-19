@@ -42,8 +42,10 @@ func (m *RepositorioExpensesMock) ObtenerGastosDeEmpresa(ctx context.Context, em
 	return expenses, args.Error(1)
 }
 
-func (m *RepositorioExpensesMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID) (bool, error) {
-	args := m.Called(ctx, categoryID, empresaID)
+// CategoriaExiste indica si la categoría es visible para la empresa y del tipo
+// pedido. El mock devuelve lo que le configure el test.
+func (m *RepositorioExpensesMock) CategoriaExiste(ctx context.Context, categoryID uuid.UUID, empresaID uuid.UUID, tipo model.CategoryType) (bool, error) {
+	args := m.Called(ctx, categoryID, empresaID, tipo)
 
 	existe, _ := args.Get(0).(bool)
 
@@ -98,13 +100,14 @@ var (
 func newTestExpense() model.Expense {
 	descripcion := "Compra insumos"
 	return model.Expense{
-		ID:          testExpenseID,
-		EmpresaID:   testEmpresaID,
-		Monto:       1500,
-		CategoryID:  testCategoryID,
-		Descripcion: &descripcion,
-		Fecha:       testFecha,
-		CreatedAt:   testFecha.Add(2 * time.Hour),
+		ID:            testExpenseID,
+		EmpresaID:     testEmpresaID,
+		Monto:         1500,
+		PaymentMethod: model.PaymentMethodDebito,
+		CategoryID:    testCategoryID,
+		Descripcion:   &descripcion,
+		Fecha:         testFecha,
+		CreatedAt:     testFecha.Add(2 * time.Hour),
 	}
 }
 
@@ -112,9 +115,10 @@ func newTestExpense() model.Expense {
 func newTestPayloadExpense() PayloadGasto {
 	descripcion := "Compra insumos"
 	return PayloadGasto{
-		Monto:       1500,
-		CategoryID:  &testCategoryID,
-		Descripcion: &descripcion,
+		Monto:         1500,
+		PaymentMethod: model.PaymentMethodDebito,
+		CategoryID:    &testCategoryID,
+		Descripcion:   &descripcion,
 	}
 }
 

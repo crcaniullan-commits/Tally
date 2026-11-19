@@ -37,6 +37,27 @@ func (m *RepositorioEmpresasMock) ObtenerEmpresas(ctx context.Context, userID uu
 	return empresas, args.Error(1)
 }
 
+// InvalidadorEmpresaMock es un mock del invalidador de cache
+// (invalidadorEmpresa) usado para verificar que el service invalida la
+// entrada cacheada de la empresa cuando cambia o se borra.
+type InvalidadorEmpresaMock struct {
+	mock.Mock
+}
+
+func (m *InvalidadorEmpresaMock) Invalidar(ctx context.Context, userID, empresaID uuid.UUID) {
+	m.Called(ctx, userID, empresaID)
+}
+
+// newInvalidadorEmpresaMock devuelve un invalidador que acepta cualquier
+// llamada: los tests que no miran el cache no tienen que configurar nada,
+// y los que sí lo verifican usan AssertCalled/AssertNotCalled.
+func newInvalidadorEmpresaMock() *InvalidadorEmpresaMock {
+	m := new(InvalidadorEmpresaMock)
+	m.On("Invalidar", mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+
+	return m
+}
+
 // IServiceEmpresasMock es un mock de la capa de servicio (IServiceEmpresas) usado
 // para probar HandlerEmpresas de forma aislada.
 type IServiceEmpresasMock struct {

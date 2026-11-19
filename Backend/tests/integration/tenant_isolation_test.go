@@ -17,17 +17,19 @@ import (
 func TestTenantIsolation(t *testing.T) {
 	owner := testutil.NewUser(t)
 	ownerEmpresa := testutil.CreateEmpresa(t, owner)
-	ownerCat := testutil.CreateCategory(t, owner, ownerEmpresa.ID)
-	ownerIncome := testutil.CreateIncome(t, owner, ownerEmpresa.ID, 1500, &ownerCat.ID)
-	ownerExpense := testutil.CreateExpense(t, owner, ownerEmpresa.ID, 700, ownerCat.ID)
+	ownerCatIngreso := testutil.CreateCategory(t, owner, ownerEmpresa.ID, model.CategoryTypeIngreso)
+	ownerCatGasto := testutil.CreateCategory(t, owner, ownerEmpresa.ID, model.CategoryTypeGasto)
+	ownerIncome := testutil.CreateIncome(t, owner, ownerEmpresa.ID, 1500, &ownerCatIngreso.ID)
+	ownerExpense := testutil.CreateExpense(t, owner, ownerEmpresa.ID, 700, ownerCatGasto.ID)
 	ownerDebtor := testutil.CreateDebtor(t, owner, ownerEmpresa.ID, 2000)
 	ownerGoal := testutil.CreateGoal(t, owner, ownerEmpresa.ID, "dia", 10000)
 
 	intruder := testutil.NewUser(t)
 	intruderEmpresa := testutil.CreateEmpresa(t, intruder)
-	intruderCat := testutil.CreateCategory(t, intruder, intruderEmpresa.ID)
-	intruderIncome := testutil.CreateIncome(t, intruder, intruderEmpresa.ID, 900, &intruderCat.ID)
-	intruderExpense := testutil.CreateExpense(t, intruder, intruderEmpresa.ID, 400, intruderCat.ID)
+	intruderCatIngreso := testutil.CreateCategory(t, intruder, intruderEmpresa.ID, model.CategoryTypeIngreso)
+	intruderCatGasto := testutil.CreateCategory(t, intruder, intruderEmpresa.ID, model.CategoryTypeGasto)
+	intruderIncome := testutil.CreateIncome(t, intruder, intruderEmpresa.ID, 900, &intruderCatIngreso.ID)
+	intruderExpense := testutil.CreateExpense(t, intruder, intruderEmpresa.ID, 400, intruderCatGasto.ID)
 	intruderDebtor := testutil.CreateDebtor(t, intruder, intruderEmpresa.ID, 300)
 	intruderGoal := testutil.CreateGoal(t, intruder, intruderEmpresa.ID, "dia", 5000)
 
@@ -109,13 +111,13 @@ func TestTenantIsolation(t *testing.T) {
 			{
 				name:   "renombrar categoría ajena",
 				method: http.MethodPatch,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCat.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCatGasto.ID.String()),
 				body:   map[string]string{"nombre": testutil.UniqueName("Intrusa")},
 			},
 			{
 				name:   "borrar categoría ajena",
 				method: http.MethodDelete,
-				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCat.ID.String()),
+				path:   testutil.EmpresaPath(intruderEmpresa.ID, "/categorias/"+ownerCatGasto.ID.String()),
 			},
 		}
 
@@ -131,13 +133,14 @@ func TestTenantIsolation(t *testing.T) {
 		income := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/ingresos"), intruder.Token, map[string]any{
 			"monto":          1000,
 			"payment_method": "efectivo",
-			"category_id":    ownerCat.ID.String(),
+			"category_id":    ownerCatIngreso.ID.String(),
 		})
 		testutil.RequireError(t, income, http.StatusBadRequest, "recurso no encontrado")
 
 		expense := testutil.Request(t, http.MethodPost, testutil.EmpresaPath(intruderEmpresa.ID, "/gastos"), intruder.Token, map[string]any{
-			"monto":       1000,
-			"category_id": ownerCat.ID.String(),
+			"monto":          1000,
+			"payment_method": "efectivo",
+			"category_id":    ownerCatGasto.ID.String(),
 		})
 		testutil.RequireError(t, expense, http.StatusBadRequest, "recurso no encontrado")
 	})
@@ -161,9 +164,11 @@ func TestTenantIsolation(t *testing.T) {
 
 		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(intruderEmpresa.ID, "/categorias"), intruder.Token, nil))
 		for _, c := range categorias {
-			require.NotEqual(t, ownerCat.ID, c.ID)
+			require.NotEqual(t, ownerCatIngreso.ID, c.ID)
+			require.NotEqual(t, ownerCatGasto.ID, c.ID)
 		}
-		require.Contains(t, categorias, intruderCat)
+		require.Contains(t, categorias, intruderCatIngreso)
+		require.Contains(t, categorias, intruderCatGasto)
 	})
 
 	t.Run("el dueño sigue viendo sus propios datos", func(t *testing.T) {
@@ -184,9 +189,11 @@ func TestTenantIsolation(t *testing.T) {
 		require.Equal(t, ownerGoal.ID, goals[0].ID)
 
 		categorias := testutil.DecodeData[[]model.Categorie](t, testutil.Request(t, http.MethodGet, testutil.EmpresaPath(ownerEmpresa.ID, "/categorias"), owner.Token, nil))
-		require.Contains(t, categorias, ownerCat)
+		require.Contains(t, categorias, ownerCatIngreso)
+		require.Contains(t, categorias, ownerCatGasto)
 		for _, c := range categorias {
-			require.NotEqual(t, intruderCat.ID, c.ID)
+			require.NotEqual(t, intruderCatIngreso.ID, c.ID)
+			require.NotEqual(t, intruderCatGasto.ID, c.ID)
 		}
 	})
 

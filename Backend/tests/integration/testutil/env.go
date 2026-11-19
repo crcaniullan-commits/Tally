@@ -19,6 +19,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/categories"
 	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
 	"github.com/crcaniullan-commits/Tally/internal/debtors"
+	"github.com/crcaniullan-commits/Tally/internal/dispositivos"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/excel"
@@ -26,6 +27,8 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/jobs"
+	"github.com/crcaniullan-commits/Tally/internal/notificaciones"
 	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -83,14 +86,28 @@ func newEnv() (*TestEnv, func(), error) {
 func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 	logger := zap.NewNop().Sugar()
 
+	// El backend real arma los buscadores con cache (internal/cache). La suite
+	// replica ese cableado para que los tests ejerciten el mismo camino.
+	appCache := newCacheMemoria()
+
+	buscadorUsuario := users.NuevoBuscadorUsuarioConCache(
+		users.NuevoAlmacenUsuarios(db),
+		appCache,
+	)
+
+	buscadorEmpresa := empresas.NuevoBuscadorEmpresaConCache(
+		empresas.NuevoAlmacenEmpresas(db),
+		appCache,
+	)
+
 	middl := intermediario.NuevoMiddlewareAutenticacion(
 		errores.NuevaRespuestaErrores(logger),
 		auth.NewJWTAuthenticator(jwtSecret, jwtIssuer, jwtIssuer),
-		users.NuevoAlmacenUsuarios(db),
+		buscadorUsuario,
 	)
 
-	empresaRoute, finder := empresas.InitModule(db, logger, middl)
-	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, finder)
+	empresaRoute := empresas.InitModule(db, logger, middl, buscadorEmpresa)
+	emMiddl := intermediario.NuevoMiddlewareEmpresa(logger, buscadorEmpresa)
 	transactor := bdtx.NewTransactor(db)
 
 	remitente = newRemitenteRecorder()
@@ -108,8 +125,15 @@ func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 		r.Route("/aplicacion", func(r chi.Router) {
 			r.Use(middl.MiddlewareTokenAutenticacion)
 
-			users.InitModule(r, db, logger, middl)
+			users.InitModule(r, db, logger, middl, buscadorUsuario)
 			clavesacceso.InitModule(r, db, logger, middl, remitente)
+
+			dispSvc := dispositivos.InitModule(r, db, logger, middl)
+			logNotifier := notificaciones.NuevoLogNotifier(logger)
+			notifSvc := notificaciones.InitModule(r, db, logger, middl, dispSvc, logNotifier)
+
+			loc, _ := time.LoadLocation("America/Santiago")
+			_, _ = jobs.InitModule(r, db, logger, middl, notifSvc, loc, "0 20 * * *", "0 9 * * *")
 
 			r.Route("/empresas", func(r chi.Router) {
 				empresaRoute.Collection(r)
@@ -289,13 +313,22 @@ func ensureSchema(db *sql.DB) error {
 }
 
 func ensureGlobalCategories(db *sql.DB) error {
+	// Se aseguran las globales que siembran las migraciones, por si la suite
+	// reutiliza una base existente (TEST_DB_ADDR) y esas filas no están.
 	_, err := db.Exec(`
-		INSERT INTO categories (nombre, empresa_id)
-		SELECT nombre, NULL
-		FROM (VALUES ('Ventas'), ('Servicios'), ('Pedidos')) AS defaults(nombre)
+		INSERT INTO categories (nombre, empresa_id, tipo)
+		SELECT defaults.nombre, NULL, defaults.tipo::category_type
+		FROM (VALUES
+			('Ventas', 'ingreso'),
+			('Servicios', 'ingreso'),
+			('Pedidos', 'ingreso'),
+			('Insumos', 'gasto'),
+			('Comunes', 'gasto'),
+			('Pagos', 'gasto')
+		) AS defaults(nombre, tipo)
 		WHERE NOT EXISTS (
 			SELECT 1 FROM categories c
-			WHERE c.empresa_id IS NULL AND c.nombre = defaults.nombre
+			WHERE c.empresa_id IS NULL AND c.nombre = defaults.nombre AND c.tipo = defaults.tipo::category_type
 		)
 	`)
 	if err != nil {

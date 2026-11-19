@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/model"
@@ -94,6 +95,11 @@ func (h *HandlerEmpresas) CambiarNombre(w http.ResponseWriter, r *http.Request) 
 
 	if nombre == "" {
 		h.errors.ErrorSolicitudInvalida(w, r, errors.New("la ruta debe incluir el nombre de la empresa"))
+		return
+	}
+
+	if utf8.RuneCountInString(nombre) > 30 {
+		h.errors.ErrorSolicitudInvalida(w, r, errors.New("el nombre de la empresa no puede superar los 30 caracteres"))
 		return
 	}
 

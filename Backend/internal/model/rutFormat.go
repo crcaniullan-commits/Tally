@@ -16,8 +16,8 @@ var (
 
 // RUT representa el Value Object con sus dos componentes para la base de datos
 type RUT struct {
-	Cuerpo int    // Ej: 19234567
-	DV     string // Ej: "K" o "4"
+	Cuerpo int    `json:"cuerpo"` // Ej: 19234567
+	DV     string `json:"dv"`     // Ej: "K" o "4"
 }
 
 // ParseRUT convierte un string a un struct RUT validando SOLO el formato básico.

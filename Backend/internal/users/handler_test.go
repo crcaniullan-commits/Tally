@@ -302,8 +302,8 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 		assert.Equal(t, esperado.ID.String(), data["id"])
 		assert.Equal(t, esperado.Email, data["email"])
 		assert.Equal(t, esperado.Nombre, data["nombre"])
-		assert.Equal(t, float64(19234567), data["rut"].(map[string]any)["Cuerpo"])
-		assert.Equal(t, "K", data["rut"].(map[string]any)["DV"])
+		assert.Equal(t, float64(19234567), data["rut"].(map[string]any)["cuerpo"])
+		assert.Equal(t, "K", data["rut"].(map[string]any)["dv"])
 		assert.NotContains(t, data, "PasswordHash", "la contraseña nunca debe filtrarse")
 	})
 
@@ -375,14 +375,14 @@ func TestUsersHandler_ServiceAndHandlerWiring(t *testing.T) {
 	t.Run("ServicioUsuarios satisface la interfaz que espera el handler", func(t *testing.T) {
 		// Guarda contra regresiones de firmas: si cambia IServiceUsuarios, esto
 		// deja de compilar.
-		var _ IServiceUsuarios = NuevoServicioUsuarios(new(RepositorioUsuariosMock))
+		var _ IServiceUsuarios = NuevoServicioUsuarios(new(RepositorioUsuariosMock), new(InvalidadorUsuarioMock))
 	})
 
 	t.Run("el handler construye un ServicioUsuarios real sobre un store mockeado", func(t *testing.T) {
 		store := new(RepositorioUsuariosMock)
 		store.On("ObtenerPorRUT", mock.Anything, "19.234.567-K").Return(newTestUser(), nil).Once()
 
-		handler := newTestHandler(NuevoServicioUsuarios(store))
+		handler := newTestHandler(NuevoServicioUsuarios(store, new(InvalidadorUsuarioMock)))
 
 		r := requestWithRutParam(http.MethodGet, "/users/municipal/19.234.567-K", "19.234.567-K")
 		w := httptest.NewRecorder()
