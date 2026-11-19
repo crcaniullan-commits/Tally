@@ -59,14 +59,35 @@ const docTemplate = `{
                     "200": {
                         "description": "claves emitidas por el municipal",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/model.AccessKey"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.AccessKey"
+                                }
                             }
                         }
                     },
                     "400": {
                         "description": "paginación inválida",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol municipal)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -91,7 +112,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Genera un código de acceso, lo guarda asociado al municipal autenticado (created_by) con un año de vencimiento y lo envía por correo al destinatario del payload. La respuesta viene envuelta en {\"datos\": ...} con la llave creada; el código también viaja en el correo. Emitir es independiente de canjear: el emprendedor lo canjea después en POST /aplicacion/autenticacion.",
+                "description": "Genera un código de acceso, lo guarda asociado al municipal autenticado (created_by) con un año de vencimiento y lo envía por correo al destinatario del payload. La respuesta viene envuelta en {\"datos\": ...} con la llave creada; el código también viaja en el correo. Emitir es independiente de canjear: el emprendedor lo canjea después en POST /autenticacion.",
                 "consumes": [
                     "application/json"
                 ],
@@ -117,11 +138,32 @@ const docTemplate = `{
                     "201": {
                         "description": "código creado",
                         "schema": {
-                            "$ref": "#/definitions/model.AccessKey"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.AccessKey"
+                            }
                         }
                     },
                     "400": {
                         "description": "payload inválido o email mal formado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol municipal)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -181,11 +223,32 @@ const docTemplate = `{
                     "200": {
                         "description": "correo reenviado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
                         "description": "claveID inválido o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol municipal)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -242,11 +305,32 @@ const docTemplate = `{
                     "200": {
                         "description": "código revocado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
                         "description": "código vacío",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol municipal)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -312,6 +396,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -363,6 +456,158 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Alias de PUT /aplicacion/dispositivos: registra un token de notificación push o actualiza su última conexión. Responde 204 sin contenido.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dispositivos"
+                ],
+                "summary": "Registrar o refrescar token de dispositivo",
+                "parameters": [
+                    {
+                        "description": "token y plataforma del dispositivo",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dispositivos.PayloadDispositivo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "dispositivo registrado"
+                    },
+                    "400": {
+                        "description": "payload inválido o plataforma no soportada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina el token de dispositivo indicado en el body del usuario autenticado. Responde 204 sin contenido.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dispositivos"
+                ],
+                "summary": "Desvincular un token de dispositivo",
+                "parameters": [
+                    {
+                        "description": "token del dispositivo",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dispositivos.PayloadEliminarDispositivo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "dispositivo desvinculado"
+                    },
+                    "400": {
+                        "description": "token inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "dispositivo no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -425,6 +670,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "404": {
                         "description": "dispositivo no encontrado",
                         "schema": {
@@ -453,7 +707,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Devuelve todas las empresas asociadas al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...}.",
+                "description": "Devuelve todas las empresas asociadas al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...}. Si el usuario no tiene empresas responde 200 con {\"datos\": null}.",
                 "produces": [
                     "application/json"
                 ],
@@ -465,14 +719,26 @@ const docTemplate = `{
                     "200": {
                         "description": "lista de empresas",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/model.Empresa"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Empresa"
+                                }
                             }
                         }
                     },
-                    "404": {
-                        "description": "empresas no encontradas",
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -523,11 +789,32 @@ const docTemplate = `{
                     "201": {
                         "description": "empresa creada",
                         "schema": {
-                            "$ref": "#/definitions/model.Empresa"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Empresa"
+                            }
                         }
                     },
                     "400": {
                         "description": "payload de la empresa erroneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -575,7 +862,37 @@ const docTemplate = `{
                     "200": {
                         "description": "empresa borrada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "empresaID inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "404": {
@@ -627,9 +944,48 @@ const docTemplate = `{
                     "200": {
                         "description": "categorías de la empresa y globales",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/model.Categorie"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.Categorie"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "empresaID inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
                             }
                         }
                     },
@@ -683,11 +1039,41 @@ const docTemplate = `{
                     "201": {
                         "description": "categoría creada",
                         "schema": {
-                            "$ref": "#/definitions/model.Categorie"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Categorie"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload de la categoría erróneo o la categoría ya existe",
+                        "description": "empresaID inválido, payload de la categoría erróneo o la categoría ya existe",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -751,11 +1137,32 @@ const docTemplate = `{
                     "200": {
                         "description": "nombre cambiado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "categoriaID inválido o payload erróneo",
+                        "description": "empresaID o categoriaID inválido, o payload erróneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -764,7 +1171,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "categoría no encontrada",
+                        "description": "empresa ajena o categoría no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -819,11 +1226,32 @@ const docTemplate = `{
                     "200": {
                         "description": "categoría eliminada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "categoria invalido",
+                        "description": "empresaID o categoria invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -832,7 +1260,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "categoría no encontrada",
+                        "description": "empresa ajena o categoría no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -898,6 +1326,42 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "empresaID inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -948,11 +1412,41 @@ const docTemplate = `{
                     "201": {
                         "description": "deuda creada",
                         "schema": {
-                            "$ref": "#/definitions/model.Debtor"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Debtor"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload inválido",
+                        "description": "empresaID inválido o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1007,11 +1501,32 @@ const docTemplate = `{
                     "200": {
                         "description": "deuda eliminada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "deudorID invalido",
+                        "description": "empresaID o deudorID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1020,7 +1535,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "deuda no encontrada",
+                        "description": "empresa ajena o deuda no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1085,11 +1600,32 @@ const docTemplate = `{
                     "200": {
                         "description": "deuda actualizada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "deudorID o payload inválido",
+                        "description": "empresaID o deudorID inválido, o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1098,7 +1634,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "deuda no encontrada",
+                        "description": "empresa ajena o deuda no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1153,11 +1689,32 @@ const docTemplate = `{
                     "200": {
                         "description": "deuda pagada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "deudorID invalido",
+                        "description": "empresaID o deudorID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1166,7 +1723,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "deuda no encontrada",
+                        "description": "empresa ajena o deuda no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1235,6 +1792,42 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "empresaID inválido o paginación inválida",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -1283,11 +1876,41 @@ const docTemplate = `{
                     "200": {
                         "description": "archivo subido",
                         "schema": {
-                            "$ref": "#/definitions/excel.File"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/excel.File"
+                            }
                         }
                     },
                     "400": {
-                        "description": "falta el archivo, no es un .xlsx válido o excede el tamaño máximo",
+                        "description": "empresaID inválido, falta el archivo, no es un .xlsx válido o excede el tamaño máximo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1346,7 +1969,25 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "id invalido",
+                        "description": "empresaID o id invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1355,7 +1996,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "archivo no encontrado",
+                        "description": "empresa ajena o archivo no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1406,13 +2047,28 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "archivo eliminado",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "archivo eliminado"
                     },
                     "400": {
-                        "description": "id invalido",
+                        "description": "empresaID o id invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1421,7 +2077,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "archivo no encontrado",
+                        "description": "empresa ajena o archivo no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1509,7 +2165,34 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "parametros de paginacion erroneos",
+                        "description": "empresaID inválido o parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1567,11 +2250,41 @@ const docTemplate = `{
                     "201": {
                         "description": "gasto creado",
                         "schema": {
-                            "$ref": "#/definitions/model.Expense"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Expense"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload del gasto erróneo",
+                        "description": "empresaID inválido o payload del gasto erróneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1626,11 +2339,32 @@ const docTemplate = `{
                     "200": {
                         "description": "gasto eliminado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "gastoID invalido",
+                        "description": "empresaID o gastoID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1639,7 +2373,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "gasto no encontrado",
+                        "description": "empresa ajena o gasto no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1704,11 +2438,32 @@ const docTemplate = `{
                     "200": {
                         "description": "gasto actualizado",
                         "schema": {
-                            "$ref": "#/definitions/model.Expense"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Expense"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, sin campos o categoría ajena",
+                        "description": "empresaID o gastoID inválido, payload erróneo, sin campos o categoría ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1717,7 +2472,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "gasto no encontrado",
+                        "description": "empresa ajena o gasto no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1805,7 +2560,34 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "parametros de paginacion erroneos",
+                        "description": "empresaID inválido o parametros de paginacion erroneos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1863,11 +2645,41 @@ const docTemplate = `{
                     "201": {
                         "description": "ingreso creado",
                         "schema": {
-                            "$ref": "#/definitions/model.Income"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Income"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload del ingreso erróneo",
+                        "description": "empresaID inválido o payload del ingreso erróneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1922,11 +2734,32 @@ const docTemplate = `{
                     "200": {
                         "description": "ingreso eliminado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "ingresoID invalido",
+                        "description": "empresaID o ingresoID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1935,7 +2768,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "ingreso no encontrado",
+                        "description": "empresa ajena o ingreso no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2000,11 +2833,32 @@ const docTemplate = `{
                     "200": {
                         "description": "ingreso actualizado",
                         "schema": {
-                            "$ref": "#/definitions/model.Income"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Income"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload erróneo, sin campos o categoría ajena",
+                        "description": "empresaID o ingresoID inválido, payload erróneo, sin campos o categoría ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2013,7 +2867,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "ingreso no encontrado",
+                        "description": "empresa ajena o ingreso no encontrado",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2070,6 +2924,42 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "400": {
+                        "description": "empresaID inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -2120,11 +3010,41 @@ const docTemplate = `{
                     "201": {
                         "description": "objetivo creado",
                         "schema": {
-                            "$ref": "#/definitions/model.Goal"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Goal"
+                            }
                         }
                     },
                     "400": {
-                        "description": "payload inválido o falta la empresa en el contexto",
+                        "description": "empresaID inválido o payload inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "empresa no encontrada o ajena",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2179,11 +3099,32 @@ const docTemplate = `{
                     "200": {
                         "description": "meta encontrada",
                         "schema": {
-                            "$ref": "#/definitions/model.Goal"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.Goal"
+                            }
                         }
                     },
                     "400": {
-                        "description": "metaID invalido",
+                        "description": "empresaID o metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2192,7 +3133,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "meta no encontrada",
+                        "description": "empresa ajena o meta no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2245,11 +3186,32 @@ const docTemplate = `{
                     "200": {
                         "description": "meta eliminada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "metaID invalido",
+                        "description": "empresaID o metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2258,7 +3220,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "meta no encontrada",
+                        "description": "empresa ajena o meta no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2313,11 +3275,32 @@ const docTemplate = `{
                     "200": {
                         "description": "estado del objetivo",
                         "schema": {
-                            "$ref": "#/definitions/goals.EstadoMeta"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/goals.EstadoMeta"
+                            }
                         }
                     },
                     "400": {
-                        "description": "metaID invalido",
+                        "description": "empresaID o metaID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2326,7 +3309,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "meta no encontrada",
+                        "description": "empresa ajena o meta no encontrada",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2353,7 +3336,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cambia el nombre de una empresa, siempre que pertenezca al usuario autenticado. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
+                "description": "Cambia el nombre de una empresa, siempre que pertenezca al usuario autenticado. El nombre se limita a 30 caracteres. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "produces": [
                     "application/json"
                 ],
@@ -2381,11 +3364,32 @@ const docTemplate = `{
                     "200": {
                         "description": "nombre actualizado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
-                        "description": "ruta debe incluir el nombre de la empresa",
+                        "description": "empresaID inválido, nombre vacío o nombre de más de 30 caracteres",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2448,6 +3452,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -2487,6 +3500,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2540,6 +3562,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -2582,6 +3613,15 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2648,6 +3688,15 @@ const docTemplate = `{
                             }
                         }
                     },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "500": {
                         "description": "error interno del servidor",
                         "schema": {
@@ -2667,7 +3716,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Elimina un usuario de la base de datos",
+                "description": "Elimina un usuario de la base de datos. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "tags": [
                     "Usuarios"
                 ],
@@ -2676,11 +3725,32 @@ const docTemplate = `{
                     "200": {
                         "description": "usuario eliminado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
                         "description": "userID invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2714,7 +3784,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Actualiza un usuario en la base de datos",
+                "description": "Actualiza un usuario en la base de datos. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2740,11 +3810,32 @@ const docTemplate = `{
                     "200": {
                         "description": "usuario actualizado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
                         "description": "payload del usuario erróneo",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol usuario)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2780,7 +3871,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Busca un usuario por su rut",
+                "description": "Busca un usuario por su rut. La respuesta viene envuelta en {\"datos\": ...} con el usuario.",
                 "produces": [
                     "application/json"
                 ],
@@ -2801,11 +3892,32 @@ const docTemplate = `{
                     "200": {
                         "description": "usuario",
                         "schema": {
-                            "$ref": "#/definitions/model.User"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/model.User"
+                            }
                         }
                     },
                     "400": {
                         "description": "rut invalido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "prohibido (se requiere rol municipal)",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -2836,7 +3948,7 @@ const docTemplate = `{
         },
         "/autenticacion": {
             "post": {
-                "description": "Registra un nuevo usuario y devuelve un token de autenticación",
+                "description": "Registra un nuevo usuario y devuelve un token de autenticación. La respuesta viene envuelta en {\"datos\": ...} con el token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2862,7 +3974,10 @@ const docTemplate = `{
                     "201": {
                         "description": "token de autenticacion",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -2888,7 +4003,7 @@ const docTemplate = `{
         },
         "/autenticacion/inicio-sesion": {
             "post": {
-                "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación",
+                "description": "Inicia sesión con email y contraseña y devuelve un token de autenticación. La respuesta viene envuelta en {\"datos\": ...} con el token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2914,7 +4029,10 @@ const docTemplate = `{
                     "202": {
                         "description": "token de autenticacion",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -2940,7 +4058,7 @@ const docTemplate = `{
         },
         "/autenticacion/municipal": {
             "post": {
-                "description": "Registra un usuario con rol municipal y devuelve un token de autenticación",
+                "description": "Registra un usuario con rol municipal y devuelve un token de autenticación. La respuesta viene envuelta en {\"datos\": ...} con el token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2966,7 +4084,10 @@ const docTemplate = `{
                     "201": {
                         "description": "token de autenticacion",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -2992,7 +4113,7 @@ const docTemplate = `{
         },
         "/autenticacion/recuperar-password": {
             "post": {
-                "description": "Genera un código numérico de 6 dígitos y lo manda por correo al email indicado. El código sirve para verificar al usuario y después cambiar su contraseña. Si el email no está registrado responde 400.",
+                "description": "Genera un código numérico de 6 dígitos y lo manda por correo al email indicado. El código sirve para verificar al usuario y después cambiar su contraseña. Si el email no está registrado responde 400. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3018,7 +4139,10 @@ const docTemplate = `{
                     "202": {
                         "description": "código enviado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -3044,7 +4168,7 @@ const docTemplate = `{
         },
         "/autenticacion/recuperar-password/confirmar": {
             "post": {
-                "description": "Cambia la contraseña del usuario con el código de recuperación ya verificado. El código queda consumido y no se puede reusar.",
+                "description": "Cambia la contraseña del usuario con el código de recuperación ya verificado. El código queda consumido y no se puede reusar. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3070,7 +4194,10 @@ const docTemplate = `{
                     "200": {
                         "description": "contraseña actualizada",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -3096,7 +4223,7 @@ const docTemplate = `{
         },
         "/autenticacion/recuperar-password/verificar": {
             "post": {
-                "description": "Verifica el código de 6 dígitos recibido por correo. Un código verificado habilita el cambio de contraseña. Un código incorrecto, vencido o ya usado responde 400.",
+                "description": "Verifica el código de 6 dígitos recibido por correo. Un código verificado habilita el cambio de contraseña. Un código incorrecto, vencido o ya usado responde 400. La respuesta viene envuelta en {\"datos\": ...} con el mensaje de confirmación.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3122,7 +4249,10 @@ const docTemplate = `{
                     "200": {
                         "description": "código verificado",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "400": {
@@ -3388,6 +4518,17 @@ const docTemplate = `{
                         "web"
                     ]
                 },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dispositivos.PayloadEliminarDispositivo": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
                 "token": {
                     "type": "string"
                 }

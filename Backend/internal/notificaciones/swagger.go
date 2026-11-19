@@ -8,6 +8,7 @@ package notificaciones
 //	@Produce		json
 //	@Success		200	{object}	map[string][]model.NotificationLog	"historial de notificaciones"
 //	@Failure		401	{object}	map[string]string					"no autorizado"
+//	@Failure		403	{object}	map[string]string					"prohibido (se requiere rol usuario)"
 //	@Failure		500	{object}	map[string]string					"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/notificaciones/historial	[get]
@@ -23,6 +24,7 @@ func ListarHistorialSwagger() {}
 //	@Param			payload	body		PayloadPruebaNotificacion	false	"título y cuerpo opcionales"
 //	@Success		200		{object}	map[string]string			"notificación de prueba enviada"
 //	@Failure		401		{object}	map[string]string			"no autorizado"
+//	@Failure		403		{object}	map[string]string			"prohibido (se requiere rol usuario)"
 //	@Failure		500		{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/notificaciones/probar	[post]

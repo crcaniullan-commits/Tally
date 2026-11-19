@@ -7,11 +7,14 @@ package expenses
 //	@Tags			Gastos
 //	@Accept			json
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		PayloadGasto		true	"payload"
-//	@Success		201			{object}	model.Expense		"gasto creado"
-//	@Failure		400			{object}	map[string]string	"payload del gasto erróneo"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string						true	"ID de la empresa"
+//	@Param			payload		body		PayloadGasto				true	"payload"
+//	@Success		201			{object}	map[string]model.Expense	"gasto creado"
+//	@Failure		400			{object}	map[string]string			"empresaID inválido o payload del gasto erróneo"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa no encontrada o ajena"
+//	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/gastos	[post]
 func Create() {}
@@ -23,13 +26,15 @@ func Create() {}
 //	@Tags			Gastos
 //	@Accept			json
 //	@Produce		json
-//	@Param			empresaID	path		string					true	"ID de la empresa"
-//	@Param			gastoID		path		string					true	"ID del gasto"
-//	@Param			payload		body		PayloadActualizarGasto	true	"campos a actualizar"
-//	@Success		200			{object}	model.Expense			"gasto actualizado"
-//	@Failure		400			{object}	map[string]string		"payload erróneo, sin campos o categoría ajena"
-//	@Failure		404			{object}	map[string]string		"gasto no encontrado"
-//	@Failure		500			{object}	map[string]string		"error interno del servidor"
+//	@Param			empresaID	path		string						true	"ID de la empresa"
+//	@Param			gastoID		path		string						true	"ID del gasto"
+//	@Param			payload		body		PayloadActualizarGasto		true	"campos a actualizar"
+//	@Success		200			{object}	map[string]model.Expense	"gasto actualizado"
+//	@Failure		400			{object}	map[string]string			"empresaID o gastoID inválido, payload erróneo, sin campos o categoría ajena"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa ajena o gasto no encontrado"
+//	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/gastos/{gastoID}	[patch]
 func Update() {}
@@ -42,9 +47,11 @@ func Update() {}
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			gastoID		path		string				true	"ID del gasto"
-//	@Success		200			{object}	string				"gasto eliminado"
-//	@Failure		400			{object}	map[string]string	"gastoID invalido"
-//	@Failure		404			{object}	map[string]string	"gasto no encontrado"
+//	@Success		200			{object}	map[string]string	"gasto eliminado"
+//	@Failure		400			{object}	map[string]string	"empresaID o gastoID invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o gasto no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/gastos/{gastoID}	[delete]
@@ -63,7 +70,10 @@ func Delete() {}
 //	@Param			hasta			query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
 //	@Param			categoria_id	query		string						false	"UUID de la categoria por la que filtrar"
 //	@Success		200				{object}	map[string][]model.Expense	"pagina de gastos"
-//	@Failure		400				{object}	map[string]string			"parametros de paginacion erroneos"
+//	@Failure		400				{object}	map[string]string			"empresaID inválido o parametros de paginacion erroneos"
+//	@Failure		401				{object}	map[string]string			"no autorizado"
+//	@Failure		403				{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404				{object}	map[string]string			"empresa no encontrada o ajena"
 //	@Failure		500				{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/gastos	[get]

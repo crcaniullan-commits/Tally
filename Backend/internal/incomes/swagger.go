@@ -7,11 +7,14 @@ package incomes
 //	@Tags			Ingresos
 //	@Accept			json
 //	@Produce		json
-//	@Param			empresaID	path		string				true	"ID de la empresa"
-//	@Param			payload		body		PayloadIngreso		true	"payload"
-//	@Success		201			{object}	model.Income		"ingreso creado"
-//	@Failure		400			{object}	map[string]string	"payload del ingreso erróneo"
-//	@Failure		500			{object}	map[string]string	"error interno del servidor"
+//	@Param			empresaID	path		string					true	"ID de la empresa"
+//	@Param			payload		body		PayloadIngreso			true	"payload"
+//	@Success		201			{object}	map[string]model.Income	"ingreso creado"
+//	@Failure		400			{object}	map[string]string		"empresaID inválido o payload del ingreso erróneo"
+//	@Failure		401			{object}	map[string]string		"no autorizado"
+//	@Failure		403			{object}	map[string]string		"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string		"empresa no encontrada o ajena"
+//	@Failure		500			{object}	map[string]string		"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/ingresos	[post]
 func AgregarIngreso() {}
@@ -26,9 +29,11 @@ func AgregarIngreso() {}
 //	@Param			empresaID	path		string						true	"ID de la empresa"
 //	@Param			ingresoID	path		string						true	"ID del ingreso"
 //	@Param			payload		body		PayloadActualizarIngreso	true	"campos a actualizar"
-//	@Success		200			{object}	model.Income				"ingreso actualizado"
-//	@Failure		400			{object}	map[string]string			"payload erróneo, sin campos o categoría ajena"
-//	@Failure		404			{object}	map[string]string			"ingreso no encontrado"
+//	@Success		200			{object}	map[string]model.Income		"ingreso actualizado"
+//	@Failure		400			{object}	map[string]string			"empresaID o ingresoID inválido, payload erróneo, sin campos o categoría ajena"
+//	@Failure		401			{object}	map[string]string			"no autorizado"
+//	@Failure		403			{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string			"empresa ajena o ingreso no encontrado"
 //	@Failure		500			{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/ingresos/{ingresoID}	[patch]
@@ -42,9 +47,11 @@ func Actualizar() {}
 //	@Produce		json
 //	@Param			empresaID	path		string				true	"ID de la empresa"
 //	@Param			ingresoID	path		string				true	"ID del ingreso"
-//	@Success		200			{object}	string				"ingreso eliminado"
-//	@Failure		400			{object}	map[string]string	"ingresoID invalido"
-//	@Failure		404			{object}	map[string]string	"ingreso no encontrado"
+//	@Success		200			{object}	map[string]string	"ingreso eliminado"
+//	@Failure		400			{object}	map[string]string	"empresaID o ingresoID invalido"
+//	@Failure		401			{object}	map[string]string	"no autorizado"
+//	@Failure		403			{object}	map[string]string	"prohibido (se requiere rol usuario)"
+//	@Failure		404			{object}	map[string]string	"empresa ajena o ingreso no encontrado"
 //	@Failure		500			{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/ingresos/{ingresoID}	[delete]
@@ -63,7 +70,10 @@ func Eliminar() {}
 //	@Param			hasta			query		string						false	"fecha maxima del rango (AAAA-MM-DD)"
 //	@Param			categoria_id	query		string						false	"UUID de la categoria por la que filtrar"
 //	@Success		200				{object}	map[string][]model.Income	"pagina de ingresos"
-//	@Failure		400				{object}	map[string]string			"parametros de paginacion erroneos"
+//	@Failure		400				{object}	map[string]string			"empresaID inválido o parametros de paginacion erroneos"
+//	@Failure		401				{object}	map[string]string			"no autorizado"
+//	@Failure		403				{object}	map[string]string			"prohibido (se requiere rol usuario)"
+//	@Failure		404				{object}	map[string]string			"empresa no encontrada o ajena"
 //	@Failure		500				{object}	map[string]string			"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/empresas/{empresaID}/ingresos	[get]

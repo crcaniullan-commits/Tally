@@ -302,8 +302,8 @@ func TestUsersHandler_GetByRut(t *testing.T) {
 		assert.Equal(t, esperado.ID.String(), data["id"])
 		assert.Equal(t, esperado.Email, data["email"])
 		assert.Equal(t, esperado.Nombre, data["nombre"])
-		assert.Equal(t, float64(19234567), data["rut"].(map[string]any)["Cuerpo"])
-		assert.Equal(t, "K", data["rut"].(map[string]any)["DV"])
+		assert.Equal(t, float64(19234567), data["rut"].(map[string]any)["cuerpo"])
+		assert.Equal(t, "K", data["rut"].(map[string]any)["dv"])
 		assert.NotContains(t, data, "PasswordHash", "la contraseña nunca debe filtrarse")
 	})
 

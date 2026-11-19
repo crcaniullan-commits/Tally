@@ -8,6 +8,7 @@ package jobs
 //	@Produce		json
 //	@Success		200	{object}	map[string]string	"recordatorio diario ejecutado"
 //	@Failure		401	{object}	map[string]string	"no autorizado"
+//	@Failure		403	{object}	map[string]string	"prohibido (se requiere rol usuario)"
 //	@Failure		500	{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/jobs/recordatorio-diario	[post]
@@ -21,6 +22,7 @@ func RecordatorioDiarioSwagger() {}
 //	@Produce		json
 //	@Success		200	{object}	map[string]string	"aviso de cobros vencidos ejecutado"
 //	@Failure		401	{object}	map[string]string	"no autorizado"
+//	@Failure		403	{object}	map[string]string	"prohibido (se requiere rol usuario)"
 //	@Failure		500	{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/jobs/cobros-vencidos	[post]
@@ -34,6 +36,7 @@ func CobrosVencidosSwagger() {}
 //	@Produce		json
 //	@Success		200	{object}	map[string]string	"todos los jobs ejecutados"
 //	@Failure		401	{object}	map[string]string	"no autorizado"
+//	@Failure		403	{object}	map[string]string	"prohibido (se requiere rol usuario)"
 //	@Failure		500	{object}	map[string]string	"error interno del servidor"
 //	@Security		ApiKeyAuth
 //	@Router			/aplicacion/jobs/ejecutar-todos	[post]
