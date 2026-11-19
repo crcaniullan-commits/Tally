@@ -267,6 +267,177 @@
                 }
             }
         },
+        "/aplicacion/dispositivos": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve la lista de dispositivos y tokens activos asociados al usuario autenticado. La respuesta viene envuelta en {\"datos\": [...]}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dispositivos"
+                ],
+                "summary": "Listar dispositivos registrados",
+                "responses": {
+                    "200": {
+                        "description": "lista de dispositivos",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.DeviceToken"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Registra un nuevo token de notificación push o actualiza la última conexión (last_seen_at) de un dispositivo para el usuario autenticado. Admite plataformas android, ios y web. Responde 204 sin contenido.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dispositivos"
+                ],
+                "summary": "Registrar o refrescar token de dispositivo",
+                "parameters": [
+                    {
+                        "description": "token y plataforma del dispositivo",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dispositivos.PayloadDispositivo"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "dispositivo registrado"
+                    },
+                    "400": {
+                        "description": "payload inválido o plataforma no soportada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/dispositivos/{token}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Elimina el token de dispositivo del usuario autenticado (por ejemplo, al cerrar sesión en la app móvil). Responde 204 sin contenido.",
+                "tags": [
+                    "Dispositivos"
+                ],
+                "summary": "Desvincular token de dispositivo",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "token del dispositivo",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "dispositivo desvinculado"
+                    },
+                    "400": {
+                        "description": "token inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "dispositivo no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/aplicacion/empresas": {
             "get": {
                 "security": [
@@ -2235,6 +2406,252 @@
                 }
             }
         },
+        "/aplicacion/jobs/cobros-vencidos": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Ejecuta bajo demanda el job que detecta deudores vencidos e impagos agrupados por usuario, emitiendo una notificación consolidada en pesos chilenos. Responde 200 con mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Ejecutar aviso de cobros vencidos",
+                "responses": {
+                    "200": {
+                        "description": "aviso de cobros vencidos ejecutado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/jobs/ejecutar-todos": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Ejecuta secuencialmente el recordatorio diario por inactividad y el aviso de cobros vencidos. Responde 200 con mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Ejecutar todas las tareas programadas",
+                "responses": {
+                    "200": {
+                        "description": "todos los jobs ejecutados",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/jobs/recordatorio-diario": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Ejecuta bajo demanda el job que detecta usuarios con dispositivos registrados que hoy no han cargado ningún ingreso ni egreso (en hora de Chile), emitiendo la notificación push correspondiente. Responde 200 con mensaje de confirmación.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Ejecutar recordatorio diario de inactividad",
+                "responses": {
+                    "200": {
+                        "description": "recordatorio diario ejecutado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/notificaciones/historial": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Devuelve el registro de notificaciones y recordatorios emitidos para el usuario autenticado (notification_log), ordenados del más reciente al más antiguo. La respuesta viene envuelta en {\"datos\": [...]}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notificaciones"
+                ],
+                "summary": "Listar historial de notificaciones enviadas",
+                "responses": {
+                    "200": {
+                        "description": "historial de notificaciones",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/definitions/model.NotificationLog"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/aplicacion/notificaciones/probar": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Despacha inmediatamente una notificación push de prueba a todos los dispositivos registrados del usuario autenticado. La respuesta viene envuelta en {\"datos\": ...}.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notificaciones"
+                ],
+                "summary": "Enviar notificación push de prueba",
+                "parameters": [
+                    {
+                        "description": "título y cuerpo opcionales",
+                        "name": "payload",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/notificaciones.PayloadPruebaNotificacion"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "notificación de prueba enviada",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "no autorizado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/aplicacion/usuarios": {
             "delete": {
                 "security": [
@@ -2948,6 +3365,26 @@
                 }
             }
         },
+        "dispositivos.PayloadDispositivo": {
+            "type": "object",
+            "required": [
+                "platform",
+                "token"
+            ],
+            "properties": {
+                "platform": {
+                    "type": "string",
+                    "enum": [
+                        "android",
+                        "ios",
+                        "web"
+                    ]
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "empresas.PayloadEmpresa": {
             "type": "object",
             "required": [
@@ -3236,6 +3673,26 @@
                 }
             }
         },
+        "model.DeviceToken": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "model.Empresa": {
             "type": "object",
             "properties": {
@@ -3344,6 +3801,23 @@
                 }
             }
         },
+        "model.NotificationLog": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "ref_date": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "model.PaymentMethod": {
             "type": "string",
             "enum": [
@@ -3411,6 +3885,19 @@
                 "UserRoleUsuario",
                 "UserRoleMunicipal"
             ]
+        },
+        "notificaciones.PayloadPruebaNotificacion": {
+            "type": "object",
+            "properties": {
+                "cuerpo": {
+                    "type": "string",
+                    "maxLength": 250
+                },
+                "titulo": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
         },
         "users.PayloadActualizarUsuario": {
             "type": "object",

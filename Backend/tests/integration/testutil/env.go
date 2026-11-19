@@ -19,6 +19,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/categories"
 	clavesacceso "github.com/crcaniullan-commits/Tally/internal/clavesAcceso"
 	"github.com/crcaniullan-commits/Tally/internal/debtors"
+	"github.com/crcaniullan-commits/Tally/internal/dispositivos"
 	"github.com/crcaniullan-commits/Tally/internal/empresas"
 	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/excel"
@@ -26,6 +27,8 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/goals"
 	"github.com/crcaniullan-commits/Tally/internal/incomes"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/jobs"
+	"github.com/crcaniullan-commits/Tally/internal/notificaciones"
 	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -124,6 +127,13 @@ func buildRouter(db *sql.DB, files excel.FileStorage) http.Handler {
 
 			users.InitModule(r, db, logger, middl, buscadorUsuario)
 			clavesacceso.InitModule(r, db, logger, middl, remitente)
+
+			dispSvc := dispositivos.InitModule(r, db, logger, middl)
+			logNotifier := notificaciones.NuevoLogNotifier(logger)
+			notifSvc := notificaciones.InitModule(r, db, logger, middl, dispSvc, logNotifier)
+
+			loc, _ := time.LoadLocation("America/Santiago")
+			_, _ = jobs.InitModule(r, db, logger, middl, notifSvc, loc, "0 20 * * *", "0 9 * * *")
 
 			r.Route("/empresas", func(r chi.Router) {
 				empresaRoute.Collection(r)

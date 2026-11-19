@@ -145,12 +145,10 @@ func TestUsersFlow(t *testing.T) {
 
 		rut, ok := data["rut"].(map[string]any)
 		require.True(t, ok, "rut debería ser un objeto: %v", data["rut"])
-		// DISCREPANCIA: el swagger define rut como {cuerpo, dv}, pero el struct
-		// model.RUT no tiene tags JSON y serializa {Cuerpo, DV}.
-		require.Contains(t, rut, "Cuerpo")
-		require.Contains(t, rut, "DV")
-		require.NotContains(t, rut, "cuerpo")
-		require.NotContains(t, rut, "dv")
+		require.Contains(t, rut, "cuerpo")
+		require.Contains(t, rut, "dv")
+		require.NotContains(t, rut, "Cuerpo")
+		require.NotContains(t, rut, "DV")
 
 		// BUG: ObtenerPorRUT no selecciona created_at ni updated_at, así que salen
 		// en el zero value de time.Time.

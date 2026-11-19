@@ -18,6 +18,7 @@ import (
 	"github.com/crcaniullan-commits/Tally/internal/errores"
 	"github.com/crcaniullan-commits/Tally/internal/excel"
 	"github.com/crcaniullan-commits/Tally/internal/intermediario"
+	"github.com/crcaniullan-commits/Tally/internal/notificaciones"
 	"github.com/crcaniullan-commits/Tally/internal/storage"
 	"github.com/crcaniullan-commits/Tally/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -133,11 +134,19 @@ func (app *Application) Run() error {
 		app.logger.Errorf("S3 no configurado - se usará la ruta ./data/files en su lugar")
 	}
 
+	var pushEnv notificaciones.EnviadorPush
+	if entorno.ObtenerBooleano("EXPO_PUSH_MOCK", false) {
+		pushEnv = notificaciones.NuevoLogNotifier(app.logger)
+		app.logger.Infow("Notificaciones push configuradas en modo mock (consola)")
+	} else {
+		pushEnv = notificaciones.NuevoClienteExpoPush(nil)
+	}
+
 	r.Use(intermediario.MiddlewaresGlobales()...)
 
 	r.Route("/v1", AsignarRutas(r, smtp, transactor, empresaRoute, *emMiddl,
 		fileStore, app.db, app.logger, app.config.Addr, app.config.ConfigJWT, middl,
-		*buscadorUsuario))
+		*buscadorUsuario, pushEnv))
 
 	srv := &http.Server{
 		Addr:         app.config.Addr,

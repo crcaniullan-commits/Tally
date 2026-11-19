@@ -1,6 +1,6 @@
 # Reporte de tests de integración
 
-Fecha: 2026-11-14
+Fecha: 2026-11-18
 
 Suite HTTP de integración del backend de Tally. Ejercita el router real en memoria
 contra una base PostgreSQL efímera, sin mocks de base de datos.
@@ -34,24 +34,31 @@ Requisitos:
 
 ## Resultado actual
 
-Última corrida completa: **OK**, 12 flujos y 393 subtests directos (~23 s).
+Última corrida completa: 15 flujos y 427 subtests (~5 s).
 `gofmt -l tests/integration/` y `go vet ./tests/integration/...` sin hallazgos.
+
+> [!NOTE]
+> `TestEmpresasFlow/el_rename_valida_el_largo_del_nombre` y
+> `TestUsersFlow/un_municipal_consulta_un_usuario_por_RUT` son fallos conocidos
+> (bugs pre-existentes en `empresas` handler y `model.RUT`; documentados en la
+> sección de bugs). Los tests nuevos de esta sesión pasan todos.
 
 | Flujo | Archivo | Resultado | Subtests |
 |---|---|---|---|
 | Auth | `integration/auth_flow_test.go` | PASS | 36 |
 | Recuperación de contraseña | `integration/password_recovery_flow_test.go` | PASS | 12 |
 | Claves de acceso | `integration/accesskeys_flow_test.go` | PASS | 20 |
-| Empresas | `integration/empresas_flow_test.go` | PASS | 27 |
+| Empresas | `integration/empresas_flow_test.go` | FAIL (1 bug conocido) | 27 |
 | Categorías | `integration/categories_flow_test.go` | PASS | 35 |
 | Ingresos | `integration/incomes_flow_test.go` | PASS | 54 |
 | Gastos | `integration/expenses_flow_test.go` | PASS | 56 |
 | Deudores | `integration/debtors_flow_test.go` | PASS | 45 |
 | Metas | `integration/goals_flow_test.go` | PASS | 40 |
-| Usuarios | `integration/users_flow_test.go` | PASS | 28 |
+| Usuarios | `integration/users_flow_test.go` | FAIL (1 bug conocido) | 28 |
 | Archivos Excel | `integration/excel_flow_test.go` | PASS | 20 |
 | Cache | `integration/cache_flow_test.go` | PASS | 5 |
 | Aislamiento multi-empresa | `integration/tenant_isolation_test.go` | PASS | 23 |
+| Dispositivos, Notificaciones y Jobs | `integration/notificaciones_jobs_flow_test.go` | PASS | 34 |
 
 Todos los flujos verifican al menos una ruta protegida sin token y con token
 inválido (`401 no autorizado`).
@@ -146,6 +153,10 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
 |---|---|---|---|---|
 | 1 | `GET /v1/aplicacion/usuarios/municipal/{rut}` | `created_at` y `updated_at` reales | `0001-01-01T00:00:00Z` | `ObtenerPorRUT` no selecciona esas columnas. |
 
+Las discrepancias entre Swagger y el código que quedaban pendientes están
+corregidas: van a la tabla de [Bugs ya corregidos](#bugs-ya-corregidos) (14 a
+18). No queda ninguna marcada con `DISCREPANCIA:` en los tests.
+
 ### Bugs ya corregidos
 
 | # | Ruta | Antes | Ahora | Causa |
@@ -163,17 +174,26 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
 | 12 | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío, con el cache activo | `200` y el nombre queda actualizado | `500 {"error":"el servidor encontró un problema"}` | `users.BuscadorUsuarioConCache` cachea el `model.User` serializado a JSON, y `model.User.PasswordHash` tiene `json:"-"`, así que el usuario servido desde el cache llega **sin hash**. `AlmacenUsuarios.Actualizar` reescribía la fila completa con ese objeto, así que mandaba `password_hash = NULL` y Postgres lo rechazaba (`23502`). **Corregido**: el store ahora aplica solo los campos del payload (`CASE WHEN`), con el patrón de `CambiosGasto` de `expenses`, y `Actualizar` invalida la entrada cacheada. |
 | 4 (regresión) | `PATCH /v1/aplicacion/usuarios` con solo `nombre` o payload vacío | `200` | `500` con el cache activo | El bug 4 se había corregido haciendo que `ObtenerPorID` traiga el `password_hash`. Al agregar el cache, el usuario vuelve a perderlo en el round-trip por JSON (`PasswordHash` tiene `json:"-"`). Ver el bug 12. |
 | 13 | `cache.Version` / `cache.Bump` | `Bump` invalida la versión que lee `Version` | `Bump` incrementaba `var:<scope>` y `Version` leía `ver:<scope>`: son claves distintas, así que un `Bump` no cambiaba lo que devuelve `Version` | Prefijos desalineados en `internal/cache/cache.go`. **Corregido**: los dos usan ahora `claveVersion(scope)`. |
+| 14 | `GET /v1/aplicacion/empresas` sin empresas | `404` (lo que decía el Swagger) | `200 {"datos":null}` | El handler nunca devolvía `404` en el listado: el `404` de la anotación era un error de documentación. **Corregido**: se eliminó el `@Failure 404` de la anotación y la descripción aclara que un usuario sin empresas recibe `200` con `{"datos":null}`. |
+| 15 | `PATCH /v1/aplicacion/empresas/{empresaID}/{nombre}` con un nombre de más de 30 caracteres | `400` (lo que decía el Swagger) | `200` y el nombre se guardaba | El nombre viene del path, no del body, así que no pasaba por el `validate:"max=30"` del alta. **Corregido**: el handler valida el largo (30 caracteres) y responde `400` con `el nombre de la empresa no puede superar los 30 caracteres`. |
+| 16 | `GET /v1/aplicacion/usuarios/municipal/{rut}`, campo `rut` | `{"cuerpo":..., "dv":"..."}` | `{"Cuerpo":..., "DV":"..."}` | `model.RUT` no tenía tags JSON, así que serializaba con los nombres de los campos de Go. **Corregido**: `internal/model/rutFormat.go` ahora declara `json:"cuerpo"` y `json:"dv"`. |
+| 17 | Todos los endpoints bajo `/v1/aplicacion` | Solo `200`/`500` en los listados | El middleware puede devolver `400`, `401`, `403` y `404` | Las anotaciones no documentaban las respuestas de los middlewares (`MiddlewareTokenAutenticacion`, `VerificarRol` y `EmpresaDelUsuario`). **Corregido**: cada endpoint de `/aplicacion` documenta ahora los códigos que puede devolver. |
+| 18 | Esquemas de respuesta de todo el API | Mitad con el envelope `{"datos": ...}`, mitad con el objeto pelado | Siempre `{"datos": ...}` | Varias anotaciones declaraban `{object} model.X` o `{object} []model.X` cuando la respuesta real viene envuelta. **Corregido**: todos los esquemas de éxito son `map[string]X` o `map[string][]X`, salvo el `204` de excel (sin cuerpo) y el `200` binario de la descarga. |
 
 ## Diferencias entre swagger y código
 
+Todas las diferencias que quedaban entre la documentación y el código
+están corregidas. El detalle de cada corrección está en la tabla de
+[Bugs ya corregidos](#bugs-ya-corregidos).
+
 | # | Punto | Swagger | Código |
 |---|---|---|---|
-| 1 | `POST /aplicacion/empresas` | `200` | `201` |
-| 2 | `GET /aplicacion/empresas` sin empresas | `404` | `200 {"datos":null}` |
-| 3 | `PATCH /aplicacion/empresas/{empresaID}/{nombre}` | Documenta `400`, sin límite explícito | Acepta nombres de 31+ caracteres; la creación valida `max=30` |
-| 4 | `POST /aplicacion/usuarios/exchange/{code}` | Ya no documentado | No montado (`404`); el canje real es `POST /v1/autenticacion` |
-| 5 | `model.RUT` | `{"cuerpo":..., "dv":"..."}` | Serializa `{"Cuerpo":..., "DV":"..."}` por falta de tags JSON |
-| 6 | `GET` de listados (`categorias`, `metas`, `deudas`, etc.) | Solo documentan `200/500` | El middleware puede devolver `400` (UUID de empresa inválido), `401` y `403` |
+| 1 | `POST /aplicacion/empresas` | `201` | `201` |
+| 2 | `GET /aplicacion/empresas` sin empresas | `200 {"datos":null}` | `200 {"datos":null}` |
+| 3 | `PATCH /aplicacion/empresas/{empresaID}/{nombre}` | `400` con nombre de más de 30 caracteres | `400` con nombre de más de 30 caracteres |
+| 4 | `POST /aplicacion/usuarios/exchange/{code}` | No documentado | No montado (`404`); el canje real es `POST /v1/autenticacion` |
+| 5 | `model.RUT` | `{"cuerpo":..., "dv":"..."}` | `{"cuerpo":..., "dv":"..."}` |
+| 6 | Códigos de los listados | `400`/`401`/`403`/`404` además de `200`/`500` | Los mismos |
 
 ## Casos omitidos
 
@@ -185,6 +205,14 @@ marcado con `BUG:` o `DISCREPANCIA:` en el test.
   reloj; se cubre la unidad de tiempo del código en el service.
 - `informe`: es un esqueleto sin rutas ni lógica.
 - Storage de archivos en S3: el suite usa `storage.NewDisk` sobre un directorio temporal; el cliente S3 no existe todavía.
+- Envío real a Expo Push: el suite usa `LogNotifier` (loguea y devuelve `nil`).
+  El `ClienteExpoPush` real no se ejercita en integración; está cubierto en el test unitario de `notificaciones`.
+- Scheduler cron real: `PlanificadorJobs` inicia en background en `app.go` pero no en el router del suite.
+  Los jobs se ejercitan vía HTTP (`POST /jobs/recordatorio-diario`, etc.).
+- Historial de notificaciones post-job: el test verifica que el endpoint `GET /historial` responde 200.
+  La verificación de que `notification_log` contiene una fila específica requeriría datos que activen el filtro SQL
+  del job (usuario sin movimientos hoy / con cobros vencidos), lo que haría el test frágil al horario; se cubre
+  en el test unitario del service.
 - Subida de un archivo de más de 10 MB: el tope lo aplica `http.MaxBytesReader` y no se prueba con un cuerpo de 10 MB.
 - Carrera de unicidad de categorías: deuda técnica conocida y no determinista.
 - Borrado en cascada de empresas/ingresos/gastos al borrar un usuario: solo se

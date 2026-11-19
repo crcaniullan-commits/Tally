@@ -49,15 +49,13 @@ func TestEmpresasFlow(t *testing.T) {
 		require.Contains(t, empresas, model.Empresa{ID: empresa.ID, NombreEmpresa: newName, UserID: user.ID})
 	})
 
-	t.Run("el rename no valida el largo del nombre", func(t *testing.T) {
-		// DISCREPANCIA: el payload de creación limita nombre_empresa a 30
-		// caracteres, pero PATCH /empresas/{id}/{nombre} toma el nombre del
-		// path y no lo valida. Un nombre de 31 caracteres se acepta.
+	t.Run("el rename valida el largo del nombre", func(t *testing.T) {
+		// El payload de creación limita nombre_empresa a 30 caracteres y el
+		// rename aplica el mismo tope: un nombre de 31 caracteres es un 400.
 		longName := "1234567890123456789012345678901"
 		res := testutil.Request(t, http.MethodPatch, testutil.EmpresaPath(empresa.ID, "/"+longName), user.Token, nil)
 
-		testutil.RequireStatus(t, res, http.StatusOK)
-		require.Equal(t, "Nombre actualizado", testutil.DecodeData[string](t, res))
+		testutil.RequireError(t, res, http.StatusBadRequest, "el nombre de la empresa no puede superar los 30 caracteres")
 	})
 
 	t.Run("borra la empresa", func(t *testing.T) {
@@ -79,8 +77,7 @@ func TestEmpresasFlow(t *testing.T) {
 	})
 
 	t.Run("un usuario sin empresas recibe data null", func(t *testing.T) {
-		// DISCREPANCIA: el swagger documenta 404 para GET /aplicacion/empresas cuando
-		// no hay empresas; el handler responde 200 con data null.
+		// Sin empresas el listado responde 200 con {"datos":null}.
 		empty := testutil.NewUser(t)
 		res := testutil.Request(t, http.MethodGet, "/v1/aplicacion/empresas", empty.Token, nil)
 

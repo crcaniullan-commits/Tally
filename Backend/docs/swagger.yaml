@@ -159,6 +159,20 @@ definitions:
     - monto
     - nombre
     type: object
+  dispositivos.PayloadDispositivo:
+    properties:
+      platform:
+        enum:
+        - android
+        - ios
+        - web
+        type: string
+      token:
+        type: string
+    required:
+    - platform
+    - token
+    type: object
   empresas.PayloadEmpresa:
     properties:
       nombre_empresa:
@@ -348,6 +362,19 @@ definitions:
       pagado:
         type: boolean
     type: object
+  model.DeviceToken:
+    properties:
+      id:
+        type: string
+      last_seen_at:
+        type: string
+      platform:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: string
+    type: object
   model.Empresa:
     properties:
       id:
@@ -420,6 +447,17 @@ definitions:
       payment_method:
         $ref: '#/definitions/model.PaymentMethod'
     type: object
+  model.NotificationLog:
+    properties:
+      kind:
+        type: string
+      ref_date:
+        type: string
+      sent_at:
+        type: string
+      user_id:
+        type: string
+    type: object
   model.PaymentMethod:
     enum:
     - debito
@@ -468,6 +506,15 @@ definitions:
     x-enum-varnames:
     - UserRoleUsuario
     - UserRoleMunicipal
+  notificaciones.PayloadPruebaNotificacion:
+    properties:
+      cuerpo:
+        maxLength: 250
+        type: string
+      titulo:
+        maxLength: 100
+        type: string
+    type: object
   users.PayloadActualizarUsuario:
     properties:
       nombre:
@@ -677,6 +724,119 @@ paths:
       summary: Revocar un código de acceso
       tags:
       - ClavesAcceso
+  /aplicacion/dispositivos:
+    get:
+      description: 'Devuelve la lista de dispositivos y tokens activos asociados al
+        usuario autenticado. La respuesta viene envuelta en {"datos": [...]}.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lista de dispositivos
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.DeviceToken'
+              type: array
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar dispositivos registrados
+      tags:
+      - Dispositivos
+    put:
+      consumes:
+      - application/json
+      description: Registra un nuevo token de notificación push o actualiza la última
+        conexión (last_seen_at) de un dispositivo para el usuario autenticado. Admite
+        plataformas android, ios y web. Responde 204 sin contenido.
+      parameters:
+      - description: token y plataforma del dispositivo
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/dispositivos.PayloadDispositivo'
+      responses:
+        "204":
+          description: dispositivo registrado
+        "400":
+          description: payload inválido o plataforma no soportada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Registrar o refrescar token de dispositivo
+      tags:
+      - Dispositivos
+  /aplicacion/dispositivos/{token}:
+    delete:
+      description: Elimina el token de dispositivo del usuario autenticado (por ejemplo,
+        al cerrar sesión en la app móvil). Responde 204 sin contenido.
+      parameters:
+      - description: token del dispositivo
+        in: path
+        name: token
+        required: true
+        type: string
+      responses:
+        "204":
+          description: dispositivo desvinculado
+        "400":
+          description: token inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: dispositivo no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Desvincular token de dispositivo
+      tags:
+      - Dispositivos
   /aplicacion/empresas:
     get:
       description: 'Devuelve todas las empresas asociadas al usuario autenticado.
@@ -2040,6 +2200,171 @@ paths:
       summary: Estado de la meta
       tags:
       - Metas
+  /aplicacion/jobs/cobros-vencidos:
+    post:
+      description: Ejecuta bajo demanda el job que detecta deudores vencidos e impagos
+        agrupados por usuario, emitiendo una notificación consolidada en pesos chilenos.
+        Responde 200 con mensaje de confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: aviso de cobros vencidos ejecutado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar aviso de cobros vencidos
+      tags:
+      - Jobs
+  /aplicacion/jobs/ejecutar-todos:
+    post:
+      description: Ejecuta secuencialmente el recordatorio diario por inactividad
+        y el aviso de cobros vencidos. Responde 200 con mensaje de confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: todos los jobs ejecutados
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar todas las tareas programadas
+      tags:
+      - Jobs
+  /aplicacion/jobs/recordatorio-diario:
+    post:
+      description: Ejecuta bajo demanda el job que detecta usuarios con dispositivos
+        registrados que hoy no han cargado ningún ingreso ni egreso (en hora de Chile),
+        emitiendo la notificación push correspondiente. Responde 200 con mensaje de
+        confirmación.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: recordatorio diario ejecutado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Ejecutar recordatorio diario de inactividad
+      tags:
+      - Jobs
+  /aplicacion/notificaciones/historial:
+    get:
+      description: 'Devuelve el registro de notificaciones y recordatorios emitidos
+        para el usuario autenticado (notification_log), ordenados del más reciente
+        al más antiguo. La respuesta viene envuelta en {"datos": [...]}.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: historial de notificaciones
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.NotificationLog'
+              type: array
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Listar historial de notificaciones enviadas
+      tags:
+      - Notificaciones
+  /aplicacion/notificaciones/probar:
+    post:
+      consumes:
+      - application/json
+      description: 'Despacha inmediatamente una notificación push de prueba a todos
+        los dispositivos registrados del usuario autenticado. La respuesta viene envuelta
+        en {"datos": ...}.'
+      parameters:
+      - description: título y cuerpo opcionales
+        in: body
+        name: payload
+        schema:
+          $ref: '#/definitions/notificaciones.PayloadPruebaNotificacion'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: notificación de prueba enviada
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: no autorizado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Enviar notificación push de prueba
+      tags:
+      - Notificaciones
   /aplicacion/usuarios:
     delete:
       description: Elimina un usuario de la base de datos

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/crcaniullan-commits/Tally/cmd/application"
 	"github.com/crcaniullan-commits/Tally/internal/bd"
