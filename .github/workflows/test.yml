@@ -78,7 +78,45 @@ jobs:
           # Que un fallo de Codecov no tumbe el pipeline de tests.
           fail_ci_if_error: false
           # token: ${{ secrets.CODECOV_TOKEN }}
+  publish:
+    name: Publicar imagen (GHCR)
+    needs: backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # GHCR exige minúsculas y el nombre del repo puede tener mayúsculas.
+      - name: Nombre de la imagen
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-backend" >> "$GITHUB_ENV"
+
+      - name: Login en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: ./Backend
+          file: ./Backend/docker/Dockerfile
+          target: runtime
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
   # Placeholder: cuando exista el frontend, copia este job y ajusta el comando
   # de test según el stack. Sube el reporte con `flags: frontend` para que
   # Codecov lo separe del backend según codecov.yml.
